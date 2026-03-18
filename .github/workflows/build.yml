@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build plugin ZIP
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Full history required so we can push the commit back
+          fetch-depth: 0
+
+      - name: Set up PHP 8.0
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          extensions: mbstring, intl, json
+          coverage: none
+
+      - name: Run build script
+        run: bash bin/build.sh
+
+      - name: Copy ZIP to dist/
+        run: |
+          mkdir -p dist
+          # Remove any previously committed ZIPs so old versions don't accumulate
+          rm -f dist/*.zip
+          cp build/*.zip dist/
+
+      - name: Commit ZIP to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          # Only commit if there is something new to commit
+          if git diff --cached --quiet; then
+            echo "No changes to the ZIP – skipping commit."
+          else
+            git commit -m "Build: update plugin ZIP [skip actions]"
+            git push
+          fi
