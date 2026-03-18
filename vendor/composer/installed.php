@@ -1,0 +1,41 @@
+<?php return array(
+    'root' => array(
+        'name' => 'openai/fk-usps-optimizer',
+        'pretty_version' => 'dev-copilot/fix-fatal-error-activating-plugin',
+        'version' => 'dev-copilot/fix-fatal-error-activating-plugin',
+        'reference' => 'c9ef81d72335389f9836a355965db172b1a14825',
+        'type' => 'wordpress-plugin',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'dev' => false,
+    ),
+    'versions' => array(
+        'dvdoug/boxpacker' => array(
+            'pretty_version' => '3.12.1',
+            'version' => '3.12.1.0',
+            'reference' => '04720e946770045b00ea796ba8941240b66cba0b',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../dvdoug/boxpacker',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'openai/fk-usps-optimizer' => array(
+            'pretty_version' => 'dev-copilot/fix-fatal-error-activating-plugin',
+            'version' => 'dev-copilot/fix-fatal-error-activating-plugin',
+            'reference' => 'c9ef81d72335389f9836a355965db172b1a14825',
+            'type' => 'wordpress-plugin',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'psr/log' => array(
+            'pretty_version' => '3.0.2',
+            'version' => '3.0.2.0',
+            'reference' => 'f16e1d5863e37f8d8c2a01719f5b34baa2b714d3',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../psr/log',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+    ),
+);
