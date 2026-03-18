@@ -1,0 +1,316 @@
+<?php
+
+namespace FK_USPS_Optimizer;
+
+if (! defined('ABSPATH')) {
+	exit;
+}
+
+class Settings {
+	const OPTION_KEY = 'fk_usps_optimizer_settings';
+
+	public function register(): void {
+		add_action('admin_init', array($this, 'register_settings'));
+		add_action('admin_menu', array($this, 'register_menu'));
+	}
+
+	public function register_settings(): void {
+		register_setting(
+			'fk_usps_optimizer',
+			self::OPTION_KEY,
+			array($this, 'sanitize_settings')
+		);
+
+		add_settings_section(
+			'fk_usps_optimizer_api',
+			__('ShipEngine and Shipping Origin', 'fk-usps-optimizer'),
+			'__return_false',
+			'fk-usps-optimizer'
+		);
+
+		$fields = array(
+			'shipengine_api_key' => __('ShipEngine API Key', 'fk-usps-optimizer'),
+			'shipengine_carrier_id' => __('ShipEngine Carrier ID', 'fk-usps-optimizer'),
+			'ship_from_name' => __('Ship From Name', 'fk-usps-optimizer'),
+			'ship_from_company' => __('Ship From Company', 'fk-usps-optimizer'),
+			'ship_from_phone' => __('Ship From Phone', 'fk-usps-optimizer'),
+			'ship_from_address1' => __('Ship From Address 1', 'fk-usps-optimizer'),
+			'ship_from_address2' => __('Ship From Address 2', 'fk-usps-optimizer'),
+			'ship_from_city' => __('Ship From City', 'fk-usps-optimizer'),
+			'ship_from_state' => __('Ship From State', 'fk-usps-optimizer'),
+			'ship_from_postal_code' => __('Ship From Postal Code', 'fk-usps-optimizer'),
+			'ship_from_country' => __('Ship From Country', 'fk-usps-optimizer'),
+			'debug_logging' => __('Enable Debug Logging', 'fk-usps-optimizer'),
+			'boxes_json' => __('Box Definitions JSON', 'fk-usps-optimizer'),
+		);
+
+		foreach ($fields as $key => $label) {
+			add_settings_field(
+				$key,
+				$label,
+				array($this, 'render_field'),
+				'fk-usps-optimizer',
+				'fk_usps_optimizer_api',
+				array(
+					'key' => $key,
+				)
+			);
+		}
+	}
+
+	public function register_menu(): void {
+		add_submenu_page(
+			'woocommerce',
+			__('USPS Optimizer', 'fk-usps-optimizer'),
+			__('USPS Optimizer', 'fk-usps-optimizer'),
+			'manage_woocommerce',
+			'fk-usps-optimizer',
+			array($this, 'render_page')
+		);
+	}
+
+	public function render_field(array $args): void {
+		$key      = $args['key'];
+		$settings = $this->get_settings();
+		$value    = $settings[$key] ?? '';
+
+		if ('debug_logging' === $key) {
+			printf(
+				'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s /> %4$s</label>',
+				esc_attr(self::OPTION_KEY),
+				esc_attr($key),
+				checked('1', (string) $value, false),
+				esc_html__('Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer')
+			);
+			return;
+		}
+
+		if ('boxes_json' === $key) {
+			printf(
+				'<textarea class="large-text code" rows="16" name="%1$s[%2$s]">%3$s</textarea><p class="description">%4$s</p>',
+				esc_attr(self::OPTION_KEY),
+				esc_attr($key),
+				esc_textarea($value ?: wp_json_encode($this->get_default_boxes(), JSON_PRETTY_PRINT)),
+				esc_html__('Configure custom cubic boxes and USPS flat rate boxes. Use box_type values of cubic or flat_rate.', 'fk-usps-optimizer')
+			);
+			return;
+		}
+
+		printf(
+			'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />',
+			esc_attr(self::OPTION_KEY),
+			esc_attr($key),
+			esc_attr($value)
+		);
+	}
+
+	public function render_page(): void {
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html__('FunnelKit USPS Priority Shipping Optimizer', 'fk-usps-optimizer'); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields('fk_usps_optimizer');
+				do_settings_sections('fk-usps-optimizer');
+				submit_button();
+				?>
+			</form>
+		</div>
+		<?php
+	}
+
+	public function sanitize_settings(array $input): array {
+		$output = array();
+
+		$string_fields = array(
+			'shipengine_api_key',
+			'shipengine_carrier_id',
+			'ship_from_name',
+			'ship_from_company',
+			'ship_from_phone',
+			'ship_from_address1',
+			'ship_from_address2',
+			'ship_from_city',
+			'ship_from_state',
+			'ship_from_postal_code',
+			'ship_from_country',
+		);
+
+		foreach ($string_fields as $field) {
+			$output[$field] = isset($input[$field]) ? sanitize_text_field((string) $input[$field]) : '';
+		}
+
+		$output['debug_logging'] = empty($input['debug_logging']) ? '0' : '1';
+		$output['boxes_json']    = $this->sanitize_boxes_json($input['boxes_json'] ?? '');
+
+		return $output;
+	}
+
+	protected function sanitize_boxes_json(string $raw_json): string {
+		$decoded = json_decode(wp_unslash($raw_json), true);
+
+		if (! is_array($decoded)) {
+			add_settings_error(self::OPTION_KEY, 'invalid_boxes_json', __('Box definitions JSON is invalid. Keeping default boxes.', 'fk-usps-optimizer'));
+			return wp_json_encode($this->get_default_boxes());
+		}
+
+		$boxes = array();
+
+		foreach ($decoded as $box) {
+			if (! is_array($box)) {
+				continue;
+			}
+
+			$boxes[] = array(
+				'reference'     => sanitize_text_field((string) ($box['reference'] ?? '')),
+				'package_code'  => sanitize_text_field((string) ($box['package_code'] ?? 'package')),
+				'package_name'  => sanitize_text_field((string) ($box['package_name'] ?? '')),
+				'box_type'      => in_array(($box['box_type'] ?? ''), array('cubic', 'flat_rate'), true) ? $box['box_type'] : 'cubic',
+				'outer_width'   => absint($box['outer_width'] ?? 0),
+				'outer_length'  => absint($box['outer_length'] ?? 0),
+				'outer_depth'   => absint($box['outer_depth'] ?? 0),
+				'inner_width'   => absint($box['inner_width'] ?? 0),
+				'inner_length'  => absint($box['inner_length'] ?? 0),
+				'inner_depth'   => absint($box['inner_depth'] ?? 0),
+				'empty_weight'  => absint($box['empty_weight'] ?? 0),
+				'max_weight'    => absint($box['max_weight'] ?? 0),
+			);
+		}
+
+		return wp_json_encode($boxes);
+	}
+
+	public function get_settings(): array {
+		$saved = get_option(self::OPTION_KEY, array());
+
+		return wp_parse_args($saved, array(
+			'shipengine_api_key'    => '',
+			'shipengine_carrier_id' => '',
+			'ship_from_name'        => '',
+			'ship_from_company'     => '',
+			'ship_from_phone'       => '',
+			'ship_from_address1'    => '',
+			'ship_from_address2'    => '',
+			'ship_from_city'        => '',
+			'ship_from_state'       => '',
+			'ship_from_postal_code' => '',
+			'ship_from_country'     => 'US',
+			'debug_logging'         => '0',
+			'boxes_json'            => wp_json_encode($this->get_default_boxes()),
+		));
+	}
+
+	public function get_boxes(): array {
+		$settings = $this->get_settings();
+		$boxes    = json_decode($settings['boxes_json'], true);
+
+		return is_array($boxes) ? apply_filters('fk_usps_optimizer_boxes', $boxes) : $this->get_default_boxes();
+	}
+
+	public function get_ship_from_address(): array {
+		$settings = $this->get_settings();
+
+		return apply_filters('fk_usps_optimizer_ship_from_address', array(
+			'name'          => $settings['ship_from_name'],
+			'company_name'  => $settings['ship_from_company'],
+			'phone'         => $settings['ship_from_phone'],
+			'address_line1' => $settings['ship_from_address1'],
+			'address_line2' => $settings['ship_from_address2'],
+			'city_locality' => $settings['ship_from_city'],
+			'state_province'=> $settings['ship_from_state'],
+			'postal_code'   => $settings['ship_from_postal_code'],
+			'country_code'  => $settings['ship_from_country'],
+			'address_residential_indicator' => 'no',
+		));
+	}
+
+	public function get_shipengine_api_key(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters('fk_usps_optimizer_shipengine_api_key', $settings['shipengine_api_key']);
+	}
+
+	public function get_shipengine_carrier_id(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters('fk_usps_optimizer_shipengine_carrier_id', $settings['shipengine_carrier_id']);
+	}
+
+	public function is_debug_logging_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['debug_logging'];
+	}
+
+	protected function get_default_boxes(): array {
+		return array(
+			array(
+				'reference'    => 'Cubic Small',
+				'package_code' => 'package',
+				'package_name' => 'Custom Cubic Small',
+				'box_type'     => 'cubic',
+				'outer_width'  => 8,
+				'outer_length' => 8,
+				'outer_depth'  => 6,
+				'inner_width'  => 8,
+				'inner_length' => 8,
+				'inner_depth'  => 6,
+				'empty_weight' => 3,
+				'max_weight'   => 20,
+			),
+			array(
+				'reference'    => 'Cubic Medium',
+				'package_code' => 'package',
+				'package_name' => 'Custom Cubic Medium',
+				'box_type'     => 'cubic',
+				'outer_width'  => 12,
+				'outer_length' => 10,
+				'outer_depth'  => 8,
+				'inner_width'  => 12,
+				'inner_length' => 10,
+				'inner_depth'  => 8,
+				'empty_weight' => 5,
+				'max_weight'   => 20,
+			),
+			array(
+				'reference'    => 'USPS Small Flat Rate',
+				'package_code' => 'small_flat_rate_box',
+				'package_name' => 'USPS Small Flat Rate Box',
+				'box_type'     => 'flat_rate',
+				'outer_width'  => 9,
+				'outer_length' => 6,
+				'outer_depth'  => 2,
+				'inner_width'  => 9,
+				'inner_length' => 6,
+				'inner_depth'  => 2,
+				'empty_weight' => 4,
+				'max_weight'   => 70,
+			),
+			array(
+				'reference'    => 'USPS Medium Flat Rate',
+				'package_code' => 'medium_flat_rate_box',
+				'package_name' => 'USPS Medium Flat Rate Box',
+				'box_type'     => 'flat_rate',
+				'outer_width'  => 14,
+				'outer_length' => 12,
+				'outer_depth'  => 3,
+				'inner_width'  => 14,
+				'inner_length' => 12,
+				'inner_depth'  => 3,
+				'empty_weight' => 6,
+				'max_weight'   => 70,
+			),
+			array(
+				'reference'    => 'USPS Large Flat Rate',
+				'package_code' => 'large_flat_rate_box',
+				'package_name' => 'USPS Large Flat Rate Box',
+				'box_type'     => 'flat_rate',
+				'outer_width'  => 12,
+				'outer_length' => 12,
+				'outer_depth'  => 6,
+				'inner_width'  => 12,
+				'inner_length' => 12,
+				'inner_depth'  => 6,
+				'empty_weight' => 8,
+				'max_weight'   => 70,
+			),
+		);
+	}
+}

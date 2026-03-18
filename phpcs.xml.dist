@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<ruleset name="FK USPS Optimizer">
+	<description>WordPress coding standards for the FunnelKit USPS Priority Shipping Optimizer plugin.</description>
+
+	<file>woocommerce-fk-usps-optimizer.php</file>
+	<file>includes</file>
+	<exclude-pattern>vendor/*</exclude-pattern>
+
+	<arg name="basepath" value="."/>
+	<arg name="extensions" value="php"/>
+	<arg value="sp"/>
+
+	<rule ref="WordPress-Core"/>
+	<rule ref="WordPress-Docs"/>
+	<rule ref="WordPress-Extra"/>
+</ruleset>

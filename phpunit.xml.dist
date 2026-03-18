@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<phpunit bootstrap="tests/bootstrap.php"
+	colors="true"
+	verbose="true">
+	<testsuites>
+		<testsuite name="FK USPS Optimizer Tests">
+			<directory>tests</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>
