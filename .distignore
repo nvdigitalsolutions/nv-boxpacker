@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+vendor/bin
+tests
+phpunit.xml.dist
+phpcs.xml.dist
+.gitignore
+.editorconfig

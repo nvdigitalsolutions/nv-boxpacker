@@ -1,0 +1,35 @@
+{
+  "name": "openai/fk-usps-optimizer",
+  "description": "WooCommerce and FunnelKit USPS Priority cubic and flat-rate optimizer.",
+  "type": "wordpress-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": ">=7.4",
+    "dvdoug/boxpacker": "^4.1"
+  },
+  "require-dev": {
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+    "php-stubs/woocommerce-stubs": "^10.0",
+    "php-stubs/wordpress-stubs": "^6.8",
+    "phpunit/phpunit": "^9.6",
+    "wp-coding-standards/wpcs": "^3.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "FK_USPS_Optimizer\\": "includes/"
+    }
+  },
+  "scripts": {
+    "lint": [
+      "php -l woocommerce-fk-usps-optimizer.php",
+      "find includes -name '*.php' -print0 | xargs -0 -n1 php -l"
+    ],
+    "phpcs": "phpcs",
+    "test": "phpunit"
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  }
+}
