@@ -4,8 +4,8 @@
   "type": "wordpress-plugin",
   "license": "proprietary",
   "require": {
-    "php": ">=7.4",
-    "dvdoug/boxpacker": "^4.1"
+    "php": ">=8.0",
+    "dvdoug/boxpacker": "^3.12"
   },
   "require-dev": {
     "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
@@ -15,9 +15,9 @@
     "wp-coding-standards/wpcs": "^3.1"
   },
   "autoload": {
-    "psr-4": {
-      "FK_USPS_Optimizer\\": "includes/"
-    }
+    "classmap": [
+      "includes/"
+    ]
   },
   "scripts": {
     "lint": [
@@ -30,6 +30,11 @@
   "config": {
     "allow-plugins": {
       "dealerdirect/phpcodesniffer-composer-installer": true
-    }
+    },
+    "optimize-autoloader": true,
+    "platform": {
+      "php": "8.0.0"
+    },
+    "sort-packages": true
   }
 }
