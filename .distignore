@@ -5,6 +5,7 @@ vendor/bin
 tests
 bin
 build
+dist
 phpunit.xml.dist
 phpcs.xml.dist
 .gitignore
