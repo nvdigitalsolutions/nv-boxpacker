@@ -10,6 +10,8 @@ jobs:
   lint-and-test:
     name: PHP ${{ matrix.php }} Lint, PHPCS & Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     strategy:
       matrix:
