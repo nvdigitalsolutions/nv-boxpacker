@@ -140,12 +140,12 @@ class BoxPacker_Item implements \DVDoug\BoxPacker\Item {
 	}
 
 	/**
-	 * Get the allowed rotation constant.
+	 * Whether the item must remain flat during packing.
 	 *
-	 * @return int Rotation constant.
+	 * @return bool True if the item must be kept flat.
 	 */
-	public function getAllowedRotation(): int {
-		return $this->keep_flat ? \DVDoug\BoxPacker\Rotation::KeepFlat : \DVDoug\BoxPacker\Rotation::BestFit;
+	public function keepFlat(): bool {
+		return $this->keep_flat;
 	}
 
 	/**
