@@ -142,9 +142,11 @@ class BoxPacker_Item implements \DVDoug\BoxPacker\Item {
 	/**
 	 * Whether the item must remain flat during packing.
 	 *
+	 * Implements the DVDoug\BoxPacker\Item interface (v3.12+).
+	 *
 	 * @return bool True if the item must be kept flat.
 	 */
-	public function keepFlat(): bool {
+	public function getKeepFlat(): bool {
 		return $this->keep_flat;
 	}
 

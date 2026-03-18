@@ -1,10 +1,17 @@
 <?xml version="1.0"?>
 <phpunit bootstrap="tests/bootstrap.php"
 	colors="true"
-	verbose="true">
+	verbose="true"
+	stopOnError="false"
+	stopOnFailure="false">
 	<testsuites>
 		<testsuite name="FK USPS Optimizer Tests">
-			<directory>tests</directory>
+			<directory suffix="Test.php">tests/Unit</directory>
 		</testsuite>
 	</testsuites>
+	<coverage>
+		<include>
+			<directory suffix=".php">includes</directory>
+		</include>
+	</coverage>
 </phpunit>
