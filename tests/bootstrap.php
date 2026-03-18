@@ -28,10 +28,13 @@ require_once FK_USPS_OPTIMIZER_PATH . 'vendor/autoload.php';
 // ---------------------------------------------------------------------------
 $GLOBALS['_test_wp_options']       = array();
 $GLOBALS['_test_wp_remote_post']   = null;   // null = default 200/{} response.
+$GLOBALS['_test_wp_remote_get']    = null;   // null = default 200/{} response.
 $GLOBALS['_test_wp_filters']       = array();
 $GLOBALS['_test_settings_errors']  = array();
 $GLOBALS['_test_current_user_can'] = true;
 $GLOBALS['_test_wc_logger']        = null;
+$GLOBALS['_test_wp_safe_redirect'] = null;
+$GLOBALS['_test_wp_transients']    = array();
 
 // ---------------------------------------------------------------------------
 // WordPress core stubs
@@ -551,6 +554,88 @@ function wc_get_logger(): WC_Test_Logger {
 // ---------------------------------------------------------------------------
 // WordPress HTTP stubs
 // ---------------------------------------------------------------------------
+
+/**
+ * Perform a remote GET request.
+ *
+ * Returns the value stored in $GLOBALS['_test_wp_remote_get'].
+ * If that value is callable, it is called with ($url, $args).
+ * If null, a default 200-OK / empty-body response is returned.
+ *
+ * @param string $url  URL to GET.
+ * @param array  $args Request arguments.
+ * @return array|\WP_Error Response array or WP_Error.
+ */
+function wp_remote_get( string $url, array $args = array() ) {
+	$stub = $GLOBALS['_test_wp_remote_get'] ?? null;
+	if ( null === $stub ) {
+		return array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
+	}
+	if ( is_callable( $stub ) ) {
+		return $stub( $url, $args );
+	}
+	return $stub;
+}
+
+/**
+ * Redirect to a URL safely (in tests, just stores the URL in global state).
+ *
+ * @param string $location URL to redirect to.
+ * @param int    $status   HTTP status code (ignored in tests).
+ * @param string $x_redirect_by Optional X-Redirect-By header value (ignored).
+ * @return bool Always true.
+ */
+function wp_safe_redirect( string $location, int $status = 302, string $x_redirect_by = 'WordPress' ): bool {
+	$GLOBALS['_test_wp_safe_redirect'] = $location;
+	return true;
+}
+
+/**
+ * Append query arguments to a URL.
+ *
+ * @param array  $args Query arguments to add.
+ * @param string $url  Base URL.
+ * @return string URL with query arguments appended.
+ */
+function add_query_arg( array $args, string $url = '' ): string {
+	$query = http_build_query( $args );
+	return $url . ( strpos( $url, '?' ) !== false ? '&' : '?' ) . $query;
+}
+
+/**
+ * Get a transient value.
+ *
+ * @param string $transient Transient name.
+ * @return mixed Value or false if not set.
+ */
+function get_transient( string $transient ) {
+	return $GLOBALS['_test_wp_transients'][ $transient ] ?? false;
+}
+
+/**
+ * Set a transient value.
+ *
+ * @param string $transient  Transient name.
+ * @param mixed  $value      Value to store.
+ * @param int    $expiration Expiration in seconds (ignored in tests).
+ * @return bool Always true.
+ */
+function set_transient( string $transient, $value, int $expiration = 0 ): bool {
+	$GLOBALS['_test_wp_transients'][ $transient ] = $value;
+	return true;
+}
+
+/**
+ * Delete a transient.
+ *
+ * @param string $transient Transient name.
+ * @return bool Always true.
+ */
+function delete_transient( string $transient ): bool {
+	unset( $GLOBALS['_test_wp_transients'][ $transient ] );
+	return true;
+}
+
 
 /**
  * Perform a remote POST request.

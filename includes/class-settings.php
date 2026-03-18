@@ -110,7 +110,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				selected( 'shipengine', (string) $value, false ),
-				esc_html__( 'ShipEngine', 'fk-usps-optimizer' ),
+				esc_html__( 'ShipEngine (primary — USPS via stamps_com)', 'fk-usps-optimizer' ),
 				selected( 'shipstation', (string) $value, false ),
 				esc_html__( 'ShipStation', 'fk-usps-optimizer' )
 			);
@@ -118,9 +118,11 @@ class Settings {
 		}
 
 		if ( in_array( $key, array( 'debug_logging', 'sandbox_mode' ), true ) ) {
-			$label = 'debug_logging' === $key
-				? esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' )
-				: esc_html__( 'Use sandbox / test credentials. Rates are not production prices.', 'fk-usps-optimizer' );
+			if ( 'debug_logging' === $key ) {
+				$label = esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' );
+			} else {
+				$label = esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' );
+			}
 
 			printf(
 				'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s /> %4$s</label>',
@@ -128,6 +130,18 @@ class Settings {
 				esc_attr( $key ),
 				checked( '1', (string) $value, false ),
 				$label // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
+			);
+			return;
+		}
+
+		if ( 'shipengine_carrier_id' === $key ) {
+			printf(
+				'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( $value ),
+				esc_html__( 'Your ShipEngine USPS carrier ID (e.g. se-123456). Use the "Test Connection" button below to verify.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -155,15 +169,40 @@ class Settings {
 	 * Renders the plugin settings admin page.
 	 */
 	public function render_page(): void {
+		$test_result = get_transient( 'fk_usps_test_connection_result' );
+		if ( false !== $test_result ) {
+			delete_transient( 'fk_usps_test_connection_result' );
+		}
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'FunnelKit USPS Priority Shipping Optimizer', 'fk-usps-optimizer' ); ?></h1>
+
+			<?php if ( is_array( $test_result ) ) : ?>
+			<div class="notice <?php echo $test_result['success'] ? 'notice-success' : 'notice-error'; ?> is-dismissible">
+				<p><?php echo esc_html( $test_result['message'] ); ?></p>
+			</div>
+			<?php endif; ?>
+
 			<form method="post" action="options.php">
 				<?php
 				settings_fields( 'fk_usps_optimizer' );
 				do_settings_sections( 'fk-usps-optimizer' );
 				submit_button();
 				?>
+			</form>
+
+			<hr />
+			<h2><?php echo esc_html__( 'Test ShipEngine Connection', 'fk-usps-optimizer' ); ?></h2>
+			<p class="description">
+				<?php echo esc_html__( 'Verifies your ShipEngine API key is valid and that the configured Carrier ID belongs to an active USPS carrier account. Save your settings before running this test.', 'fk-usps-optimizer' ); ?>
+			</p>
+			<p class="description">
+				<?php echo esc_html__( 'For sandbox testing, use a TEST_-prefixed API key from your ShipEngine dashboard and enable Sandbox Mode above.', 'fk-usps-optimizer' ); ?>
+			</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="fk_usps_test_connection" />
+				<?php wp_nonce_field( 'fk_usps_test_connection', 'fk_usps_test_connection_nonce' ); ?>
+				<?php submit_button( __( 'Test Connection', 'fk-usps-optimizer' ), 'secondary', 'submit', false ); ?>
 			</form>
 		</div>
 		<?php
