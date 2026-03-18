@@ -17,8 +17,11 @@ require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-settings.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-order-plan-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-packing-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipengine-service.php';
+require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipstation-service.php';
+require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-test-pricing-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-pirateship-export.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-admin-ui.php';
+require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-admin-test-ui.php';
 
 /**
  * Main plugin class responsible for bootstrapping all services.
@@ -67,11 +70,25 @@ class Plugin {
 	protected $export_service;
 
 	/**
-	 * Admin UI instance.
+	 * ShipStation service instance.
 	 *
-	 * @var Admin_UI
+	 * @var ShipStation_Service
 	 */
-	protected $admin_ui;
+	protected $shipstation_service;
+
+	/**
+	 * Test pricing service instance.
+	 *
+	 * @var Test_Pricing_Service
+	 */
+	protected $test_pricing_service;
+
+	/**
+	 * Admin test UI instance.
+	 *
+	 * @var Admin_Test_UI
+	 */
+	protected $admin_test_ui;
 
 	/**
 	 * Bootstrap and return the singleton plugin instance.
@@ -90,12 +107,15 @@ class Plugin {
 	 * Constructor. Instantiates all services and registers the init hook.
 	 */
 	protected function __construct() {
-		$this->settings           = new Settings();
-		$this->order_plan_service = new Order_Plan_Service();
-		$this->packing_service    = new Packing_Service( $this->settings );
-		$this->shipengine_service = new ShipEngine_Service( $this->settings );
-		$this->export_service     = new PirateShip_Export( $this->settings, $this->order_plan_service );
-		$this->admin_ui           = new Admin_UI( $this->settings, $this->order_plan_service, $this->export_service );
+		$this->settings             = new Settings();
+		$this->order_plan_service   = new Order_Plan_Service();
+		$this->packing_service      = new Packing_Service( $this->settings );
+		$this->shipengine_service   = new ShipEngine_Service( $this->settings );
+		$this->shipstation_service  = new ShipStation_Service( $this->settings );
+		$this->test_pricing_service = new Test_Pricing_Service( $this->settings, $this->packing_service, $this->shipengine_service, $this->shipstation_service );
+		$this->export_service       = new PirateShip_Export( $this->settings, $this->order_plan_service );
+		$this->admin_ui             = new Admin_UI( $this->settings, $this->order_plan_service, $this->export_service );
+		$this->admin_test_ui        = new Admin_Test_UI( $this->settings, $this->test_pricing_service );
 
 		add_action( 'plugins_loaded', array( $this, 'init' ) );
 	}
@@ -112,6 +132,7 @@ class Plugin {
 
 		$this->settings->register();
 		$this->admin_ui->register();
+		$this->admin_test_ui->register();
 		$this->export_service->register();
 
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );

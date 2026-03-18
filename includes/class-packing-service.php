@@ -38,8 +38,20 @@ class Packing_Service {
 	 * @return array Packed packages.
 	 */
 	public function pack_order( \WC_Order $order ): array {
-		$items = $this->get_shippable_items( $order );
+		return $this->pack_items( $this->get_shippable_items( $order ) );
+	}
 
+	/**
+	 * Pack a flat list of item arrays into boxes.
+	 *
+	 * Each item must contain: name, length, width, height (inches) and weight_oz.
+	 * Additional keys (product_id, item_id, sku, etc.) are preserved and returned
+	 * in the packed-package item lists.
+	 *
+	 * @param array $items Flat list of item arrays.
+	 * @return array Packed packages.
+	 */
+	public function pack_items( array $items ): array {
 		if ( empty( $items ) ) {
 			return array();
 		}

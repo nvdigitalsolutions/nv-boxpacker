@@ -40,11 +40,43 @@ class ShipEngine_Service {
 	 * @return array Best shipping plan found.
 	 */
 	public function build_package_plan( \WC_Order $order, array $package, int $package_number ): array {
+		return $this->build_package_plan_for_address(
+			$package,
+			$this->get_ship_to_address( $order ),
+			$package_number,
+			$order->get_id()
+		);
+	}
+
+	/**
+	 * Build the best shipping package plan using an explicit ship-to address.
+	 *
+	 * Useful for test/sandbox rate lookups that are not tied to a real order.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipEngine-formatted ship-to address.
+	 * @param int   $package_number Package sequence number.
+	 * @return array Best shipping plan found.
+	 */
+	public function build_test_package_plan( array $package, array $ship_to, int $package_number ): array {
+		return $this->build_package_plan_for_address( $package, $ship_to, $package_number );
+	}
+
+	/**
+	 * Core plan-building logic shared by build_package_plan and build_test_package_plan.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipEngine-formatted destination address.
+	 * @param int   $package_number Package sequence number.
+	 * @param int   $order_id       Order ID used for logging (0 for test runs).
+	 * @return array Best shipping plan found, or empty array.
+	 */
+	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates = $this->build_candidates( $package );
 		$best_plan  = array();
 
 		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate( $order, $candidate );
+			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
 
 			if ( ! $response['success'] ) {
 				continue;
@@ -134,16 +166,32 @@ class ShipEngine_Service {
 	/**
 	 * Request a shipping rate from ShipEngine for a candidate shipment.
 	 *
-	 * @param \WC_Order $order     The order.
+	 * @param \WC_Order $order     The order (provides ship-to address and ID for logging).
 	 * @param array     $candidate Candidate shipment.
 	 * @return array Result with 'success' key and optionally 'rate'.
 	 */
 	protected function request_rate( \WC_Order $order, array $candidate ): array {
+		return $this->request_rate_for_address(
+			$this->get_ship_to_address( $order ),
+			$candidate,
+			$order->get_id()
+		);
+	}
+
+	/**
+	 * Perform the actual ShipEngine rate HTTP request for a given address.
+	 *
+	 * @param array $ship_to   ShipEngine-formatted destination address.
+	 * @param array $candidate Candidate shipment.
+	 * @param int   $order_id  Order ID used for log context (0 for test runs).
+	 * @return array Result with 'success' key and optionally 'rate'.
+	 */
+	protected function request_rate_for_address( array $ship_to, array $candidate, int $order_id = 0 ): array {
 		$api_key    = $this->settings->get_shipengine_api_key();
 		$carrier_id = $this->settings->get_shipengine_carrier_id();
 
 		if ( '' === $api_key || '' === $carrier_id ) {
-			$this->log( 'Missing ShipEngine credentials.', array( 'order_id' => $order->get_id() ) );
+			$this->log( 'Missing ShipEngine credentials.', array( 'order_id' => $order_id ) );
 			return array( 'success' => false );
 		}
 
@@ -153,7 +201,7 @@ class ShipEngine_Service {
 			),
 			'shipment'     => array(
 				'validate_address' => 'no_validation',
-				'ship_to'          => $this->get_ship_to_address( $order ),
+				'ship_to'          => $ship_to,
 				'ship_from'        => $this->settings->get_ship_from_address(),
 				'packages'         => array(
 					array(
@@ -190,7 +238,7 @@ class ShipEngine_Service {
 			$this->log(
 				'ShipEngine request failed.',
 				array(
-					'order_id' => $order->get_id(),
+					'order_id' => $order_id,
 					'error'    => $response->get_error_message(),
 				)
 			);
@@ -205,7 +253,7 @@ class ShipEngine_Service {
 			$this->log(
 				'ShipEngine returned a non-success response.',
 				array(
-					'order_id' => $order->get_id(),
+					'order_id' => $order_id,
 					'status'   => $code,
 					'body'     => $body,
 				)
@@ -220,7 +268,7 @@ class ShipEngine_Service {
 			$this->log(
 				'ShipEngine returned no rates.',
 				array(
-					'order_id' => $order->get_id(),
+					'order_id' => $order_id,
 					'body'     => $body,
 				)
 			);
