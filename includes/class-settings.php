@@ -43,19 +43,24 @@ class Settings {
 		);
 
 		$fields = array(
-			'shipengine_api_key'    => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
-			'shipengine_carrier_id' => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
-			'ship_from_name'        => __( 'Ship From Name', 'fk-usps-optimizer' ),
-			'ship_from_company'     => __( 'Ship From Company', 'fk-usps-optimizer' ),
-			'ship_from_phone'       => __( 'Ship From Phone', 'fk-usps-optimizer' ),
-			'ship_from_address1'    => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
-			'ship_from_address2'    => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
-			'ship_from_city'        => __( 'Ship From City', 'fk-usps-optimizer' ),
-			'ship_from_state'       => __( 'Ship From State', 'fk-usps-optimizer' ),
-			'ship_from_postal_code' => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
-			'ship_from_country'     => __( 'Ship From Country', 'fk-usps-optimizer' ),
-			'debug_logging'         => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
-			'boxes_json'            => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
+			'carrier'                  => __( 'Shipping Carrier API', 'fk-usps-optimizer' ),
+			'shipengine_api_key'       => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
+			'shipengine_carrier_id'    => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
+			'shipstation_api_key'      => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
+			'shipstation_api_secret'   => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
+			'shipstation_carrier_code' => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
+			'sandbox_mode'             => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'ship_from_name'           => __( 'Ship From Name', 'fk-usps-optimizer' ),
+			'ship_from_company'        => __( 'Ship From Company', 'fk-usps-optimizer' ),
+			'ship_from_phone'          => __( 'Ship From Phone', 'fk-usps-optimizer' ),
+			'ship_from_address1'       => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
+			'ship_from_address2'       => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
+			'ship_from_city'           => __( 'Ship From City', 'fk-usps-optimizer' ),
+			'ship_from_state'          => __( 'Ship From State', 'fk-usps-optimizer' ),
+			'ship_from_postal_code'    => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
+			'ship_from_country'        => __( 'Ship From Country', 'fk-usps-optimizer' ),
+			'debug_logging'            => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
+			'boxes_json'               => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
 		);
 
 		foreach ( $fields as $key => $label ) {
@@ -96,13 +101,33 @@ class Settings {
 		$settings = $this->get_settings();
 		$value    = $settings[ $key ] ?? '';
 
-		if ( 'debug_logging' === $key ) {
+		if ( 'carrier' === $key ) {
+			printf(
+				'<select name="%1$s[%2$s]">' .
+				'<option value="shipengine"%3$s>%4$s</option>' .
+				'<option value="shipstation"%5$s>%6$s</option>' .
+				'</select>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				selected( 'shipengine', (string) $value, false ),
+				esc_html__( 'ShipEngine', 'fk-usps-optimizer' ),
+				selected( 'shipstation', (string) $value, false ),
+				esc_html__( 'ShipStation', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
+		if ( in_array( $key, array( 'debug_logging', 'sandbox_mode' ), true ) ) {
+			$label = 'debug_logging' === $key
+				? esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' )
+				: esc_html__( 'Use sandbox / test credentials. Rates are not production prices.', 'fk-usps-optimizer' );
+
 			printf(
 				'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s /> %4$s</label>',
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				checked( '1', (string) $value, false ),
-				esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' )
+				$label // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
 			);
 			return;
 		}
@@ -156,6 +181,9 @@ class Settings {
 		$string_fields = array(
 			'shipengine_api_key',
 			'shipengine_carrier_id',
+			'shipstation_api_key',
+			'shipstation_api_secret',
+			'shipstation_carrier_code',
 			'ship_from_name',
 			'ship_from_company',
 			'ship_from_phone',
@@ -171,7 +199,9 @@ class Settings {
 			$output[ $field ] = isset( $input[ $field ] ) ? sanitize_text_field( (string) $input[ $field ] ) : '';
 		}
 
+		$output['carrier']       = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
 		$output['debug_logging'] = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']  = empty( $input['sandbox_mode'] ) ? '0' : '1';
 		$output['boxes_json']    = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
 		return $output;
@@ -228,19 +258,24 @@ class Settings {
 		return wp_parse_args(
 			$saved,
 			array(
-				'shipengine_api_key'    => '',
-				'shipengine_carrier_id' => '',
-				'ship_from_name'        => '',
-				'ship_from_company'     => '',
-				'ship_from_phone'       => '',
-				'ship_from_address1'    => '',
-				'ship_from_address2'    => '',
-				'ship_from_city'        => '',
-				'ship_from_state'       => '',
-				'ship_from_postal_code' => '',
-				'ship_from_country'     => 'US',
-				'debug_logging'         => '0',
-				'boxes_json'            => wp_json_encode( $this->get_default_boxes() ),
+				'carrier'                  => 'shipengine',
+				'shipengine_api_key'       => '',
+				'shipengine_carrier_id'    => '',
+				'shipstation_api_key'      => '',
+				'shipstation_api_secret'   => '',
+				'shipstation_carrier_code' => 'stamps_com',
+				'sandbox_mode'             => '0',
+				'ship_from_name'           => '',
+				'ship_from_company'        => '',
+				'ship_from_phone'          => '',
+				'ship_from_address1'       => '',
+				'ship_from_address2'       => '',
+				'ship_from_city'           => '',
+				'ship_from_state'          => '',
+				'ship_from_postal_code'    => '',
+				'ship_from_country'        => 'US',
+				'debug_logging'            => '0',
+				'boxes_json'               => wp_json_encode( $this->get_default_boxes() ),
 			)
 		);
 	}
@@ -310,6 +345,59 @@ class Settings {
 	public function is_debug_logging_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) $settings['debug_logging'];
+	}
+
+	/**
+	 * Get the configured shipping carrier API.
+	 *
+	 * @return string 'shipengine' or 'shipstation'.
+	 */
+	public function get_carrier(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters( 'fk_usps_optimizer_carrier', $settings['carrier'] );
+	}
+
+	/**
+	 * Get the ShipStation API key.
+	 *
+	 * @return string ShipStation API key.
+	 */
+	public function get_shipstation_api_key(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters( 'fk_usps_optimizer_shipstation_api_key', $settings['shipstation_api_key'] );
+	}
+
+	/**
+	 * Get the ShipStation API secret.
+	 *
+	 * @return string ShipStation API secret.
+	 */
+	public function get_shipstation_api_secret(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters( 'fk_usps_optimizer_shipstation_api_secret', $settings['shipstation_api_secret'] );
+	}
+
+	/**
+	 * Get the ShipStation carrier code.
+	 *
+	 * @return string ShipStation carrier code (e.g. 'stamps_com').
+	 */
+	public function get_shipstation_carrier_code(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters( 'fk_usps_optimizer_shipstation_carrier_code', $settings['shipstation_carrier_code'] );
+	}
+
+	/**
+	 * Check whether sandbox mode is enabled.
+	 *
+	 * When active, rate requests are marked as sandbox in logs and the admin UI
+	 * displays a warning banner.
+	 *
+	 * @return bool Whether sandbox mode is enabled.
+	 */
+	public function is_sandbox_mode_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['sandbox_mode'];
 	}
 
 	/**

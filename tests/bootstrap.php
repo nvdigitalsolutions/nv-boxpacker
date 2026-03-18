@@ -392,6 +392,87 @@ function check_admin_referer( $action = -1, string $query_arg = '_wpnonce' ): in
 	return 1;
 }
 
+/**
+ * Verify a nonce value (always passes in tests).
+ *
+ * @param mixed $nonce  Nonce value (ignored).
+ * @param mixed $action Nonce action (ignored).
+ * @return int|false Always returns 1 in tests.
+ */
+function wp_verify_nonce( $nonce, $action = -1 ) {
+	return 1;
+}
+
+/**
+ * Output or return a nonce hidden input field.
+ *
+ * @param mixed  $action  Nonce action (ignored).
+ * @param string $name    Field name.
+ * @param bool   $referer Whether to include referer field (ignored).
+ * @param bool   $echo    Whether to echo the field.
+ * @return string HTML nonce field.
+ */
+function wp_nonce_field( $action = -1, string $name = '_wpnonce', bool $referer = true, bool $echo = true ): string {
+	$html = '<input type="hidden" name="' . esc_attr( $name ) . '" value="test_nonce" />';
+	if ( $echo ) {
+		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already escaped above.
+	}
+	return $html;
+}
+
+/**
+ * Sanitize a string key (lowercase alphanumeric, underscores, hyphens only).
+ *
+ * @param string $key Raw key.
+ * @return string Sanitized key.
+ */
+function sanitize_key( string $key ): string {
+	return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', $key ) );
+}
+
+/**
+ * Append a trailing slash to a string.
+ *
+ * @param string $string Input string.
+ * @return string String with trailing slash.
+ */
+function trailingslashit( string $string ): string {
+	return rtrim( $string, '/\\' ) . '/';
+}
+
+/**
+ * Escape a string for use in JavaScript.
+ *
+ * Uses json_encode() with JSON_UNESCAPED_UNICODE and JSON_HEX_TAG so that
+ * the result is safe for inline JavaScript contexts (matches WordPress core).
+ * The surrounding double-quotes from json_encode() are stripped since
+ * esc_js() only returns the escaped content, not a quoted JS literal.
+ *
+ * @param string $text Text to escape.
+ * @return string Escaped text.
+ */
+function esc_js( string $text ): string {
+	$encoded = json_encode( $text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
+	// json_encode wraps strings in double-quotes; strip them.
+	return substr( (string) $encoded, 1, -1 );
+}
+
+/**
+ * Output a checked/selected HTML attribute for a select element.
+ *
+ * @param mixed  $selected One of the values to compare.
+ * @param mixed  $current  The value to compare against.
+ * @param bool   $echo     Whether to echo the attribute.
+ * @return string Attribute string or empty string.
+ */
+function selected( $selected, $current = true, bool $echo = true ): string {
+	$result = ( (string) $selected === (string) $current ) ? ' selected="selected"' : '';
+	if ( $echo ) {
+		echo $result; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- attribute string.
+	}
+	return $result;
+}
+
 // ---------------------------------------------------------------------------
 // WooCommerce stubs
 // ---------------------------------------------------------------------------
