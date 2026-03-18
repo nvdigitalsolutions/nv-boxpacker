@@ -443,11 +443,18 @@ function trailingslashit( string $string ): string {
 /**
  * Escape a string for use in JavaScript.
  *
+ * Uses json_encode() with JSON_UNESCAPED_UNICODE and JSON_HEX_TAG so that
+ * the result is safe for inline JavaScript contexts (matches WordPress core).
+ * The surrounding double-quotes from json_encode() are stripped since
+ * esc_js() only returns the escaped content, not a quoted JS literal.
+ *
  * @param string $text Text to escape.
  * @return string Escaped text.
  */
 function esc_js( string $text ): string {
-	return addslashes( $text );
+	$encoded = json_encode( $text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
+	// json_encode wraps strings in double-quotes; strip them.
+	return substr( (string) $encoded, 1, -1 );
 }
 
 /**

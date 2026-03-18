@@ -127,7 +127,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				checked( '1', (string) $value, false ),
-				$label // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitised by esc_html__() above.
+				$label // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
 			);
 			return;
 		}

@@ -89,11 +89,12 @@ class Admin_Test_UI {
 		);
 		$errors = array();
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified below via wp_verify_nonce.
-		if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['fk_usps_test_nonce'] ) ) {
-			$raw_nonce = sanitize_key( wp_unslash( $_POST['fk_usps_test_nonce'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_key used.
+		if ( 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+			// Verify nonce before accessing any other POST data.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce is verified on the next line via wp_verify_nonce.
+			$raw_nonce = sanitize_key( wp_unslash( $_POST['fk_usps_test_nonce'] ?? '' ) );
 
-			if ( ! wp_verify_nonce( $raw_nonce, 'fk_usps_test_pricing' ) ) {
+			if ( '' === $raw_nonce || ! wp_verify_nonce( $raw_nonce, 'fk_usps_test_pricing' ) ) {
 				$errors[] = __( 'Security check failed. Please try again.', 'fk-usps-optimizer' );
 			} else {
 				$posted = $this->parse_posted_data( $_POST ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- parse_posted_data sanitizes internally.
