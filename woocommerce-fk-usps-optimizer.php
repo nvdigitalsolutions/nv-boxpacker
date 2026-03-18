@@ -5,7 +5,7 @@
  * Version: 1.0.0
  * Author: OpenAI
  * Requires at least: 6.0
- * Requires PHP: 7.4
+ * Requires PHP: 8.0
  * Text Domain: fk-usps-optimizer
  *
  * @package FK_USPS_Optimizer

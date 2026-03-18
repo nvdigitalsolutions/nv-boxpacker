@@ -4,7 +4,7 @@
   "type": "wordpress-plugin",
   "license": "proprietary",
   "require": {
-    "php": ">=7.4",
+    "php": ">=8.0",
     "dvdoug/boxpacker": "^3.12"
   },
   "require-dev": {
@@ -32,6 +32,9 @@
       "dealerdirect/phpcodesniffer-composer-installer": true
     },
     "optimize-autoloader": true,
+    "platform": {
+      "php": "8.0.0"
+    },
     "sort-packages": true
   }
 }
