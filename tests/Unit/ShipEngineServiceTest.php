@@ -32,6 +32,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	protected function setUp(): void {
 		$GLOBALS['_test_wp_remote_post'] = null;
+		$GLOBALS['_test_wp_remote_get']  = null;
 		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
 		$GLOBALS['_test_wp_filters']     = array();
 		$GLOBALS['_test_wp_options']     = array();
@@ -624,6 +625,159 @@ class ShipEngineServiceTest extends TestCase {
 		$logged = $GLOBALS['_test_wc_logger']->logs[0]['message'];
 		$this->assertStringContainsString( 'key', $logged );
 		$this->assertStringContainsString( 'value', $logged );
+	}
+
+	// -------------------------------------------------------------------------
+	// test_connection
+	// -------------------------------------------------------------------------
+
+	public function test_connection_returns_error_when_api_key_missing(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( '' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'API key', $result['message'] );
+	}
+
+	public function test_connection_returns_error_when_carrier_id_missing(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( '' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'Carrier ID', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_wp_error(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$GLOBALS['_test_wp_remote_get'] = new \WP_Error( 'http_request_failed', 'cURL error 28' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'cURL error 28', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_401_response(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'bad_key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 401 ),
+			'body'     => json_encode( array( 'errors' => array( 'Unauthorized' ) ) ),
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'Invalid ShipEngine API key', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_non_success_status(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( '500', $result['message'] );
+	}
+
+	public function test_connection_returns_error_when_carrier_id_not_found(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-999' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'carriers' => array(
+					array( 'carrier_id' => 'se-123', 'carrier_code' => 'stamps_com', 'friendly_name' => 'USPS' ),
+				),
+			) ),
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'se-999', $result['message'] );
+	}
+
+	public function test_connection_returns_error_for_non_usps_carrier(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'carriers' => array(
+					array( 'carrier_id' => 'se-123', 'carrier_code' => 'fedex', 'friendly_name' => 'FedEx' ),
+				),
+			) ),
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'USPS carrier', $result['message'] );
+		$this->assertSame( 'FedEx', $result['carrier_name'] );
+	}
+
+	public function test_connection_succeeds_for_stamps_com_carrier(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-123' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'carriers' => array(
+					array( 'carrier_id' => 'se-123', 'carrier_code' => 'stamps_com', 'friendly_name' => 'USPS' ),
+				),
+			) ),
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertTrue( $result['success'] );
+		$this->assertStringContainsString( 'USPS', $result['message'] );
+		$this->assertSame( 'USPS', $result['carrier_name'] );
+	}
+
+	public function test_connection_succeeds_for_usps_carrier_code(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'TEST_abc' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'se-456' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'carriers' => array(
+					array( 'carrier_id' => 'se-456', 'carrier_code' => 'usps', 'friendly_name' => 'USPS Priority Mail' ),
+				),
+			) ),
+		);
+
+		$result = $this->service->test_connection();
+
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( 'USPS Priority Mail', $result['carrier_name'] );
+	}
+
+	public function test_connection_result_empty_carrier_name_on_failure(): void {
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( '' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( '' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertSame( '', $result['carrier_name'] );
 	}
 
 	// -------------------------------------------------------------------------

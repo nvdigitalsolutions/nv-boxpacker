@@ -136,6 +136,7 @@ class Plugin {
 		$this->export_service->register();
 
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
+		add_action( 'admin_post_fk_usps_test_connection', array( $this, 'handle_test_connection' ) );
 	}
 
 	/**
@@ -213,5 +214,35 @@ class Plugin {
 		}
 
 		$this->order_plan_service->save( $order, $plan );
+	}
+
+	/**
+	 * Handle the "Test Connection" admin-post action from the settings page.
+	 *
+	 * Verifies the nonce, runs the ShipEngine connection test, stores the
+	 * result as a short-lived transient, and redirects back to the settings page
+	 * so the result can be displayed as an admin notice.
+	 *
+	 * @return void
+	 */
+	public function handle_test_connection(): void {
+		check_admin_referer( 'fk_usps_test_connection', 'fk_usps_test_connection_nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'fk-usps-optimizer' ) );
+		}
+
+		$result = $this->shipengine_service->test_connection();
+		set_transient( 'fk_usps_test_connection_result', $result, 60 );
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page' => 'fk-usps-optimizer',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
 	}
 }

@@ -382,6 +382,135 @@ class ShipEngine_Service {
 	}
 
 	/**
+	 * Test the ShipEngine API connection and verify USPS carrier availability.
+	 *
+	 * Calls GET /v1/carriers to confirm the API key is valid and that the
+	 * configured carrier ID exists and belongs to a USPS carrier account.
+	 *
+	 * @return array {
+	 *   success:      bool   Whether all checks passed.
+	 *   message:      string Human-readable result message.
+	 *   carrier_name: string Friendly carrier name (empty on failure).
+	 * }
+	 */
+	public function test_connection(): array {
+		$api_key    = $this->settings->get_shipengine_api_key();
+		$carrier_id = $this->settings->get_shipengine_carrier_id();
+
+		if ( '' === $api_key ) {
+			return array(
+				'success'      => false,
+				'message'      => __( 'ShipEngine API key is not configured.', 'fk-usps-optimizer' ),
+				'carrier_name' => '',
+			);
+		}
+
+		if ( '' === $carrier_id ) {
+			return array(
+				'success'      => false,
+				'message'      => __( 'ShipEngine Carrier ID is not configured.', 'fk-usps-optimizer' ),
+				'carrier_name' => '',
+			);
+		}
+
+		$response = wp_remote_get(
+			'https://api.shipengine.com/v1/carriers',
+			array(
+				'timeout' => 15,
+				'headers' => array(
+					'API-Key'      => $api_key,
+					'Content-Type' => 'application/json',
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success'      => false,
+				'message'      => sprintf(
+					/* translators: %s: error message. */
+					__( 'Connection failed: %s', 'fk-usps-optimizer' ),
+					$response->get_error_message()
+				),
+				'carrier_name' => '',
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 401 === $code || 403 === $code ) {
+			return array(
+				'success'      => false,
+				'message'      => __( 'Invalid ShipEngine API key. Please check your credentials.', 'fk-usps-optimizer' ),
+				'carrier_name' => '',
+			);
+		}
+
+		if ( $code < 200 || $code >= 300 ) {
+			return array(
+				'success'      => false,
+				'message'      => sprintf(
+					/* translators: %d: HTTP status code. */
+					__( 'ShipEngine returned an unexpected response (HTTP %d).', 'fk-usps-optimizer' ),
+					$code
+				),
+				'carrier_name' => '',
+			);
+		}
+
+		$body     = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$carriers = $body['carriers'] ?? array();
+
+		$found = null;
+		foreach ( $carriers as $carrier ) {
+			if ( isset( $carrier['carrier_id'] ) && $carrier['carrier_id'] === $carrier_id ) {
+				$found = $carrier;
+				break;
+			}
+		}
+
+		if ( null === $found ) {
+			return array(
+				'success'      => false,
+				'message'      => sprintf(
+					/* translators: %s: carrier ID. */
+					__( 'Carrier ID "%s" was not found in your ShipEngine account. Please verify the ID.', 'fk-usps-optimizer' ),
+					$carrier_id
+				),
+				'carrier_name' => '',
+			);
+		}
+
+		$carrier_name = (string) ( $found['friendly_name'] ?? $found['carrier_code'] ?? $carrier_id );
+		$carrier_code = strtolower( (string) ( $found['carrier_code'] ?? '' ) );
+
+		// Verify the carrier is USPS-capable (stamps_com or usps carrier codes).
+		$is_usps = in_array( $carrier_code, array( 'stamps_com', 'usps', 'endicia' ), true );
+
+		if ( ! $is_usps ) {
+			return array(
+				'success'      => false,
+				'message'      => sprintf(
+					/* translators: %s: carrier name. */
+					__( 'Carrier "%s" is not a USPS carrier. This plugin requires a USPS carrier (stamps_com or usps).', 'fk-usps-optimizer' ),
+					$carrier_name
+				),
+				'carrier_name' => $carrier_name,
+			);
+		}
+
+		return array(
+			'success'      => true,
+			'message'      => sprintf(
+				/* translators: %s: carrier name. */
+				__( 'Connection successful! USPS carrier "%s" is active and ready.', 'fk-usps-optimizer' ),
+				$carrier_name
+			),
+			'carrier_name' => $carrier_name,
+		);
+	}
+
+	/**
 	 * Log a debug message via the WooCommerce logger.
 	 *
 	 * @param string $message Log message.

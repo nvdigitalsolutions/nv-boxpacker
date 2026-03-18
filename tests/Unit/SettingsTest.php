@@ -26,6 +26,7 @@ class SettingsTest extends TestCase {
 		$GLOBALS['_test_wp_options']      = array();
 		$GLOBALS['_test_wp_filters']      = array();
 		$GLOBALS['_test_settings_errors'] = array();
+		$GLOBALS['_test_wp_transients']   = array();
 		$this->settings                   = new Settings();
 	}
 
@@ -408,6 +409,69 @@ class SettingsTest extends TestCase {
 		$output = ob_get_clean();
 		$this->assertStringContainsString( 'textarea', $output );
 	}
+
+	public function test_render_field_outputs_select_for_carrier_with_usps_note(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'carrier' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'select', $output );
+		$this->assertStringContainsString( 'USPS', $output );
+		$this->assertStringContainsString( 'shipengine', $output );
+	}
+
+	public function test_render_field_sandbox_mode_label_mentions_test_key(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'sandbox_mode' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'TEST_', $output );
+	}
+
+	public function test_render_field_carrier_id_shows_description(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'shipengine_carrier_id' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'USPS carrier ID', $output );
+		$this->assertStringContainsString( 'Test Connection', $output );
+	}
+
+	public function test_render_page_includes_test_connection_form(): void {
+		ob_start();
+		$this->settings->render_page();
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'fk_usps_test_connection', $output );
+		$this->assertStringContainsString( 'Test ShipEngine Connection', $output );
+	}
+
+	public function test_render_page_displays_success_transient(): void {
+		$GLOBALS['_test_wp_transients']['fk_usps_test_connection_result'] = array(
+			'success' => true,
+			'message' => 'Connection successful! USPS carrier "USPS" is active.',
+		);
+
+		ob_start();
+		$this->settings->render_page();
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'notice-success', $output );
+		$this->assertStringContainsString( 'Connection successful', $output );
+		// Transient should be consumed.
+		$this->assertFalse( $GLOBALS['_test_wp_transients']['fk_usps_test_connection_result'] ?? false );
+	}
+
+	public function test_render_page_displays_error_transient(): void {
+		$GLOBALS['_test_wp_transients']['fk_usps_test_connection_result'] = array(
+			'success' => false,
+			'message' => 'Invalid ShipEngine API key.',
+		);
+
+		ob_start();
+		$this->settings->render_page();
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'notice-error', $output );
+		$this->assertStringContainsString( 'Invalid ShipEngine API key', $output );
+	}
+
 
 	// -------------------------------------------------------------------------
 	// render_page (smoke test)
