@@ -22,9 +22,21 @@ define( 'FK_USPS_OPTIMIZER_URL', plugin_dir_url( __FILE__ ) );
 
 $autoload = FK_USPS_OPTIMIZER_PATH . 'vendor/autoload.php';
 
-if ( file_exists( $autoload ) ) {
-	require_once $autoload;
+if ( ! file_exists( $autoload ) ) {
+	add_action(
+		'admin_notices',
+		function () {
+			echo '<div class="notice notice-error"><p>' .
+				esc_html__( 'FunnelKit USPS Priority Optimizer: Composer dependencies are missing. Please run', 'fk-usps-optimizer' ) .
+				' <code>composer install</code> ' .
+				esc_html__( 'in the plugin directory or reinstall using the built ZIP.', 'fk-usps-optimizer' ) .
+				'</p></div>';
+		}
+	);
+	return;
 }
+
+require_once $autoload;
 
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-plugin.php';
 

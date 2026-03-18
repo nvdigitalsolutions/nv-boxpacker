@@ -1,4 +1,30 @@
-/vendor/
+# Dev-only Composer packages (not needed for production)
+/vendor/bin/
+/vendor/dealerdirect/
+/vendor/doctrine/
+/vendor/myclabs/
+/vendor/nikic/
+/vendor/phar-io/
+/vendor/php-stubs/
+/vendor/phpcsstandards/
+/vendor/phpunit/
+/vendor/sebastian/
+/vendor/squizlabs/
+/vendor/theseer/
+/vendor/wp-coding-standards/
+
+# Dev-only files inside bundled vendor packages
+/vendor/dvdoug/boxpacker/tests/
+/vendor/dvdoug/boxpacker/features/
+/vendor/dvdoug/boxpacker/docs/
+/vendor/dvdoug/boxpacker/visualiser/
+/vendor/dvdoug/boxpacker/.github/
+/vendor/dvdoug/boxpacker/behat.yml
+/vendor/dvdoug/boxpacker/phpunit.xml
+/vendor/dvdoug/boxpacker/.php-cs-fixer.dist.php
+/vendor/dvdoug/boxpacker/.readthedocs.yaml
+/vendor/dvdoug/boxpacker/.scrutinizer.yml
+
 /node_modules/
 /build/
 /.phpunit.result.cache
