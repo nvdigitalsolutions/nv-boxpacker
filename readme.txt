@@ -1,5 +1,5 @@
 === FunnelKit USPS Priority Shipping Optimizer ===
-Contributors: openai
+Contributors: NV Digtal
 Tags: woocommerce, shipping, usps, pirateship, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
