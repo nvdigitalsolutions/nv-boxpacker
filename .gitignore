@@ -1,4 +1,5 @@
 /vendor/
 /node_modules/
+/build/
 /.phpunit.result.cache
 /phpcs-report.txt

@@ -4,10 +4,12 @@ node_modules
 vendor/bin
 tests
 bin
+build
 phpunit.xml.dist
 phpcs.xml.dist
 .gitignore
 .distignore
 .editorconfig
+.phpunit.result.cache
 composer.json
 composer.lock
