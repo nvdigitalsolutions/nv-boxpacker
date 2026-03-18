@@ -3,7 +3,11 @@
 node_modules
 vendor/bin
 tests
+bin
 phpunit.xml.dist
 phpcs.xml.dist
 .gitignore
+.distignore
 .editorconfig
+composer.json
+composer.lock
