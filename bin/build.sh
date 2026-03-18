@@ -27,7 +27,7 @@ echo "==> Installing production Composer dependencies..."
 composer install \
   --working-dir="${PLUGIN_DIR}" \
   --no-dev \
-  --optimize-autoloader \
+  --classmap-authoritative \
   --no-interaction \
   --quiet
 

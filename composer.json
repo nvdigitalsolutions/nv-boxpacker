@@ -20,6 +20,7 @@
     ]
   },
   "scripts": {
+    "build": "bash bin/build.sh",
     "lint": [
       "php -l woocommerce-fk-usps-optimizer.php",
       "find includes -name '*.php' -print0 | xargs -0 -n1 php -l"
