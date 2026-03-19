@@ -42,3 +42,31 @@ jobs:
 
       - name: PHPUnit tests
         run: composer test
+
+  build:
+    name: Build plugin ZIP
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP 8.0
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          extensions: mbstring, intl, json
+          coverage: none
+
+      - name: Build plugin ZIP
+        run: bash bin/build.sh
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: build/*.zip
+          retention-days: 30

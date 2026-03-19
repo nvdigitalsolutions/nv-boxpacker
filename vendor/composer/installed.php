@@ -3,7 +3,7 @@
         'name' => 'openai/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/fix-js-css-display-issue',
         'version' => 'dev-copilot/fix-js-css-display-issue',
-        'reference' => 'e349bef695d7e47def4bb7743c1963d24247ffc6',
+        'reference' => '4eae702864a46e797f6c16da00681256b644d322',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'openai/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/fix-js-css-display-issue',
             'version' => 'dev-copilot/fix-js-css-display-issue',
-            'reference' => 'e349bef695d7e47def4bb7743c1963d24247ffc6',
+            'reference' => '4eae702864a46e797f6c16da00681256b644d322',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
