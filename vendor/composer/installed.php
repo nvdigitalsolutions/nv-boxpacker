@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'openai/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/update-settings-page-connection-test',
-        'version' => 'dev-copilot/update-settings-page-connection-test',
-        'reference' => '83951a615e1dad1a8b12065d74a3b1711f149e64',
+        'pretty_version' => 'dev-copilot/rebuild-zip-file',
+        'version' => 'dev-copilot/rebuild-zip-file',
+        'reference' => 'de5cd298bcce48bbb06163b86400de86575d2be4',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'openai/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/update-settings-page-connection-test',
-            'version' => 'dev-copilot/update-settings-page-connection-test',
-            'reference' => '83951a615e1dad1a8b12065d74a3b1711f149e64',
+            'pretty_version' => 'dev-copilot/rebuild-zip-file',
+            'version' => 'dev-copilot/rebuild-zip-file',
+            'reference' => 'de5cd298bcce48bbb06163b86400de86575d2be4',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
