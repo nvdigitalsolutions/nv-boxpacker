@@ -48,10 +48,11 @@ class Settings {
 			'fk-usps-optimizer-settings',
 			'fkUspsOptimizer',
 			array(
-				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'nonce'   => wp_create_nonce( 'fk_usps_test_connection' ),
-				'testing' => __( 'Testing connection\u2026', 'fk-usps-optimizer' ),
-				'error'   => __( 'An unexpected error occurred. Please try again.', 'fk-usps-optimizer' ),
+				'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+				'nonce'       => wp_create_nonce( 'fk_usps_test_connection' ),
+				'settingsKey' => self::OPTION_KEY,
+				'testing'     => __( 'Testing connection\u2026', 'fk-usps-optimizer' ),
+				'error'       => __( 'An unexpected error occurred. Please try again.', 'fk-usps-optimizer' ),
 			)
 		);
 	}
@@ -233,7 +234,7 @@ class Settings {
 				?>
 			</form>
 
-			<div id="fk-usps-test-connection">
+			<div id="fk-usps-test-connection" style="display:none">
 			<hr />
 			<h2><?php echo esc_html__( 'Test Carrier API Connection', 'fk-usps-optimizer' ); ?></h2>
 			<p class="description">

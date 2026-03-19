@@ -384,18 +384,28 @@ class ShipEngine_Service {
 	/**
 	 * Test the ShipEngine API connection and verify USPS carrier availability.
 	 *
+	 * When $api_key or $carrier_id are provided (e.g. passed directly from the
+	 * settings form before saving), those values are used.  Empty strings cause
+	 * the method to fall back to the values stored in settings.
+	 *
 	 * Calls GET /v1/carriers to confirm the API key is valid and that the
 	 * configured carrier ID exists and belongs to a USPS carrier account.
 	 *
+	 * @param string $api_key    Optional API key override.
+	 * @param string $carrier_id Optional carrier ID override.
 	 * @return array {
 	 *   success:      bool   Whether all checks passed.
 	 *   message:      string Human-readable result message.
 	 *   carrier_name: string Friendly carrier name (empty on failure).
 	 * }
 	 */
-	public function test_connection(): array {
-		$api_key    = $this->settings->get_shipengine_api_key();
-		$carrier_id = $this->settings->get_shipengine_carrier_id();
+	public function test_connection( string $api_key = '', string $carrier_id = '' ): array {
+		if ( '' === $api_key ) {
+			$api_key = $this->settings->get_shipengine_api_key();
+		}
+		if ( '' === $carrier_id ) {
+			$carrier_id = $this->settings->get_shipengine_carrier_id();
+		}
 
 		if ( '' === $api_key ) {
 			return array(

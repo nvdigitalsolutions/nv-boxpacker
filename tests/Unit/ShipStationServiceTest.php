@@ -31,6 +31,7 @@ class ShipStationServiceTest extends TestCase {
 	private ShipStation_Service $service;
 
 	protected function setUp(): void {
+		$GLOBALS['_test_wp_remote_get']  = null;
 		$GLOBALS['_test_wp_remote_post'] = null;
 		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
 		$GLOBALS['_test_wp_filters']     = array();
@@ -536,6 +537,135 @@ class ShipStationServiceTest extends TestCase {
 
 		$this->assertSame( 1, $result['package_number'] );
 		$this->assertSame( 7.50, $result['rate_amount'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// test_connection
+	// -------------------------------------------------------------------------
+
+	public function test_connection_returns_error_when_api_key_missing(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( '' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'secret' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'API key', $result['message'] );
+	}
+
+	public function test_connection_returns_error_when_api_secret_missing(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( '' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'API key', $result['message'] );
+	}
+
+	public function test_connection_returns_error_when_both_credentials_missing(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( '' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( '' );
+
+		$result = $this->service->test_connection();
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'not configured', $result['message'] );
+	}
+
+	public function test_connection_uses_provided_credentials_instead_of_settings(): void {
+		// Settings have no credentials, but explicit args are provided.
+		$this->settings->expects( $this->never() )->method( 'get_shipstation_api_key' );
+		$this->settings->expects( $this->never() )->method( 'get_shipstation_api_secret' );
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection( 'explicit-key', 'explicit-secret' );
+
+		$this->assertTrue( $result['success'] );
+	}
+
+	public function test_connection_falls_back_to_settings_when_args_empty(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'saved-key' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'saved-secret' );
+
+		$captured_headers = null;
+		$GLOBALS['_test_wp_remote_get'] = function ( string $url, array $args ) use ( &$captured_headers ) {
+			$captured_headers = $args['headers'];
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '{}',
+			);
+		};
+
+		$this->service->test_connection();
+
+		$this->assertNotNull( $captured_headers );
+		$this->assertStringContainsString( 'Basic ', $captured_headers['Authorization'] );
+		$this->assertStringContainsString(
+			base64_encode( 'saved-key:saved-secret' ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			$captured_headers['Authorization']
+		);
+	}
+
+	public function test_connection_returns_error_on_wp_error(): void {
+		$GLOBALS['_test_wp_remote_get'] = new \WP_Error( 'http_request_failed', 'cURL error 28' );
+
+		$result = $this->service->test_connection( 'key', 'secret' );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'cURL error 28', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_401_response(): void {
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 401 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection( 'bad-key', 'bad-secret' );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'Invalid ShipStation', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_403_response(): void {
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 403 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection( 'key', 'secret' );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'Invalid ShipStation', $result['message'] );
+	}
+
+	public function test_connection_returns_error_on_non_success_status(): void {
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection( 'key', 'secret' );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( '500', $result['message'] );
+	}
+
+	public function test_connection_succeeds_on_200_response(): void {
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => '{}',
+		);
+
+		$result = $this->service->test_connection( 'valid-key', 'valid-secret' );
+
+		$this->assertTrue( $result['success'] );
+		$this->assertStringContainsString( 'successful', $result['message'] );
 	}
 
 	// -------------------------------------------------------------------------

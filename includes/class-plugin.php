@@ -219,9 +219,11 @@ class Plugin {
 	/**
 	 * Handle the "Test Connection" AJAX action from the settings page.
 	 *
-	 * Verifies the nonce, runs the ShipEngine connection test, and returns
-	 * the result as a JSON response so the settings page can display it
-	 * inline without a full page reload.
+	 * Verifies the nonce, determines which carrier to test from the POSTed
+	 * carrier value (falling back to the saved setting), uses credentials
+	 * POSTed from the current form (so the test works before saving), and
+	 * returns the result as a JSON response so the settings page can display
+	 * it inline without a full page reload.
 	 *
 	 * @return void
 	 */
@@ -236,12 +238,21 @@ class Plugin {
 			return;
 		}
 
-		$carrier = $this->settings->get_carrier();
+		// Prefer the carrier from the POST request (current dropdown value) so
+		// the test reflects the UI even before settings are saved.
+		$posted_carrier = sanitize_text_field( wp_unslash( $_POST['carrier'] ?? '' ) );
+		$carrier        = in_array( $posted_carrier, array( 'shipengine', 'shipstation' ), true )
+			? $posted_carrier
+			: $this->settings->get_carrier();
 
 		if ( 'shipstation' === $carrier ) {
-			$result = $this->shipstation_service->test_connection();
+			$api_key    = sanitize_text_field( wp_unslash( $_POST['shipstation_api_key'] ?? '' ) );
+			$api_secret = sanitize_text_field( wp_unslash( $_POST['shipstation_api_secret'] ?? '' ) );
+			$result     = $this->shipstation_service->test_connection( $api_key, $api_secret );
 		} else {
-			$result = $this->shipengine_service->test_connection();
+			$api_key    = sanitize_text_field( wp_unslash( $_POST['shipengine_api_key'] ?? '' ) );
+			$carrier_id = sanitize_text_field( wp_unslash( $_POST['shipengine_carrier_id'] ?? '' ) );
+			$result     = $this->shipengine_service->test_connection( $api_key, $carrier_id );
 		}
 
 		wp_send_json_success( $result );
