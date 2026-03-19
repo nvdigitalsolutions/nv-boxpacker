@@ -15,6 +15,7 @@ A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit or
    - [Shipping Carrier API](#shipping-carrier-api)
    - [ShipEngine Settings](#shipengine-settings)
    - [ShipStation Settings](#shipstation-settings)
+   - [Test ShipEngine Connection](#test-shipengine-connection)
    - [Sandbox Mode](#sandbox-mode)
    - [Ship-From Address](#ship-from-address)
    - [Debug Logging](#debug-logging)
@@ -31,6 +32,7 @@ A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit or
 8. [Box Definition JSON Schema](#box-definition-json-schema)
 9. [Development](#development)
    - [Running Tests](#running-tests)
+   - [Building](#building)
    - [Code Style](#code-style)
    - [Directory Structure](#directory-structure)
 10. [Changelog](#changelog)
@@ -99,7 +101,7 @@ Navigate to **WooCommerce → USPS Optimizer** to manage all plugin settings.
 |---|---|---|
 | **Shipping Carrier API** | `ShipEngine` or `ShipStation` | ShipEngine |
 
-Select which carrier API to use for live rate requests. Only one is active at a time; the other's credentials are saved but ignored.
+Select which carrier API to use for live rate requests. Only one is active at a time; the other's credentials are saved but ignored. Switching the dropdown immediately shows or hides the relevant credential fields without saving the page.
 
 ---
 
@@ -125,6 +127,19 @@ ShipEngine uses a header-based `API-Key` authentication scheme and calls the `PO
 ShipStation uses HTTP Basic Authentication (`API Key:API Secret`) and calls the `GET /shipments/getrates` endpoint.
 
 > You can override the ShipStation API base URL using the `fk_usps_optimizer_shipstation_api_url` filter (see [Filter Hooks](#filter-hooks)).
+
+---
+
+### Test ShipEngine Connection
+
+Below the settings form a **Test Connection** button verifies that:
+
+1. The configured **ShipEngine API Key** authenticates successfully against the ShipEngine API.
+2. The configured **Carrier ID** belongs to an active USPS carrier account (`stamps_com`, `usps`, or `endicia`).
+
+Clicking the button fires an AJAX request — the result is displayed inline immediately below the button **without reloading the page**. Save your settings before running this test so the current values are used.
+
+> **Tip:** For sandbox testing, enter a `TEST_`-prefixed API key from your ShipEngine dashboard and enable **Sandbox Mode** above.
 
 ---
 
@@ -279,7 +294,9 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 | `plugins_loaded` | default | Calls `Plugin::init()` to check WooCommerce is active and register all sub-hooks. |
 | `admin_init` | default | Registers settings fields via `Settings::register_settings()`. |
 | `admin_menu` | default | Adds **USPS Optimizer** and **USPS Test Pricing** submenu pages under WooCommerce. |
+| `admin_enqueue_scripts` | default | Enqueues `assets/js/settings.js` and localizes `ajaxUrl`, a nonce, and i18n strings on the settings page only. |
 | `woocommerce_checkout_order_processed` | 20 | Triggers order packing and rate-shopping via `Plugin::process_order()`. |
+| `wp_ajax_fk_usps_test_connection` | default | AJAX handler for the settings page **Test Connection** button. Verifies the nonce, calls `ShipEngine_Service::test_connection()`, and returns a JSON response so the result renders inline without a page reload. |
 
 ### Filter Hooks
 
@@ -428,6 +445,26 @@ Tests live in `tests/Unit/`. A `tests/bootstrap.php` file provides WordPress and
 | `tests/Unit/TestPricingServiceTest.php` | Item expansion, carrier routing, warning generation. |
 | `tests/Unit/AdminTestUiTest.php` | Page rendering, nonce flow, form repopulation, results table, sandbox badge. |
 
+### Building
+
+Use `bin/build.sh` to create a production-ready ZIP that excludes all development files (listed in `.distignore`):
+
+```bash
+# Build with the version from the plugin header
+bash bin/build.sh
+
+# The ZIP is written to build/woocommerce-fk-usps-optimizer-<version>.zip
+```
+
+The script installs production-only Composer dependencies (`--no-dev`), copies plugin files via `rsync`, and then restores your local dev dependencies.
+
+**CI pipeline:**
+
+Every CI run produces a downloadable ZIP artifact:
+
+- The **CI** workflow (`ci.yml`) runs lint, PHPCS, and PHPUnit tests across PHP 8.0–8.3. After all matrix jobs pass, a `build` job runs `bin/build.sh` and uploads the resulting ZIP as a GitHub Actions artifact named **`plugin-zip`** (retained for 30 days). Download it from the **Actions** tab of any workflow run.
+- The **Build** workflow (`build.yml`) triggers on every push to `main`, runs the same build script, and commits the ZIP to `dist/` so it is always available directly in the repository.
+
 ### Code Style
 
 The project follows the [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/wordpress-coding-standards/) enforced via PHP_CodeSniffer:
@@ -446,6 +483,9 @@ The PHPCS configuration lives in `phpcs.xml.dist`. The `manage_woocommerce` capa
 
 ```
 fk-usps-optimizer/
+├── assets/
+│   └── js/
+│       └── settings.js             # Carrier field toggle + AJAX test connection
 ├── bin/
 │   └── build.sh                    # Production build script
 ├── includes/
@@ -482,6 +522,12 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.0
+
+- **New:** `assets/js/settings.js` — carrier credential fields show/hide instantly when the **Shipping Carrier API** dropdown changes (no save required).
+- **Improved:** **Test Connection** button now fires an AJAX request and displays the pass/fail result inline — no page reload.
+- **CI:** CI pipeline (`ci.yml`) now builds a production ZIP artifact after all tests pass, downloadable from the GitHub Actions **Actions** tab for 30 days.
 
 ### 1.1.0
 

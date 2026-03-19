@@ -20,6 +20,8 @@ This plugin prepares USPS Priority shipping plans for WooCommerce orders by:
 * storing a package-by-package plan on the order for admin review and PirateShip export, and
 * providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order.
 
+When selecting a carrier on the settings page, only the relevant credential fields are shown — the other carrier's fields are hidden automatically. A **Test Connection** button lets you verify your ShipEngine API key and carrier ID inline, without reloading the page.
+
 = Carriers =
 
 **ShipEngine** — uses the `POST /v1/rates` endpoint with an API-Key header. Supports all ShipEngine-connected USPS accounts.
@@ -56,8 +58,8 @@ From the WooCommerce order detail page, click **Export to PirateShip** to downlo
 
 == Installation ==
 
-1. Upload the plugin to `/wp-content/plugins/fk-usps-optimizer/`.
-2. Run `composer install` (without `--no-dev` to include BoxPacker and dev tooling, or with `--no-dev` for production).
+1. Download the plugin ZIP from the `dist/` directory in the repository, or from the **Actions** tab of any CI run (artifact: `plugin-zip`).
+2. Upload the ZIP and activate through **Plugins → Add New → Upload Plugin** in WordPress, or extract to `wp-content/plugins/fk-usps-optimizer/`.
 3. Activate the plugin in WordPress.
 4. Open **WooCommerce → USPS Optimizer** and configure:
    - Carrier (ShipEngine or ShipStation)
@@ -105,6 +107,11 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.0 =
+* New: Carrier credential fields show/hide automatically when switching the **Shipping Carrier API** dropdown — no page save needed.
+* Improved: **Test Connection** button now uses AJAX and displays the result inline without reloading the page.
+* CI: Production ZIP artifact is now built and uploaded automatically after every successful CI run.
 
 = 1.1.0 =
 * New: ShipStation carrier support (Basic-Auth, `GET /shipments/getrates`).
