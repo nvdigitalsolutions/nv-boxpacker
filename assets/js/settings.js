@@ -40,6 +40,8 @@
 	/**
 	 * Handle a click on the "Test Connection" button.  Sends an AJAX request
 	 * to the server and displays the result inline without reloading the page.
+	 * Credentials are read from the current form values so the test works even
+	 * before the settings have been saved.
 	 *
 	 * @param {Event} event The click event.
 	 */
@@ -58,9 +60,27 @@
 		result.style.display = '';
 		result.querySelector( 'p' ).textContent = fkUspsOptimizer.testing;
 
+		var select = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
+		var carrier = select ? select.value : '';
+		var optKey = fkUspsOptimizer.settingsKey;
+
 		var data = new FormData();
 		data.append( 'action', 'fk_usps_test_connection' );
 		data.append( 'nonce', fkUspsOptimizer.nonce );
+		data.append( 'carrier', carrier );
+
+		// Pass credentials from the current form so the test works before saving.
+		if ( 'shipstation' === carrier ) {
+			var ssKey    = document.querySelector( '[name="' + optKey + '[shipstation_api_key]"]' );
+			var ssSecret = document.querySelector( '[name="' + optKey + '[shipstation_api_secret]"]' );
+			data.append( 'shipstation_api_key', ssKey ? ssKey.value : '' );
+			data.append( 'shipstation_api_secret', ssSecret ? ssSecret.value : '' );
+		} else {
+			var seKey       = document.querySelector( '[name="' + optKey + '[shipengine_api_key]"]' );
+			var seCarrierId = document.querySelector( '[name="' + optKey + '[shipengine_carrier_id]"]' );
+			data.append( 'shipengine_api_key', seKey ? seKey.value : '' );
+			data.append( 'shipengine_carrier_id', seCarrierId ? seCarrierId.value : '' );
+		}
 
 		fetch( fkUspsOptimizer.ajaxUrl, {
 			method: 'POST',

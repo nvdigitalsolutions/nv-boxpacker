@@ -82,14 +82,24 @@ class ShipStation_Service {
 	/**
 	 * Test the ShipStation API connection by fetching the list of carriers.
 	 *
+	 * When $api_key or $api_secret are provided (e.g. passed directly from the
+	 * settings form before saving), those values are used.  Empty strings cause
+	 * the method to fall back to the values stored in settings.
+	 *
+	 * @param string $api_key    Optional API key override.
+	 * @param string $api_secret Optional API secret override.
 	 * @return array {
 	 *   success: bool   Whether the connection test passed.
 	 *   message: string Human-readable result message.
 	 * }
 	 */
-	public function test_connection(): array {
-		$api_key    = $this->settings->get_shipstation_api_key();
-		$api_secret = $this->settings->get_shipstation_api_secret();
+	public function test_connection( string $api_key = '', string $api_secret = '' ): array {
+		if ( '' === $api_key ) {
+			$api_key = $this->settings->get_shipstation_api_key();
+		}
+		if ( '' === $api_secret ) {
+			$api_secret = $this->settings->get_shipstation_api_secret();
+		}
 
 		if ( '' === $api_key || '' === $api_secret ) {
 			return array(
