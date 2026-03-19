@@ -23,6 +23,37 @@ class Settings {
 	public function register(): void {
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+	}
+
+	/**
+	 * Enqueue admin scripts and pass localised data on the settings page.
+	 *
+	 * @param string $hook_suffix The current admin page hook suffix.
+	 */
+	public function enqueue_scripts( string $hook_suffix ): void {
+		if ( 'woocommerce_page_fk-usps-optimizer' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'fk-usps-optimizer-settings',
+			FK_USPS_OPTIMIZER_URL . 'assets/js/settings.js',
+			array(),
+			FK_USPS_OPTIMIZER_VERSION,
+			true
+		);
+
+		wp_localize_script(
+			'fk-usps-optimizer-settings',
+			'fkUspsOptimizer',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( 'fk_usps_test_connection' ),
+				'testing' => __( 'Testing connection\u2026', 'fk-usps-optimizer' ),
+				'error'   => __( 'An unexpected error occurred. Please try again.', 'fk-usps-optimizer' ),
+			)
+		);
 	}
 
 	/**
@@ -63,16 +94,27 @@ class Settings {
 			'boxes_json'               => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
 		);
 
+		// Fields that belong exclusively to one carrier — the settings page JS
+		// uses these CSS classes to show or hide rows when the carrier changes.
+		$shipengine_only  = array( 'shipengine_api_key', 'shipengine_carrier_id' );
+		$shipstation_only = array( 'shipstation_api_key', 'shipstation_api_secret', 'shipstation_carrier_code' );
+
 		foreach ( $fields as $key => $label ) {
+			$args = array( 'key' => $key );
+
+			if ( in_array( $key, $shipengine_only, true ) ) {
+				$args['class'] = 'fk-shipengine-field';
+			} elseif ( in_array( $key, $shipstation_only, true ) ) {
+				$args['class'] = 'fk-shipstation-field';
+			}
+
 			add_settings_field(
 				$key,
 				$label,
 				array( $this, 'render_field' ),
 				'fk-usps-optimizer',
 				'fk_usps_optimizer_api',
-				array(
-					'key' => $key,
-				)
+				$args
 			);
 		}
 	}
@@ -103,7 +145,7 @@ class Settings {
 
 		if ( 'carrier' === $key ) {
 			printf(
-				'<select name="%1$s[%2$s]">' .
+				'<select id="%1$s_%2$s" name="%1$s[%2$s]">' .
 				'<option value="shipengine"%3$s>%4$s</option>' .
 				'<option value="shipstation"%5$s>%6$s</option>' .
 				'</select>',
@@ -191,6 +233,7 @@ class Settings {
 				?>
 			</form>
 
+			<div id="fk-usps-test-connection">
 			<hr />
 			<h2><?php echo esc_html__( 'Test ShipEngine Connection', 'fk-usps-optimizer' ); ?></h2>
 			<p class="description">
@@ -199,11 +242,11 @@ class Settings {
 			<p class="description">
 				<?php echo esc_html__( 'For sandbox testing, use a TEST_-prefixed API key from your ShipEngine dashboard and enable Sandbox Mode above.', 'fk-usps-optimizer' ); ?>
 			</p>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="fk_usps_test_connection" />
-				<?php wp_nonce_field( 'fk_usps_test_connection', 'fk_usps_test_connection_nonce' ); ?>
-				<?php submit_button( __( 'Test Connection', 'fk-usps-optimizer' ), 'secondary', 'submit', false ); ?>
-			</form>
+			<div id="fk-usps-test-result" class="notice inline" style="display:none"><p></p></div>
+			<button type="button" id="fk-usps-test-btn" class="button button-secondary">
+				<?php echo esc_html__( 'Test Connection', 'fk-usps-optimizer' ); ?>
+			</button>
+		</div>
 		</div>
 		<?php
 	}
