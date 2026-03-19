@@ -79,6 +79,77 @@ class ShipStation_Service {
 		return $this->build_package_plan_for_address( $package, $ship_to, $package_number );
 	}
 
+	/**
+	 * Test the ShipStation API connection by fetching the list of carriers.
+	 *
+	 * @return array {
+	 *   success: bool   Whether the connection test passed.
+	 *   message: string Human-readable result message.
+	 * }
+	 */
+	public function test_connection(): array {
+		$api_key    = $this->settings->get_shipstation_api_key();
+		$api_secret = $this->settings->get_shipstation_api_secret();
+
+		if ( '' === $api_key || '' === $api_secret ) {
+			return array(
+				'success' => false,
+				'message' => __( 'ShipStation API key and secret are not configured.', 'fk-usps-optimizer' ),
+			);
+		}
+
+		$auth     = base64_encode( $api_key . ':' . $api_secret ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Standard Basic-Auth encoding, not obfuscation.
+		$api_url  = (string) apply_filters( 'fk_usps_optimizer_shipstation_api_url', self::API_BASE_URL );
+		$endpoint = trailingslashit( $api_url ) . 'carriers';
+
+		$response = wp_remote_get(
+			$endpoint,
+			array(
+				'timeout' => 15,
+				'headers' => array(
+					'Authorization' => 'Basic ' . $auth,
+					'Content-Type'  => 'application/json',
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'success' => false,
+				'message' => sprintf(
+					/* translators: %s: error message. */
+					__( 'Connection failed: %s', 'fk-usps-optimizer' ),
+					$response->get_error_message()
+				),
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 401 === $code || 403 === $code ) {
+			return array(
+				'success' => false,
+				'message' => __( 'Invalid ShipStation API credentials. Please check your API key and secret.', 'fk-usps-optimizer' ),
+			);
+		}
+
+		if ( $code < 200 || $code >= 300 ) {
+			return array(
+				'success' => false,
+				'message' => sprintf(
+					/* translators: %d: HTTP status code. */
+					__( 'ShipStation returned an unexpected response (HTTP %d).', 'fk-usps-optimizer' ),
+					$code
+				),
+			);
+		}
+
+		return array(
+			'success' => true,
+			'message' => __( 'Connection successful! ShipStation credentials are valid.', 'fk-usps-optimizer' ),
+		);
+	}
+
 	// -------------------------------------------------------------------------
 	// Core plan building
 	// -------------------------------------------------------------------------
