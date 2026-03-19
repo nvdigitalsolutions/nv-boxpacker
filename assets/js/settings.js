@@ -29,7 +29,7 @@
 
 		var testSection = document.getElementById( 'fk-usps-test-connection' );
 		if ( testSection ) {
-			testSection.style.display = isSE ? '' : 'none';
+			testSection.style.display = ( isSE || isSS ) ? '' : 'none';
 		}
 	}
 

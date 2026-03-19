@@ -235,12 +235,9 @@ class Settings {
 
 			<div id="fk-usps-test-connection">
 			<hr />
-			<h2><?php echo esc_html__( 'Test ShipEngine Connection', 'fk-usps-optimizer' ); ?></h2>
+			<h2><?php echo esc_html__( 'Test Carrier API Connection', 'fk-usps-optimizer' ); ?></h2>
 			<p class="description">
-				<?php echo esc_html__( 'Verifies your ShipEngine API key is valid and that the configured Carrier ID belongs to an active USPS carrier account. Save your settings before running this test.', 'fk-usps-optimizer' ); ?>
-			</p>
-			<p class="description">
-				<?php echo esc_html__( 'For sandbox testing, use a TEST_-prefixed API key from your ShipEngine dashboard and enable Sandbox Mode above.', 'fk-usps-optimizer' ); ?>
+				<?php echo esc_html__( 'Verifies your carrier API credentials are valid and that the configured carrier account is active. Save your settings before running this test.', 'fk-usps-optimizer' ); ?>
 			</p>
 			<div id="fk-usps-test-result" class="notice inline" style="display:none"><p></p></div>
 			<button type="button" id="fk-usps-test-btn" class="button button-secondary">

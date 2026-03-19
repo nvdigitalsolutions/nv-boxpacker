@@ -463,7 +463,7 @@ class SettingsTest extends TestCase {
 		$this->settings->render_page();
 		$output = ob_get_clean();
 		$this->assertStringContainsString( 'fk-usps-test-btn', $output );
-		$this->assertStringContainsString( 'Test ShipEngine Connection', $output );
+		$this->assertStringContainsString( 'Test Carrier API Connection', $output );
 	}
 
 	public function test_render_page_includes_test_result_div(): void {

@@ -236,7 +236,14 @@ class Plugin {
 			return;
 		}
 
-		$result = $this->shipengine_service->test_connection();
+		$carrier = $this->settings->get_carrier();
+
+		if ( 'shipstation' === $carrier ) {
+			$result = $this->shipstation_service->test_connection();
+		} else {
+			$result = $this->shipengine_service->test_connection();
+		}
+
 		wp_send_json_success( $result );
 	}
 }
