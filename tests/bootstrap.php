@@ -35,6 +35,7 @@ $GLOBALS['_test_current_user_can'] = true;
 $GLOBALS['_test_wc_logger']        = null;
 $GLOBALS['_test_wp_safe_redirect'] = null;
 $GLOBALS['_test_wp_transients']    = array();
+$GLOBALS['_test_wp_json_response'] = null;
 
 // ---------------------------------------------------------------------------
 // WordPress core stubs
@@ -283,6 +284,71 @@ function checked( $checked, $current = true, bool $echo = true ): string {
  */
 function current_time( string $type, int $gmt = 0 ): string {
 	return '2024-01-01 00:00:00';
+}
+
+// ---------------------------------------------------------------------------
+// WordPress nonce / AJAX stubs
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a nonce token (always returns a fixed value in tests).
+ *
+ * @param int|string $action Nonce action (ignored).
+ * @return string Fixed test nonce.
+ */
+function wp_create_nonce( $action = -1 ): string {
+	return 'test_nonce';
+}
+
+/**
+ * Enqueue a script (no-op in tests).
+ *
+ * @param mixed ...$args Ignored.
+ */
+function wp_enqueue_script( ...$args ): void {}
+
+/**
+ * Localise a script with data (no-op in tests; returns true).
+ *
+ * @param mixed ...$args Ignored.
+ * @return bool Always true.
+ */
+function wp_localize_script( ...$args ): bool {
+	return true;
+}
+
+/**
+ * Verify an AJAX nonce (always passes in tests).
+ *
+ * @param int|string $action    Nonce action (ignored).
+ * @param string     $query_arg Query parameter name (ignored).
+ * @param bool       $stop      Whether to stop execution on failure (ignored).
+ * @return int Always 1.
+ */
+function check_ajax_referer( $action = -1, $query_arg = false, bool $stop = true ): int {
+	return 1;
+}
+
+/**
+ * Send a JSON success response (stores result in global state for tests).
+ *
+ * @param mixed $data        Response data.
+ * @param int   $status_code HTTP status code (ignored).
+ * @param int   $options     JSON encode options (ignored).
+ */
+function wp_send_json_success( $data = null, int $status_code = 200, int $options = 0 ): void {
+	$GLOBALS['_test_wp_json_response'] = array( 'success' => true, 'data' => $data );
+}
+
+/**
+ * Send a JSON error response (stores result in global state for tests).
+ *
+ * @param mixed $data        Response data.
+ * @param int   $status_code HTTP status code (ignored).
+ * @param int   $options     JSON encode options (ignored).
+ */
+function wp_send_json_error( $data = null, int $status_code = 0, int $options = 0 ): void {
+	$GLOBALS['_test_wp_json_response'] = array( 'success' => false, 'data' => $data );
 }
 
 // ---------------------------------------------------------------------------

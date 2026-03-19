@@ -27,6 +27,7 @@ class SettingsTest extends TestCase {
 		$GLOBALS['_test_wp_filters']      = array();
 		$GLOBALS['_test_settings_errors'] = array();
 		$GLOBALS['_test_wp_transients']   = array();
+		$GLOBALS['_test_wp_json_response'] = null;
 		$this->settings                   = new Settings();
 	}
 
@@ -419,6 +420,29 @@ class SettingsTest extends TestCase {
 		$this->assertStringContainsString( 'shipengine', $output );
 	}
 
+	public function test_render_field_carrier_select_has_id_attribute(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'carrier' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'id="fk_usps_optimizer_settings_carrier"', $output );
+	}
+
+	// -------------------------------------------------------------------------
+	// enqueue_scripts (smoke tests)
+	// -------------------------------------------------------------------------
+
+	public function test_enqueue_scripts_does_nothing_on_wrong_page(): void {
+		// wp_enqueue_script is a no-op stub; just confirm no exception is thrown.
+		$this->settings->enqueue_scripts( 'some_other_page' );
+		$this->assertTrue( true );
+	}
+
+	public function test_enqueue_scripts_does_nothing_on_correct_page(): void {
+		// wp_enqueue_script / wp_localize_script are no-op stubs; confirm no exception.
+		$this->settings->enqueue_scripts( 'woocommerce_page_fk-usps-optimizer' );
+		$this->assertTrue( true );
+	}
+
 	public function test_render_field_sandbox_mode_label_mentions_test_key(): void {
 		ob_start();
 		$this->settings->render_field( array( 'key' => 'sandbox_mode' ) );
@@ -434,12 +458,26 @@ class SettingsTest extends TestCase {
 		$this->assertStringContainsString( 'Test Connection', $output );
 	}
 
-	public function test_render_page_includes_test_connection_form(): void {
+	public function test_render_page_includes_test_connection_button(): void {
 		ob_start();
 		$this->settings->render_page();
 		$output = ob_get_clean();
-		$this->assertStringContainsString( 'fk_usps_test_connection', $output );
+		$this->assertStringContainsString( 'fk-usps-test-btn', $output );
 		$this->assertStringContainsString( 'Test ShipEngine Connection', $output );
+	}
+
+	public function test_render_page_includes_test_result_div(): void {
+		ob_start();
+		$this->settings->render_page();
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'fk-usps-test-result', $output );
+	}
+
+	public function test_render_page_test_connection_section_wrapped_in_div(): void {
+		ob_start();
+		$this->settings->render_page();
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'fk-usps-test-connection', $output );
 	}
 
 	public function test_render_page_displays_success_transient(): void {
