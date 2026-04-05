@@ -1,11 +1,12 @@
 === FunnelKit USPS Priority Shipping Optimizer ===
-Contributors: NV Digital
-Tags: woocommerce, shipping, usps, pirateship, funnelkit, shipengine, shipstation
+Contributors: nvdigitalsolutions
+Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.1.0
-License: Proprietary
+Stable tag: 1.2.0
+License: GPLv3
+License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 Optimize WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat-rate boxes using ShipEngine or ShipStation.
 
@@ -55,6 +56,24 @@ Boxes are stored as a JSON array in the plugin settings. Each box has inner/oute
 = PirateShip Export =
 
 From the WooCommerce order detail page, click **Export to PirateShip** to download a CSV ready for bulk import and label purchase on PirateShip.
+
+= Third-Party Services =
+
+This plugin connects to the following external services to retrieve USPS shipping rates. By using this plugin, your shipping data (addresses, package dimensions, and weights) is transmitted to these third-party APIs:
+
+**ShipEngine** (https://www.shipengine.com)
+Used to fetch USPS Priority Mail shipping rates. Requires a ShipEngine API key and carrier ID.
+- API endpoint: `https://api.shipengine.com/v1/rates`
+- Terms of Service: https://www.shipengine.com/terms-of-service/
+- Privacy Policy: https://www.shipengine.com/privacy-policy/
+
+**ShipStation** (https://www.shipstation.com)
+Used as an alternative carrier API to fetch USPS shipping rates. Requires a ShipStation API key and secret.
+- API endpoint: `https://ssapi.shipstation.com/shipments/getrates`
+- Terms of Service: https://www.shipstation.com/terms-of-service/
+- Privacy Policy: https://www.shipstation.com/privacy-policy/
+
+No data is transmitted to these services until you configure your API credentials and either process an order or use the Test Pricing page.
 
 == Installation ==
 

@@ -2,6 +2,9 @@
 
 A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit orders by packing items into custom cubic boxes and USPS flat-rate boxes, rate-shopping through ShipEngine or ShipStation, and producing package-level plans suitable for PirateShip export.
 
+**Author:** NV Digital Solutions
+**License:** GPLv3 or later — see [LICENSE](LICENSE) for details.
+
 ---
 
 ## Table of Contents
