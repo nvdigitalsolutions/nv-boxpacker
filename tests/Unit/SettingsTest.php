@@ -257,7 +257,7 @@ class SettingsTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_get_service_code_returns_default(): void {
-		$this->assertSame( 'usps_priority_mail', $this->settings->get_service_code() );
+		$this->assertSame( 'stamps_com', $this->settings->get_service_code() );
 	}
 
 	public function test_get_service_code_returns_saved_value(): void {

@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067
+class ComposerStaticInit6da3135597c352605b4d244e8fd1fc6a
 {
     public static $files = array (
         '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
@@ -58,35 +58,58 @@ class ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'DVDoug\\BoxPacker\\Box' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/Box.php',
         'DVDoug\\BoxPacker\\BoxList' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/BoxList.php',
+        'DVDoug\\BoxPacker\\BoxListTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/BoxListTest.php',
         'DVDoug\\BoxPacker\\BoxSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/BoxSorter.php',
         'DVDoug\\BoxPacker\\ConstrainedItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/ConstrainedItem.php',
         'DVDoug\\BoxPacker\\ConstrainedPlacementItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/ConstrainedPlacementItem.php',
         'DVDoug\\BoxPacker\\DefaultBoxSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/DefaultBoxSorter.php',
         'DVDoug\\BoxPacker\\DefaultItemSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/DefaultItemSorter.php',
         'DVDoug\\BoxPacker\\DefaultPackedBoxSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/DefaultPackedBoxSorter.php',
+        'DVDoug\\BoxPacker\\EfficiencyTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/EfficiencyTest.php',
         'DVDoug\\BoxPacker\\InfalliblePacker' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/InfalliblePacker.php',
+        'DVDoug\\BoxPacker\\InfalliblePackerTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/InfalliblePackerTest.php',
         'DVDoug\\BoxPacker\\Item' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/Item.php',
         'DVDoug\\BoxPacker\\ItemList' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/ItemList.php',
+        'DVDoug\\BoxPacker\\ItemListTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/ItemListTest.php',
         'DVDoug\\BoxPacker\\ItemSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/ItemSorter.php',
         'DVDoug\\BoxPacker\\ItemTooLargeException' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/ItemTooLargeException.php',
         'DVDoug\\BoxPacker\\LayerPacker' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/LayerPacker.php',
         'DVDoug\\BoxPacker\\LayerStabiliser' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/LayerStabiliser.php',
         'DVDoug\\BoxPacker\\LimitedSupplyBox' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/LimitedSupplyBox.php',
         'DVDoug\\BoxPacker\\NoBoxesAvailableException' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/NoBoxesAvailableException.php',
+        'DVDoug\\BoxPacker\\NoBoxesAvailableExceptionTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/NoBoxesAvailableExceptionTest.php',
         'DVDoug\\BoxPacker\\OrientatedItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/OrientatedItem.php',
         'DVDoug\\BoxPacker\\OrientatedItemFactory' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/OrientatedItemFactory.php',
         'DVDoug\\BoxPacker\\OrientatedItemSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/OrientatedItemSorter.php',
+        'DVDoug\\BoxPacker\\OrientatedItemTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/OrientatedItemTest.php',
         'DVDoug\\BoxPacker\\PackedBox' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedBox.php',
         'DVDoug\\BoxPacker\\PackedBoxList' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedBoxList.php',
+        'DVDoug\\BoxPacker\\PackedBoxListTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PackedBoxListTest.php',
         'DVDoug\\BoxPacker\\PackedBoxSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedBoxSorter.php',
+        'DVDoug\\BoxPacker\\PackedBoxTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PackedBoxTest.php',
         'DVDoug\\BoxPacker\\PackedItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedItem.php',
         'DVDoug\\BoxPacker\\PackedItemList' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedItemList.php',
+        'DVDoug\\BoxPacker\\PackedItemTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PackedItemTest.php',
         'DVDoug\\BoxPacker\\PackedLayer' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/PackedLayer.php',
+        'DVDoug\\BoxPacker\\PackedLayerTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PackedLayerTest.php',
         'DVDoug\\BoxPacker\\Packer' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/Packer.php',
+        'DVDoug\\BoxPacker\\PackerTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PackerTest.php',
+        'DVDoug\\BoxPacker\\PublishedTestCasesTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/PublishedTestCasesTest.php',
         'DVDoug\\BoxPacker\\Rotation' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/Rotation.php',
+        'DVDoug\\BoxPacker\\Test\\ConstrainedPlacementByCountTestItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/ConstrainedPlacementByCountTestItem.php',
+        'DVDoug\\BoxPacker\\Test\\ConstrainedPlacementNoStackingTestItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/ConstrainedPlacementNoStackingTestItem.php',
+        'DVDoug\\BoxPacker\\Test\\ConstrainedTestItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/ConstrainedTestItem.php',
+        'DVDoug\\BoxPacker\\Test\\LimitedSupplyTestBox' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/LimitedSupplyTestBox.php',
+        'DVDoug\\BoxPacker\\Test\\PackedBoxByReferenceSorter' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/PackedBoxByReferenceSorter.php',
+        'DVDoug\\BoxPacker\\Test\\THPackTestItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/THPackTestItem.php',
+        'DVDoug\\BoxPacker\\Test\\TestBox' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/TestBox.php',
+        'DVDoug\\BoxPacker\\Test\\TestItem' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/Test/TestItem.php',
         'DVDoug\\BoxPacker\\VolumePacker' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/VolumePacker.php',
+        'DVDoug\\BoxPacker\\VolumePackerTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/VolumePackerTest.php',
         'DVDoug\\BoxPacker\\WeightRedistributor' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/WeightRedistributor.php',
+        'DVDoug\\BoxPacker\\WeightRedistributorTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/WeightRedistributorTest.php',
         'DVDoug\\BoxPacker\\WorkingVolume' => __DIR__ . '/..' . '/dvdoug/boxpacker/src/WorkingVolume.php',
+        'DVDoug\\BoxPacker\\WorkingVolumeTest' => __DIR__ . '/..' . '/dvdoug/boxpacker/tests/WorkingVolumeTest.php',
         'DeepCopy\\DeepCopy' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/DeepCopy.php',
         'DeepCopy\\Exception\\CloneException' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/Exception/CloneException.php',
         'DeepCopy\\Exception\\PropertyException' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/Exception/PropertyException.php',
@@ -1094,9 +1117,9 @@ class ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit6da3135597c352605b4d244e8fd1fc6a::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit6da3135597c352605b4d244e8fd1fc6a::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit6da3135597c352605b4d244e8fd1fc6a::$classMap;
 
         }, null, ClassLoader::class);
     }

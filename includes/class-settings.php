@@ -204,7 +204,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_attr( $value ),
-				esc_html__( 'Carrier service code used for rate requests (e.g. usps_priority_mail, usps_first_class_mail, usps_ground_advantage). Leave empty to retrieve all available services.', 'fk-usps-optimizer' )
+				esc_html__( 'Carrier service code used for rate requests (e.g. stamps_com, usps_priority_mail, usps_first_class_mail, usps_ground_advantage). Leave empty to retrieve all available services.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -362,7 +362,7 @@ class Settings {
 			$saved,
 			array(
 				'carrier'                  => 'shipengine',
-				'service_code'             => 'usps_priority_mail',
+				'service_code'             => 'stamps_com',
 				'shipengine_api_key'       => '',
 				'shipengine_carrier_id'    => '',
 				'shipstation_api_key'      => '',
@@ -466,7 +466,7 @@ class Settings {
 	/**
 	 * Get the configured shipping service code.
 	 *
-	 * @return string Service code (e.g. 'usps_priority_mail').
+	 * @return string Service code (e.g. 'stamps_com').
 	 */
 	public function get_service_code(): string {
 		$settings = $this->get_settings();

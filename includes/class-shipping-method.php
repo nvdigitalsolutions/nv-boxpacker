@@ -353,7 +353,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 		$data = array(
 			'carrier'      => $carrier_key,
-			'service_code' => $settings['service_code'] ?? 'usps_priority_mail',
+			'service_code' => $settings['service_code'] ?? 'stamps_com',
 			'all_options'  => $settings['show_all_options'] ?? '0',
 			'pkg_count'    => $settings['show_package_count'] ?? '0',
 			'items'        => array_map(

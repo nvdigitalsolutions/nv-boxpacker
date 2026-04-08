@@ -224,7 +224,7 @@ The plan structure is:
     'mode'           => 'cubic',          // 'cubic' or 'flat_rate_box'
     'package_code'   => 'package',
     'package_name'   => 'Custom Cubic Small',
-    'service_code'   => 'usps_priority_mail',
+    'service_code'   => 'stamps_com',
     'rate_amount'    => 7.45,
     'currency'       => 'USD',
     'weight_oz'      => 18.5,
