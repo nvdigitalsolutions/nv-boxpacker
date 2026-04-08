@@ -18,12 +18,15 @@ A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit or
    - [Shipping Carrier API](#shipping-carrier-api)
    - [ShipEngine Settings](#shipengine-settings)
    - [ShipStation Settings](#shipstation-settings)
+   - [USPS Service Code](#usps-service-code)
+   - [Display Settings](#display-settings)
    - [Test ShipEngine Connection](#test-shipengine-connection)
    - [Sandbox Mode](#sandbox-mode)
    - [Ship-From Address](#ship-from-address)
    - [Debug Logging](#debug-logging)
    - [Box Definitions](#box-definitions)
 5. [Features](#features)
+   - [WooCommerce Shipping Zones Integration](#woocommerce-shipping-zones-integration)
    - [Automatic Order Planning](#automatic-order-planning)
    - [Admin Test Pricing Page](#admin-test-pricing-page)
    - [PirateShip CSV Export](#pirateship-csv-export)
@@ -133,6 +136,27 @@ ShipStation uses HTTP Basic Authentication (`API Key:API Secret`) and calls the 
 
 ---
 
+### USPS Service Code
+
+| Setting | Description | Default |
+|---|---|---|
+| **USPS Service Code** | The USPS service code sent to the carrier API for rate requests. Supports flat-rate and cubic pricing. | `usps_priority_mail` |
+
+Common service codes include `usps_priority_mail`, `usps_first_class_mail`, and `usps_ground_advantage`. The value applies to both ShipEngine and ShipStation.
+
+---
+
+### Display Settings
+
+These settings control how shipping rates appear in the WooCommerce cart and checkout.
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| **Show All Options** | Checkbox | Off | Display all rated box candidates as separate shipping options. When enabled, the plugin computes the cartesian product of every package's candidates and offers each combination as a distinct rate. When disabled, only the single cheapest combined rate is shown. |
+| **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority Mail (Optimized) (2 packages)". Uses proper singular/plural forms. |
+
+---
+
 ### Test ShipEngine Connection
 
 Below the settings form a **Test Connection** button verifies that:
@@ -191,6 +215,21 @@ See [Box Definition JSON Schema](#box-definition-json-schema) for the full field
 ---
 
 ## Features
+
+### WooCommerce Shipping Zones Integration
+
+The plugin registers a native **WC_Shipping_Method** (`fk_usps_optimizer`) so it appears in **WooCommerce → Settings → Shipping → Shipping Zones**. Add the **USPS Priority Optimizer** method to any zone to enable live, optimized USPS Priority rates during cart and checkout.
+
+**How it works:**
+
+1. Cart items are extracted and converted to the item format expected by `Packing_Service::pack_items()`.
+2. Items without WooCommerce product dimensions (length, width, or height not set) are detected and packed individually via the fallback packer — one item per box. This prevents the BoxPacker default of 1×1×1 inch dimensions from producing incorrect packing results.
+3. Packed packages are rate-shopped against the active carrier API.
+4. Rates are cached in a transient for 30 minutes. The cache key includes carrier, service code, box configuration, display settings, item dimensions, and destination — so rates update immediately when any of these change.
+
+When **Show All Options** is enabled, each rate option shows a descriptive label such as "USPS Priority Mail (Optimized) — 2× Small Flat Rate Box + Large Flat Rate Box". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small").
+
+---
 
 ### Automatic Order Planning
 
@@ -273,9 +312,10 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 
 | Class | File | Responsibility |
 |---|---|---|
-| `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, and wires `woocommerce_checkout_order_processed`. |
-| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting. Renders the settings admin page. |
-| `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. |
+| `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, registers the WooCommerce shipping method, and wires `woocommerce_checkout_order_processed`. |
+| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting (including `is_show_all_options_enabled()`, `is_show_package_count_enabled()`, and `get_service_code()`). Renders the settings admin page. |
+| `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live USPS rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via the active carrier, and handles "Show All Options" cartesian product logic and rate caching. |
+| `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. Items without dimensions are separated and packed individually via fallback. Packed package dimensions use inner box dimensions. |
 | `ShipEngine_Service` | `includes/class-shipengine-service.php` | Rate-shops packed packages against the ShipEngine v1 API (`POST /v1/rates`). Supports both order-based and address-based rate requests. |
 | `ShipStation_Service` | `includes/class-shipstation-service.php` | Rate-shops packed packages against the ShipStation API (`GET /shipments/getrates`) using HTTP Basic Auth. Mirrors the ShipEngine interface. Prepends `[SANDBOX]` to log messages when sandbox mode is active. |
 | `Test_Pricing_Service` | `includes/class-test-pricing-service.php` | Accepts raw form items, expands them by quantity, packs them, and delegates to the active carrier service. Returns a results array consumed by `Admin_Test_UI`. |
@@ -298,6 +338,7 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 | `admin_init` | default | Registers settings fields via `Settings::register_settings()`. |
 | `admin_menu` | default | Adds **USPS Optimizer** and **USPS Test Pricing** submenu pages under WooCommerce. |
 | `admin_enqueue_scripts` | default | Enqueues `assets/js/settings.js` and localizes `ajaxUrl`, a nonce, and i18n strings on the settings page only. |
+| `woocommerce_shipping_methods` | default (filter) | Registers `Shipping_Method` (`fk_usps_optimizer`) so it appears in WooCommerce shipping zones. |
 | `woocommerce_checkout_order_processed` | 20 | Triggers order packing and rate-shopping via `Plugin::process_order()`. |
 | `wp_ajax_fk_usps_test_connection` | default | AJAX handler for the settings page **Test Connection** button. Verifies the nonce, calls `ShipEngine_Service::test_connection()`, and returns a JSON response so the result renders inline without a page reload. |
 
@@ -442,11 +483,12 @@ Tests live in `tests/Unit/`. A `tests/bootstrap.php` file provides WordPress and
 | File | Coverage |
 |---|---|
 | `tests/Unit/SettingsTest.php` | All getters, sanitization, defaults, `get_boxes()`. |
-| `tests/Unit/PackingServiceTest.php` | BoxPacker path, fallback path, `pack_items()`. |
-| `tests/Unit/ShipEngineServiceTest.php` | Plan building, rate parsing, credential guards. |
-| `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection. |
+| `tests/Unit/PackingServiceTest.php` | BoxPacker path, fallback path, `pack_items()`, unmeasured item handling, inner-dimensions packing, multi-package scenarios. |
+| `tests/Unit/ShipEngineServiceTest.php` | Plan building, rate parsing, credential guards, `build_all_test_package_plans()`. |
+| `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection, `serviceCode`/`packageCode` in requests, `build_all_test_package_plans()`. |
 | `tests/Unit/TestPricingServiceTest.php` | Item expansion, carrier routing, warning generation. |
 | `tests/Unit/AdminTestUiTest.php` | Page rendering, nonce flow, form repopulation, results table, sandbox badge. |
+| `tests/Unit/ShippingMethodTest.php` | Rate calculation, caching, cache key composition, show-all-options cartesian product, show-package-count labels. |
 
 ### Building
 
@@ -502,6 +544,7 @@ fk-usps-optimizer/
 │   ├── class-plugin.php            # Singleton bootstrap
 │   ├── class-settings.php
 │   ├── class-shipengine-service.php
+│   ├── class-shipping-method.php      # WooCommerce shipping method (zones integration)
 │   ├── class-shipstation-service.php
 │   └── class-test-pricing-service.php
 ├── tests/
@@ -512,6 +555,7 @@ fk-usps-optimizer/
 │       ├── SettingsTest.php
 │       ├── ShipEngineServiceTest.php
 │       ├── ShipStationServiceTest.php
+│       ├── ShippingMethodTest.php
 │       └── TestPricingServiceTest.php
 ├── composer.json
 ├── composer.lock
@@ -528,8 +572,17 @@ fk-usps-optimizer/
 
 ### 1.2.0
 
+- **New:** WooCommerce Shipping Zones integration — the plugin now registers as a native `WC_Shipping_Method` (`fk_usps_optimizer`) that can be added to any shipping zone via **WooCommerce → Settings → Shipping**.
+- **New:** **Show All Options** setting — when enabled, every combination (cartesian product) of rated box candidates is displayed as a separate shipping option in the cart/checkout. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box").
+- **New:** **Show Package Count** setting — appends the package count to each shipping option label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural forms via `_n()`.
+- **New:** **USPS Service Code** setting — configurable service code (default `usps_priority_mail`) sent to both ShipEngine and ShipStation for rate requests.
+- **New:** `build_all_test_package_plans()` method on both `ShipEngine_Service` and `ShipStation_Service` — returns all rated plans for a package sorted cheapest-first, used by the "Show All Options" feature.
 - **New:** `assets/js/settings.js` — carrier credential fields show/hide instantly when the **Shipping Carrier API** dropdown changes (no save required).
 - **Improved:** **Test Connection** button now fires an AJAX request and displays the pass/fail result inline — no page reload.
+- **Fixed:** Packed package dimensions now use box **inner** dimensions instead of outer, so the same box type correctly matches as a rate candidate in `package_fits_box()`.
+- **Fixed:** Items without WooCommerce product dimensions (`has_dimensions=false`) are now packed individually via fallback instead of using BoxPacker with default 1×1×1 inch dimensions. Dimension detection uses a strict empty-string check to avoid treating valid zero-value dimensions as unmeasured.
+- **Fixed:** Rate cache key now includes carrier, service code, show-all-options, show-package-count, and box configuration — preventing stale cached rates after settings changes.
+- **Fixed:** ShipStation `request_rate()` now sends the configured `serviceCode` and `packageCode` instead of `null`, so only the intended service is rated (previously returned rates for all services, producing incorrect pricing).
 - **CI:** CI pipeline (`ci.yml`) now builds a production ZIP artifact after all tests pass, downloadable from the GitHub Actions **Actions** tab for 30 days.
 
 ### 1.1.0
