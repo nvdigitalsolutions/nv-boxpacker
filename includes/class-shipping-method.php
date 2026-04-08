@@ -80,19 +80,19 @@ class Shipping_Method extends \WC_Shipping_Method {
 			return;
 		}
 
+		$settings           = get_option( Settings::OPTION_KEY, array() );
+		$show_all_options   = '1' === ( $settings['show_all_options'] ?? '0' );
+		$show_package_count = '1' === ( $settings['show_package_count'] ?? '0' );
+
 		// Check transient cache to avoid excessive API calls.
 		$cache_key = $this->get_rate_cache_key( $items, $destination );
 		$cached    = get_transient( $cache_key );
 
-		if ( false !== $cached && isset( $cached['cost'] ) ) {
-			if ( (float) $cached['cost'] > 0 ) {
-				$this->add_rate(
-					array(
-						'id'    => $this->get_rate_id(),
-						'label' => $this->title,
-						'cost'  => (float) $cached['cost'],
-					)
-				);
+		if ( false !== $cached && isset( $cached['rates'] ) ) {
+			foreach ( $cached['rates'] as $rate ) {
+				if ( (float) $rate['cost'] > 0 ) {
+					$this->add_rate( $rate );
+				}
 			}
 			return;
 		}
@@ -101,14 +101,45 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$packed_packages = $plugin->get_packing_service()->pack_items( $items );
 
 		if ( empty( $packed_packages ) ) {
-			set_transient( $cache_key, array( 'cost' => 0 ), 30 * MINUTE_IN_SECONDS );
+			set_transient( $cache_key, array( 'rates' => array() ), 30 * MINUTE_IN_SECONDS );
 			return;
 		}
 
 		$ship_to         = $this->build_ship_to( $destination );
 		$carrier_service = $plugin->get_carrier_service();
-		$total_cost      = 0.0;
-		$all_rated       = true;
+		$package_count   = count( $packed_packages );
+
+		if ( $show_all_options ) {
+			$rates = $this->calculate_all_options( $carrier_service, $packed_packages, $ship_to, $package_count, $show_package_count );
+		} else {
+			$rates = $this->calculate_cheapest_option( $carrier_service, $packed_packages, $ship_to, $package_count, $show_package_count );
+		}
+
+		if ( empty( $rates ) ) {
+			set_transient( $cache_key, array( 'rates' => array() ), 5 * MINUTE_IN_SECONDS );
+			return;
+		}
+
+		set_transient( $cache_key, array( 'rates' => $rates ), 30 * MINUTE_IN_SECONDS );
+
+		foreach ( $rates as $rate ) {
+			$this->add_rate( $rate );
+		}
+	}
+
+	/**
+	 * Build the cheapest combined rate across all packed packages.
+	 *
+	 * @param object $carrier_service  Active carrier service.
+	 * @param array  $packed_packages  Packed packages from packing service.
+	 * @param array  $ship_to          Ship-to address.
+	 * @param int    $package_count    Total number of packages.
+	 * @param bool   $show_pkg_count   Whether to append package count to label.
+	 * @return array WooCommerce-compatible rate arrays.
+	 */
+	protected function calculate_cheapest_option( $carrier_service, array $packed_packages, array $ship_to, int $package_count, bool $show_pkg_count ): array {
+		$total_cost = 0.0;
+		$all_rated  = true;
 
 		foreach ( $packed_packages as $index => $packed ) {
 			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
@@ -122,19 +153,121 @@ class Shipping_Method extends \WC_Shipping_Method {
 		}
 
 		if ( ! $all_rated || $total_cost <= 0 ) {
-			set_transient( $cache_key, array( 'cost' => 0 ), 5 * MINUTE_IN_SECONDS );
-			return;
+			return array();
 		}
 
-		set_transient( $cache_key, array( 'cost' => $total_cost ), 30 * MINUTE_IN_SECONDS );
+		$label = $this->title;
+		if ( $show_pkg_count && $package_count > 1 ) {
+			$label .= ' — ' . sprintf(
+				/* translators: %d: number of packages. */
+				__( 'Packages (%d)', 'fk-usps-optimizer' ),
+				$package_count
+			);
+		}
 
-		$this->add_rate(
+		return array(
 			array(
 				'id'    => $this->get_rate_id(),
-				'label' => $this->title,
+				'label' => $label,
 				'cost'  => $total_cost,
-			)
+			),
 		);
+	}
+
+	/**
+	 * Build rates for every candidate combination across packed packages.
+	 *
+	 * For each packed package, all rated box candidates are collected. The
+	 * cartesian product across packages creates distinct shipping options,
+	 * each shown as a separate WooCommerce rate.
+	 *
+	 * @param object $carrier_service  Active carrier service.
+	 * @param array  $packed_packages  Packed packages from packing service.
+	 * @param array  $ship_to          Ship-to address.
+	 * @param int    $package_count    Total number of packages.
+	 * @param bool   $show_pkg_count   Whether to append package count to label.
+	 * @return array WooCommerce-compatible rate arrays.
+	 */
+	protected function calculate_all_options( $carrier_service, array $packed_packages, array $ship_to, int $package_count, bool $show_pkg_count ): array {
+		$all_plans_per_package = array();
+
+		foreach ( $packed_packages as $index => $packed ) {
+			$plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+
+			if ( empty( $plans ) ) {
+				return array();
+			}
+
+			$all_plans_per_package[] = $plans;
+		}
+
+		// Build the cartesian product of plans across packages.
+		$combinations = $this->cartesian_product( $all_plans_per_package );
+
+		$rates    = array();
+		$rate_idx = 0;
+		foreach ( $combinations as $combo ) {
+			$total_cost = 0.0;
+			$names      = array();
+
+			foreach ( $combo as $plan ) {
+				$total_cost += (float) $plan['rate_amount'];
+				$names[]     = $plan['package_name'];
+			}
+
+			if ( $total_cost <= 0 ) {
+				continue;
+			}
+
+			$label = $this->title . ' — ' . implode( ' + ', $names );
+			if ( $show_pkg_count && $package_count > 1 ) {
+				$label .= ' — ' . sprintf(
+					/* translators: %d: number of packages. */
+					__( 'Packages (%d)', 'fk-usps-optimizer' ),
+					$package_count
+				);
+			}
+
+			$rates[] = array(
+				'id'    => $this->get_rate_id() . ':' . $rate_idx,
+				'label' => $label,
+				'cost'  => $total_cost,
+			);
+
+			++$rate_idx;
+		}
+
+		// Sort cheapest first.
+		usort(
+			$rates,
+			static function ( array $a, array $b ): int {
+				return (float) $a['cost'] <=> (float) $b['cost'];
+			}
+		);
+
+		return $rates;
+	}
+
+	/**
+	 * Compute the cartesian product of an array of arrays.
+	 *
+	 * @param array $sets Array of plan arrays, one per package.
+	 * @return array Each entry is an array of plans (one per package).
+	 */
+	protected function cartesian_product( array $sets ): array {
+		$result = array( array() );
+
+		foreach ( $sets as $set ) {
+			$new_result = array();
+			foreach ( $result as $existing ) {
+				foreach ( $set as $item ) {
+					$new_result[] = array_merge( $existing, array( $item ) );
+				}
+			}
+			$result = $new_result;
+		}
+
+		return $result;
 	}
 
 	/**
@@ -214,13 +347,16 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return string Transient key (max 172 chars, within WP limit).
 	 */
 	protected function get_rate_cache_key( array $items, array $destination ): string {
-		// Include the active carrier in the hash so a carrier switch invalidates the cache.
+		// Include settings that affect rate output so changes invalidate the cache.
 		$settings    = get_option( Settings::OPTION_KEY, array() );
 		$carrier_key = $settings['carrier'] ?? 'shipengine';
 
 		$data = array(
-			'carrier' => $carrier_key,
-			'items'   => array_map(
+			'carrier'      => $carrier_key,
+			'service_code' => $settings['service_code'] ?? '',
+			'all_options'  => $settings['show_all_options'] ?? '0',
+			'pkg_count'    => $settings['show_package_count'] ?? '0',
+			'items'        => array_map(
 				static function ( array $item ): array {
 					return array(
 						'id' => $item['product_id'],
@@ -232,7 +368,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 				},
 				$items
 			),
-			'dest'    => array(
+			'dest'         => array(
 				$destination['country'] ?? '',
 				$destination['state'] ?? '',
 				$destination['postcode'] ?? '',

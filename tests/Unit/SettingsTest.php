@@ -217,6 +217,62 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// is_show_all_options_enabled
+	// -------------------------------------------------------------------------
+
+	public function test_show_all_options_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_all_options_enabled() );
+	}
+
+	public function test_show_all_options_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_all_options' => '1' );
+		$this->assertTrue( $this->settings->is_show_all_options_enabled() );
+	}
+
+	public function test_show_all_options_disabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_all_options' => '0' );
+		$this->assertFalse( $this->settings->is_show_all_options_enabled() );
+	}
+
+	// -------------------------------------------------------------------------
+	// is_show_package_count_enabled
+	// -------------------------------------------------------------------------
+
+	public function test_show_package_count_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_package_count_enabled() );
+	}
+
+	public function test_show_package_count_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_package_count' => '1' );
+		$this->assertTrue( $this->settings->is_show_package_count_enabled() );
+	}
+
+	public function test_show_package_count_disabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_package_count' => '0' );
+		$this->assertFalse( $this->settings->is_show_package_count_enabled() );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_service_code
+	// -------------------------------------------------------------------------
+
+	public function test_get_service_code_returns_default(): void {
+		$this->assertSame( '', $this->settings->get_service_code() );
+	}
+
+	public function test_get_service_code_returns_saved_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'service_code' => 'usps_ground_advantage' );
+		$this->assertSame( 'usps_ground_advantage', $this->settings->get_service_code() );
+	}
+
+	public function test_get_service_code_applies_filter(): void {
+		$GLOBALS['_test_wp_filters']['fk_usps_optimizer_service_code'][] = function () {
+			return 'custom_service';
+		};
+		$this->assertSame( 'custom_service', $this->settings->get_service_code() );
+	}
+
+	// -------------------------------------------------------------------------
 	// sanitize_settings
 	// -------------------------------------------------------------------------
 
@@ -251,6 +307,34 @@ class SettingsTest extends TestCase {
 	public function test_sanitize_settings_debug_logging_is_zero_when_absent(): void {
 		$result = $this->settings->sanitize_settings( $this->empty_settings_input() );
 		$this->assertSame( '0', $result['debug_logging'] );
+	}
+
+	public function test_sanitize_settings_show_all_options_is_one_when_truthy(): void {
+		$input  = array( 'show_all_options' => '1' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_all_options'] );
+	}
+
+	public function test_sanitize_settings_show_all_options_is_zero_when_absent(): void {
+		$result = $this->settings->sanitize_settings( $this->empty_settings_input() );
+		$this->assertSame( '0', $result['show_all_options'] );
+	}
+
+	public function test_sanitize_settings_show_package_count_is_one_when_truthy(): void {
+		$input  = array( 'show_package_count' => '1' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_package_count'] );
+	}
+
+	public function test_sanitize_settings_show_package_count_is_zero_when_absent(): void {
+		$result = $this->settings->sanitize_settings( $this->empty_settings_input() );
+		$this->assertSame( '0', $result['show_package_count'] );
+	}
+
+	public function test_sanitize_settings_service_code_is_sanitized(): void {
+		$input  = array( 'service_code' => '<b>usps_priority_mail</b>' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'usps_priority_mail', $result['service_code'] );
 	}
 
 	public function test_sanitize_settings_returns_valid_boxes_json(): void {

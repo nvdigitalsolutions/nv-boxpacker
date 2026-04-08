@@ -126,6 +126,7 @@ class ShipStationServiceTest extends TestCase {
 		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
 		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
 		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_service_code' )->willReturn( '' );
 		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
 			'postal_code'    => '90210',
 			'city_locality'  => 'Beverly Hills',
@@ -509,6 +510,76 @@ class ShipStationServiceTest extends TestCase {
 
 		$this->assertSame( 6.50, $result['rate_amount'] );
 		$this->assertSame( 'Box B', $result['package_name'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// build_all_test_package_plans
+	// -------------------------------------------------------------------------
+
+	public function test_build_all_test_package_plans_returns_empty_when_no_boxes(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+		$this->assertSame( array(), $result );
+	}
+
+	public function test_build_all_test_package_plans_returns_all_candidates(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->configure_credentials();
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			$cost = 1 === $call ? 10.00 : 6.50;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => $cost, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 2, $result );
+		// Should be sorted cheapest first.
+		$this->assertSame( 6.50, $result[0]['rate_amount'] );
+		$this->assertSame( 'Box B', $result[0]['package_name'] );
+		$this->assertSame( 10.00, $result[1]['rate_amount'] );
+		$this->assertSame( 'Box A', $result[1]['package_name'] );
+	}
+
+	public function test_build_all_test_package_plans_skips_failed_rates(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->configure_credentials();
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			if ( 1 === $call ) {
+				return new \WP_Error( 'timeout', 'Request timed out' );
+			}
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 6.50, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 1, $result );
+		$this->assertSame( 6.50, $result[0]['rate_amount'] );
 	}
 
 	// -------------------------------------------------------------------------
