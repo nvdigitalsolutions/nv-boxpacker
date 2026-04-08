@@ -129,6 +129,7 @@ class ComposerStaticInit9c7fefd90ae0159d1e2ff21b163ed067
         'FK_USPS_Optimizer\\Settings' => __DIR__ . '/../..' . '/includes/class-settings.php',
         'FK_USPS_Optimizer\\ShipEngine_Service' => __DIR__ . '/../..' . '/includes/class-shipengine-service.php',
         'FK_USPS_Optimizer\\ShipStation_Service' => __DIR__ . '/../..' . '/includes/class-shipstation-service.php',
+        'FK_USPS_Optimizer\\Shipping_Method' => __DIR__ . '/../..' . '/includes/class-shipping-method.php',
         'FK_USPS_Optimizer\\Test_Pricing_Service' => __DIR__ . '/../..' . '/includes/class-test-pricing-service.php',
         'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\Plugin' => __DIR__ . '/..' . '/dealerdirect/phpcodesniffer-composer-installer/src/Plugin.php',
         'PHPCSUtils\\AbstractSniffs\\AbstractArrayDeclarationSniff' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/AbstractSniffs/AbstractArrayDeclarationSniff.php',

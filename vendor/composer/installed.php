@@ -1,6 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
+        'pretty_version' => 'dev-copilot/fix-optimizer-shipping-option',
+        'version' => 'dev-copilot/fix-optimizer-shipping-option',
+        'reference' => '2c3655d90e4d7055d0524e85d08e8c5550f77c47',
         'pretty_version' => 'dev-copilot/update-plugin-owner-nv-digital-solutions',
         'version' => 'dev-copilot/update-plugin-owner-nv-digital-solutions',
         'reference' => '444cae3b4538758f95b6e9eaa05c2307e44ec57e',
@@ -56,6 +59,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
+            'pretty_version' => 'dev-copilot/fix-optimizer-shipping-option',
+            'version' => 'dev-copilot/fix-optimizer-shipping-option',
+            'reference' => '2c3655d90e4d7055d0524e85d08e8c5550f77c47',
             'pretty_version' => 'dev-copilot/update-plugin-owner-nv-digital-solutions',
             'version' => 'dev-copilot/update-plugin-owner-nv-digital-solutions',
             'reference' => '444cae3b4538758f95b6e9eaa05c2307e44ec57e',
