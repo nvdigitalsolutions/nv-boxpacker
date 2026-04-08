@@ -220,6 +220,10 @@ class Plugin {
 		}
 
 		$this->order_plan_service->save( $order, $plan );
+
+		if ( $this->settings->is_add_package_note_enabled() && ! empty( $plan['packages'] ) ) {
+			$order->add_order_note( $this->build_package_note( $plan ) );
+		}
 	}
 
 	/**
@@ -304,6 +308,65 @@ class Plugin {
 		}
 
 		return $this->shipengine_service;
+	}
+
+	/**
+	 * Build a human-readable order note summarising the shipping plan.
+	 *
+	 * @param array $plan Shipping plan data.
+	 * @return string Formatted note text.
+	 */
+	protected function build_package_note( array $plan ): string {
+		$lines   = array();
+		$lines[] = __( 'USPS Shipping Plan', 'fk-usps-optimizer' );
+		$lines[] = sprintf(
+			/* translators: 1: number of packages, 2: currency symbol and total rate. */
+			__( 'Total: %1$d package(s), $%2$s', 'fk-usps-optimizer' ),
+			(int) ( $plan['total_package_count'] ?? 0 ),
+			number_format( (float) ( $plan['total_rate_amount'] ?? 0 ), 2 )
+		);
+
+		foreach ( $plan['packages'] ?? array() as $package ) {
+			$lines[] = '';
+			$lines[] = sprintf(
+				/* translators: 1: package number, 2: package name, 3: mode. */
+				__( 'Package %1$d: %2$s (%3$s)', 'fk-usps-optimizer' ),
+				(int) $package['package_number'],
+				$package['package_name'],
+				$package['mode']
+			);
+			$lines[] = sprintf(
+				/* translators: %s rate amount. */
+				__( 'Rate: $%s', 'fk-usps-optimizer' ),
+				number_format( (float) $package['rate_amount'], 2 )
+			);
+			$lines[] = sprintf(
+				/* translators: 1: length, 2: width, 3: height. */
+				__( 'Dims: %1$s x %2$s x %3$s in', 'fk-usps-optimizer' ),
+				$package['dimensions']['length'],
+				$package['dimensions']['width'],
+				$package['dimensions']['height']
+			);
+			$lines[] = sprintf(
+				/* translators: %s weight in ounces. */
+				__( 'Weight: %s oz', 'fk-usps-optimizer' ),
+				$package['weight_oz']
+			);
+
+			if ( ! empty( $package['cubic_tier'] ) ) {
+				$lines[] = sprintf(
+					/* translators: %s cubic tier value. */
+					__( 'Cubic Tier: %s', 'fk-usps-optimizer' ),
+					$package['cubic_tier']
+				);
+			}
+
+			if ( ! empty( $package['packing_list'] ) ) {
+				$lines[] = __( 'Items:', 'fk-usps-optimizer' ) . ' ' . implode( ', ', $package['packing_list'] );
+			}
+		}
+
+		return implode( "\n", $lines );
 	}
 
 	/**

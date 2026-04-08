@@ -583,11 +583,40 @@ class SettingsTest extends TestCase {
 		$input  = $this->empty_settings_input();
 		$input['show_all_options']   = '1';
 		$input['show_package_count'] = '1';
+		$input['add_package_note']   = '1';
 		$input['service_code']       = 'usps_ground_advantage';
 		$result = $this->settings->sanitize_settings( $input );
 		$this->assertSame( '1', $result['show_all_options'] );
 		$this->assertSame( '1', $result['show_package_count'] );
+		$this->assertSame( '1', $result['add_package_note'] );
 		$this->assertSame( 'usps_ground_advantage', $result['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// add_package_note
+	// -------------------------------------------------------------------------
+
+	public function test_add_package_note_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_add_package_note_enabled() );
+	}
+
+	public function test_add_package_note_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'add_package_note' => '1' );
+		$this->assertTrue( $this->settings->is_add_package_note_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_add_package_note(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'add_package_note' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'add_package_note', $output );
+	}
+
+	public function test_sanitize_settings_add_package_note_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['add_package_note'] );
 	}
 
 	// -------------------------------------------------------------------------
