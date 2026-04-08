@@ -529,6 +529,40 @@ class PackingServiceTest extends TestCase {
 		$this->assertNotEmpty( $result );
 	}
 
+	/**
+	 * Multiple items without dimensions must each get their own box (not packed together).
+	 */
+	public function test_pack_order_unmeasured_items_get_separate_boxes(): void {
+		$product = $this->createMock( \WC_Product::class );
+		$product->method( 'needs_shipping' )->willReturn( true );
+		$product->method( 'get_id' )->willReturn( 5 );
+		$product->method( 'get_sku' )->willReturn( 'BAG' );
+		$product->method( 'get_length' )->willReturn( '' );
+		$product->method( 'get_width' )->willReturn( '' );
+		$product->method( 'get_height' )->willReturn( '' );
+		$product->method( 'get_weight' )->willReturn( '32' ); // 32 oz = 2 lbs
+
+		$item = $this->createMock( \WC_Order_Item_Product::class );
+		$item->method( 'get_product' )->willReturn( $product );
+		$item->method( 'get_name' )->willReturn( 'Heavy Bag' );
+		$item->method( 'get_quantity' )->willReturn( 4 );
+
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_items' )->willReturn( array( 1 => $item ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+
+		$result = $this->service->pack_order( $order );
+
+		$this->assertCount( 4, $result, '4 unmeasured items must produce 4 packages (one each).' );
+
+		$total_items = 0;
+		foreach ( $result as $pkg ) {
+			$total_items += count( $pkg['items'] );
+		}
+		$this->assertSame( 4, $total_items );
+	}
+
 	public function test_pack_order_expands_quantity_to_separate_item_entries(): void {
 		$product = $this->createMock( \WC_Product::class );
 		$product->method( 'needs_shipping' )->willReturn( true );
@@ -705,5 +739,126 @@ class PackingServiceTest extends TestCase {
 			$total_items += count( $pkg['items'] );
 		}
 		$this->assertSame( 3, $total_items );
+	}
+
+	// -------------------------------------------------------------------------
+	// pack_items — unmeasured items (has_dimensions === false)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Unmeasured items (has_dimensions === false) must get one-item-per-box
+	 * via fallback, even when BoxPacker could fit multiple 1×1×1 items in a single box.
+	 */
+	public function test_pack_items_unmeasured_items_produce_one_package_each(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+
+		$items = array();
+		for ( $i = 0; $i < 4; $i++ ) {
+			$items[] = array(
+				'product_id'     => 10,
+				'name'           => 'No Dims Item',
+				'length'         => 1.0,
+				'width'          => 1.0,
+				'height'         => 1.0,
+				'weight_oz'      => 16.0,
+				'has_dimensions' => false,
+				'sku'            => 'ND',
+			);
+		}
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 4, $result, 'Four unmeasured items must produce 4 packages (one each).' );
+	}
+
+	/**
+	 * Mixed cart: measured items go to BoxPacker, unmeasured items get fallback.
+	 */
+	public function test_pack_items_mixed_measured_and_unmeasured(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+
+		$items = array(
+			// Two small measured items — can share a box.
+			array(
+				'product_id'     => 1,
+				'name'           => 'Small Widget',
+				'length'         => 3.0,
+				'width'          => 3.0,
+				'height'         => 2.0,
+				'weight_oz'      => 4.0,
+				'has_dimensions' => true,
+				'sku'            => 'SW',
+			),
+			array(
+				'product_id'     => 2,
+				'name'           => 'Small Widget 2',
+				'length'         => 3.0,
+				'width'          => 3.0,
+				'height'         => 2.0,
+				'weight_oz'      => 4.0,
+				'has_dimensions' => true,
+				'sku'            => 'SW2',
+			),
+			// Two unmeasured items — must get separate boxes.
+			array(
+				'product_id'     => 3,
+				'name'           => 'Mystery A',
+				'length'         => 1.0,
+				'width'          => 1.0,
+				'height'         => 1.0,
+				'weight_oz'      => 8.0,
+				'has_dimensions' => false,
+				'sku'            => 'MA',
+			),
+			array(
+				'product_id'     => 4,
+				'name'           => 'Mystery B',
+				'length'         => 1.0,
+				'width'          => 1.0,
+				'height'         => 1.0,
+				'weight_oz'      => 8.0,
+				'has_dimensions' => false,
+				'sku'            => 'MB',
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		// 2 measured items may share a box (1 package) + 2 unmeasured = 2 fallback packages.
+		// Total: at least 3 packages.
+		$this->assertGreaterThanOrEqual( 3, count( $result ), 'Mixed cart must have at least 3 packages (1 for measured pair + 2 for unmeasured).' );
+
+		// Total items across all packages must be 4.
+		$total_items = 0;
+		foreach ( $result as $pkg ) {
+			$total_items += count( $pkg['items'] );
+		}
+		$this->assertSame( 4, $total_items );
+	}
+
+	/**
+	 * Measured items without the flag default to BoxPacker (backward compatibility).
+	 */
+	public function test_pack_items_without_flag_defaults_to_boxpacker(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+
+		// 4 tiny items with no has_dimensions flag — should be optimised into 1 box.
+		$items = array();
+		for ( $i = 0; $i < 4; $i++ ) {
+			$items[] = array(
+				'product_id' => 10,
+				'name'       => 'Tiny Item',
+				'length'     => 1.0,
+				'width'      => 1.0,
+				'height'     => 1.0,
+				'weight_oz'  => 2.0,
+				'sku'        => 'T',
+			);
+		}
+
+		$result = $this->service->pack_items( $items );
+
+		// Without the flag, items go to BoxPacker and should fit in 1 box.
+		$this->assertCount( 1, $result, 'Four tiny items without has_dimensions flag should optimise into 1 box.' );
 	}
 }

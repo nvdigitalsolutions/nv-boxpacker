@@ -172,8 +172,12 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 		$label = $this->title;
 		if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
-			/* translators: 1: method title, 2: package count. */
-			$label = sprintf( __( '%1$s (%2$d packages)', 'fk-usps-optimizer' ), $this->title, $package_count );
+			$label = sprintf(
+				/* translators: 1: method title, 2: package count. */
+				_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+				$this->title,
+				$package_count
+			);
 		}
 
 		return array(
@@ -214,25 +218,45 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$combos        = $this->cartesian_product( $per_package_plans );
 		$package_count = count( $packed_packages );
 		$rates         = array();
+		$seen_labels   = array();
 
 		foreach ( $combos as $combo ) {
-			$total  = 0.0;
-			$labels = array();
+			$total = 0.0;
+			$names = array();
 
 			foreach ( $combo as $plan ) {
-				$total   += (float) $plan['rate_amount'];
-				$labels[] = $plan['package_name'];
+				$total  += (float) $plan['rate_amount'];
+				$names[] = $plan['package_name'];
 			}
 
 			if ( $total <= 0 ) {
 				continue;
 			}
 
-			$label = $this->title . ' — ' . implode( ' + ', $labels );
-			if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
-				/* translators: 1: combined label, 2: package count. */
-				$label = sprintf( __( '%1$s (%2$d packages)', 'fk-usps-optimizer' ), $label, $package_count );
+			// Consolidate repeated box names: "Small + Small + Large" → "2× Small + Large".
+			$grouped = array_count_values( $names );
+			$parts   = array();
+			foreach ( $grouped as $name => $count ) {
+				$parts[] = $count > 1
+					? sprintf( '%d× %s', $count, $name )
+					: $name;
 			}
+			$label = $this->title . ' — ' . implode( ' + ', $parts );
+
+			if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
+				$label = sprintf(
+					/* translators: 1: combined label, 2: package count. */
+					_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+					$label,
+					$package_count
+				);
+			}
+
+			// Deduplicate equivalent combos (permutations of the same set of box types).
+			if ( isset( $seen_labels[ $label ] ) ) {
+				continue;
+			}
+			$seen_labels[ $label ] = true;
 
 			$rates[] = array(
 				'label' => $label,
@@ -300,21 +324,24 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$raw_width  = $product->get_width( 'edit' );
 			$raw_height = $product->get_height( 'edit' );
 			$raw_weight = $product->get_weight( 'edit' );
-			$length     = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
-			$width      = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
-			$height     = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
-			$weight     = (float) wc_get_weight( $raw_weight ? $raw_weight : 0.1, 'oz' );
-			$qty        = max( 1, (int) ( $cart_item['quantity'] ?? 1 ) );
+
+			$has_dimensions = ( '' !== $raw_length && '' !== $raw_width && '' !== $raw_height );
+			$length         = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
+			$width          = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
+			$height         = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
+			$weight         = (float) wc_get_weight( $raw_weight ? $raw_weight : 0.1, 'oz' );
+			$qty            = max( 1, (int) ( $cart_item['quantity'] ?? 1 ) );
 
 			for ( $i = 0; $i < $qty; $i++ ) {
 				$items[] = array(
-					'product_id' => $product->get_id(),
-					'name'       => $product->get_name(),
-					'length'     => $length,
-					'width'      => $width,
-					'height'     => $height,
-					'weight_oz'  => $weight,
-					'sku'        => $product->get_sku(),
+					'product_id'     => $product->get_id(),
+					'name'           => $product->get_name(),
+					'length'         => $length,
+					'width'          => $width,
+					'height'         => $height,
+					'weight_oz'      => $weight,
+					'has_dimensions' => $has_dimensions,
+					'sku'            => $product->get_sku(),
 				);
 			}
 		}
