@@ -782,6 +782,106 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// build_all_test_package_plans
+	// -------------------------------------------------------------------------
+
+	public function test_build_all_test_package_plans_returns_empty_when_no_boxes(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$ship_to = array(
+			'city_locality' => 'Springfield', 'state_province' => 'IL',
+			'postal_code' => '62701', 'country_code' => 'US',
+		);
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+		$this->assertSame( array(), $result );
+	}
+
+	public function test_build_all_test_package_plans_returns_all_candidates(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			$amount = 1 === $call ? 10.00 : 6.50;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					'rate_response' => array(
+						'rates' => array( array( 'shipping_amount' => array( 'amount' => $amount, 'currency' => 'USD' ) ) ),
+					),
+				) ),
+			);
+		};
+
+		$ship_to = array(
+			'city_locality' => 'Springfield', 'state_province' => 'IL',
+			'postal_code' => '62701', 'country_code' => 'US',
+		);
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 2, $result );
+		// Sorted cheapest first.
+		$this->assertSame( 6.50, $result[0]['rate_amount'] );
+		$this->assertSame( 'Box B', $result[0]['package_name'] );
+		$this->assertSame( 10.00, $result[1]['rate_amount'] );
+		$this->assertSame( 'Box A', $result[1]['package_name'] );
+	}
+
+	public function test_build_all_test_package_plans_skips_failed_rates(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			if ( 1 === $call ) {
+				return new \WP_Error( 'timeout', 'Request timed out' );
+			}
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					'rate_response' => array(
+						'rates' => array( array( 'shipping_amount' => array( 'amount' => 6.50, 'currency' => 'USD' ) ) ),
+					),
+				) ),
+			);
+		};
+
+		$ship_to = array(
+			'city_locality' => 'Springfield', 'state_province' => 'IL',
+			'postal_code' => '62701', 'country_code' => 'US',
+		);
+		$result = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $result );
+		$this->assertSame( 6.50, $result[0]['rate_amount'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// Private helpers
 	// -------------------------------------------------------------------------
 
