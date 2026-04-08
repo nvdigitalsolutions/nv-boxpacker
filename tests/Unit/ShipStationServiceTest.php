@@ -126,6 +126,7 @@ class ShipStationServiceTest extends TestCase {
 		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
 		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
 		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
 		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
 			'postal_code'    => '90210',
 			'city_locality'  => 'Beverly Hills',

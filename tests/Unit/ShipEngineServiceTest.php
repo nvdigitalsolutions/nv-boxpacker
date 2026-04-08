@@ -487,6 +487,7 @@ class ShipEngineServiceTest extends TestCase {
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
 		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
 			'address_line1' => '1 From St', 'city_locality' => 'City',
 			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
@@ -536,6 +537,7 @@ class ShipEngineServiceTest extends TestCase {
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
 		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
 			'address_line1' => '1 From St', 'city_locality' => 'City',
 			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
@@ -570,6 +572,7 @@ class ShipEngineServiceTest extends TestCase {
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
 		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
 			'address_line1' => '1 From St', 'city_locality' => 'City',
 			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
