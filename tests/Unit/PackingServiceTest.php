@@ -144,32 +144,57 @@ class PackingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_match_returns_first_fitting_box(): void {
-		$item   = array( 'length' => 5.0, 'width' => 5.0, 'height' => 4.0, 'weight_oz' => 8.0 );
+		$item   = array(
+			'length'    => 5.0,
+			'width'     => 5.0,
+			'height'    => 4.0,
+			'weight_oz' => 8.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'Small', $result['reference'] );
 	}
 
 	public function test_match_skips_box_too_short_and_uses_next(): void {
-		$item   = array( 'length' => 10.0, 'width' => 10.0, 'height' => 8.0, 'weight_oz' => 8.0 );
+		$item   = array(
+			'length'    => 10.0,
+			'width'     => 10.0,
+			'height'    => 8.0,
+			'weight_oz' => 8.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'Medium', $result['reference'] );
 	}
 
 	public function test_match_returns_fallback_when_no_box_fits_by_dimension(): void {
-		$item   = array( 'length' => 24.0, 'width' => 24.0, 'height' => 24.0, 'weight_oz' => 8.0 );
+		$item   = array(
+			'length'    => 24.0,
+			'width'     => 24.0,
+			'height'    => 24.0,
+			'weight_oz' => 8.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'Fallback Package', $result['reference'] );
 	}
 
 	public function test_match_returns_fallback_when_item_too_heavy(): void {
 		// 400 oz > 20 lb × 16 oz/lb = 320 oz.
-		$item   = array( 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 400.0 );
+		$item   = array(
+			'length'    => 4.0,
+			'width'     => 4.0,
+			'height'    => 3.0,
+			'weight_oz' => 400.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'Fallback Package', $result['reference'] );
 	}
 
 	public function test_match_fallback_uses_item_dimensions_as_box_dimensions(): void {
-		$item   = array( 'length' => 22.5, 'width' => 18.3, 'height' => 15.7, 'weight_oz' => 5.0 );
+		$item   = array(
+			'length'    => 22.5,
+			'width'     => 18.3,
+			'height'    => 15.7,
+			'weight_oz' => 5.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 23, $result['outer_length'] );
 		$this->assertSame( 19, $result['outer_width'] );
@@ -177,14 +202,24 @@ class PackingServiceTest extends TestCase {
 	}
 
 	public function test_match_fallback_has_cubic_box_type(): void {
-		$item   = array( 'length' => 30.0, 'width' => 30.0, 'height' => 30.0, 'weight_oz' => 5.0 );
+		$item   = array(
+			'length'    => 30.0,
+			'width'     => 30.0,
+			'height'    => 30.0,
+			'weight_oz' => 5.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'cubic', $result['box_type'] );
 	}
 
 	public function test_match_considers_exact_boundary_as_fitting(): void {
 		// Item exactly matches inner dimensions of the small box.
-		$item   = array( 'length' => 8.0, 'width' => 8.0, 'height' => 6.0, 'weight_oz' => 4.0 );
+		$item   = array(
+			'length'    => 8.0,
+			'width'     => 8.0,
+			'height'    => 6.0,
+			'weight_oz' => 4.0,
+		);
 		$result = $this->call_protected( 'match_item_to_box', array( $item, $this->make_boxes() ) );
 		$this->assertSame( 'Small', $result['reference'] );
 	}
@@ -196,7 +231,10 @@ class PackingServiceTest extends TestCase {
 	public function test_convert_box_translates_dimensions_to_mm(): void {
 		$box    = array_merge(
 			$this->make_boxes()[0],
-			array( 'empty_weight' => 3, 'max_weight' => 20 )
+			array(
+				'empty_weight' => 3,
+				'max_weight'   => 20,
+			)
 		);
 		$result = $this->call_protected( 'convert_box_to_boxpacker_units', array( $box ) );
 
@@ -211,7 +249,13 @@ class PackingServiceTest extends TestCase {
 	}
 
 	public function test_convert_box_translates_weights_to_grams(): void {
-		$box    = array_merge( $this->make_boxes()[0], array( 'empty_weight' => 3, 'max_weight' => 20 ) );
+		$box    = array_merge(
+			$this->make_boxes()[0],
+			array(
+				'empty_weight' => 3,
+				'max_weight'   => 20,
+			)
+		);
 		$result = $this->call_protected( 'convert_box_to_boxpacker_units', array( $box ) );
 
 		// empty_weight: 3 oz → round(3 × 28.3495) = round(85.0485) = 85 g.
@@ -234,8 +278,26 @@ class PackingServiceTest extends TestCase {
 		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
 
 		$items = array(
-			array( 'name' => 'A', 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'A' ),
-			array( 'name' => 'B', 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 6.0, 'product_id' => 2, 'item_id' => 2, 'sku' => 'B' ),
+			array(
+				'name'       => 'A',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 3.0,
+				'weight_oz'  => 5.0,
+				'product_id' => 1,
+				'item_id'    => 1,
+				'sku'        => 'A',
+			),
+			array(
+				'name'       => 'B',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 3.0,
+				'weight_oz'  => 6.0,
+				'product_id' => 2,
+				'item_id'    => 2,
+				'sku'        => 'B',
+			),
 		);
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
@@ -247,8 +309,26 @@ class PackingServiceTest extends TestCase {
 		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
 
 		$items = array(
-			array( 'name' => 'A', 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 8.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'A' ),
-			array( 'name' => 'B', 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 12.0, 'product_id' => 2, 'item_id' => 2, 'sku' => 'B' ),
+			array(
+				'name'       => 'A',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 3.0,
+				'weight_oz'  => 8.0,
+				'product_id' => 1,
+				'item_id'    => 1,
+				'sku'        => 'A',
+			),
+			array(
+				'name'       => 'B',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 3.0,
+				'weight_oz'  => 12.0,
+				'product_id' => 2,
+				'item_id'    => 2,
+				'sku'        => 'B',
+			),
 		);
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
@@ -261,7 +341,16 @@ class PackingServiceTest extends TestCase {
 		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
 
 		$items = array(
-			array( 'name' => 'A', 'length' => 4.0, 'width' => 4.0, 'height' => 3.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'A' ),
+			array(
+				'name'       => 'A',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 3.0,
+				'weight_oz'  => 5.0,
+				'product_id' => 1,
+				'item_id'    => 1,
+				'sku'        => 'A',
+			),
 		);
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
@@ -292,7 +381,16 @@ class PackingServiceTest extends TestCase {
 		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
 
 		$items = array(
-			array( 'name' => 'A', 'length' => 5.0, 'width' => 5.0, 'height' => 4.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'A' ),
+			array(
+				'name'       => 'A',
+				'length'     => 5.0,
+				'width'      => 5.0,
+				'height'     => 4.0,
+				'weight_oz'  => 5.0,
+				'product_id' => 1,
+				'item_id'    => 1,
+				'sku'        => 'A',
+			),
 		);
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
@@ -307,7 +405,16 @@ class PackingServiceTest extends TestCase {
 		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
 
 		$items = array(
-			array( 'name' => 'Big', 'length' => 24.0, 'width' => 18.0, 'height' => 15.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'BIG' ),
+			array(
+				'name'       => 'Big',
+				'length'     => 24.0,
+				'width'      => 18.0,
+				'height'     => 15.0,
+				'weight_oz'  => 5.0,
+				'product_id' => 1,
+				'item_id'    => 1,
+				'sku'        => 'BIG',
+			),
 		);
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
@@ -442,8 +549,8 @@ class PackingServiceTest extends TestCase {
 
 		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
 
-		$result       = $this->service->pack_order( $order );
-		$total_items  = array_sum( array_map( fn( $p ) => count( $p['items'] ), $result ) );
+		$result      = $this->service->pack_order( $order );
+		$total_items = array_sum( array_map( fn( $p ) => count( $p['items'] ), $result ) );
 
 		$this->assertSame( 3, $total_items );
 	}
@@ -487,5 +594,116 @@ class PackingServiceTest extends TestCase {
 		$this->assertSame( 9.0, $result[0]['dimensions']['length'] );
 		$this->assertSame( 9.0, $result[0]['dimensions']['width'] );
 		$this->assertSame( 7.0, $result[0]['dimensions']['height'] );
+	}
+
+	/**
+	 * Verify BoxPacker produces multiple packages when items overflow a single box.
+	 *
+	 * Two items each nearly fill the box, so BoxPacker must use a separate box
+	 * for each item. count( $result ) must equal the item count.
+	 */
+	public function test_pack_items_with_boxpacker_produces_multiple_packages(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'SmallBox',
+				'package_code' => 'package',
+				'package_name' => 'Small Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 7,
+				'outer_length' => 7,
+				'outer_depth'  => 5,
+				'inner_width'  => 6,
+				'inner_length' => 6,
+				'inner_depth'  => 4,
+				'empty_weight' => 4,
+				'max_weight'   => 20,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		// Each item is 5×5×3.5 — nearly fills the 6×6×4 inner space.
+		// Two items cannot share a single box.
+		$items = array(
+			array(
+				'product_id' => 1,
+				'name'       => 'Widget A',
+				'length'     => 5.0,
+				'width'      => 5.0,
+				'height'     => 3.5,
+				'weight_oz'  => 8.0,
+				'sku'        => 'A',
+			),
+			array(
+				'product_id' => 2,
+				'name'       => 'Widget B',
+				'length'     => 5.0,
+				'width'      => 5.0,
+				'height'     => 3.5,
+				'weight_oz'  => 8.0,
+				'sku'        => 'B',
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		// BoxPacker must produce 2 separate packages.
+		$this->assertCount( 2, $result, 'Two items that each nearly fill the box must produce 2 packages.' );
+
+		// Each package should use the inner dimensions of the box.
+		$this->assertSame( 6.0, $result[0]['dimensions']['length'] );
+		$this->assertSame( 6.0, $result[0]['dimensions']['width'] );
+		$this->assertSame( 4.0, $result[0]['dimensions']['height'] );
+
+		$this->assertSame( 6.0, $result[1]['dimensions']['length'] );
+		$this->assertSame( 6.0, $result[1]['dimensions']['width'] );
+		$this->assertSame( 4.0, $result[1]['dimensions']['height'] );
+	}
+
+	/**
+	 * Verify BoxPacker produces 3 packages for 3 large items with qty expansion.
+	 */
+	public function test_pack_items_with_boxpacker_multiple_packages_via_quantity(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'SmallBox',
+				'package_code' => 'package',
+				'package_name' => 'Small Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 7,
+				'outer_length' => 7,
+				'outer_depth'  => 5,
+				'inner_width'  => 6,
+				'inner_length' => 6,
+				'inner_depth'  => 4,
+				'empty_weight' => 4,
+				'max_weight'   => 20,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		// 3 identical items that each nearly fill the box.
+		$items = array();
+		for ( $i = 0; $i < 3; $i++ ) {
+			$items[] = array(
+				'product_id' => 10,
+				'name'       => 'Large Widget',
+				'length'     => 5.0,
+				'width'      => 5.0,
+				'height'     => 3.5,
+				'weight_oz'  => 8.0,
+				'sku'        => 'LW',
+			);
+		}
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 3, $result, 'Three items that each nearly fill the box must produce 3 packages.' );
+
+		// Total items across all packages must equal 3.
+		$total_items = 0;
+		foreach ( $result as $pkg ) {
+			$total_items += count( $pkg['items'] );
+		}
+		$this->assertSame( 3, $total_items );
 	}
 }

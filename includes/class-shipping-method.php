@@ -354,13 +354,15 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return string Transient key (max 172 chars, within WP limit).
 	 */
 	protected function get_rate_cache_key( array $items, array $destination ): string {
-		// Include the active carrier in the hash so a carrier switch invalidates the cache.
-		$settings    = get_option( Settings::OPTION_KEY, array() );
-		$carrier_key = $settings['carrier'] ?? 'shipengine';
+		$settings = get_option( Settings::OPTION_KEY, array() );
 
 		$data = array(
-			'carrier' => $carrier_key,
-			'items'   => array_map(
+			'carrier'            => $settings['carrier'] ?? 'shipengine',
+			'service_code'       => $settings['service_code'] ?? 'usps_priority_mail',
+			'show_all_options'   => $settings['show_all_options'] ?? '0',
+			'show_package_count' => $settings['show_package_count'] ?? '0',
+			'boxes_json'         => $settings['boxes_json'] ?? '',
+			'items'              => array_map(
 				static function ( array $item ): array {
 					return array(
 						'id' => $item['product_id'],
@@ -372,7 +374,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 				},
 				$items
 			),
-			'dest'    => array(
+			'dest'               => array(
 				$destination['country'] ?? '',
 				$destination['state'] ?? '',
 				$destination['postcode'] ?? '',
