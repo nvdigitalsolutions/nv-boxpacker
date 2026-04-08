@@ -285,6 +285,15 @@ class Plugin {
 	}
 
 	/**
+	 * Get the plugin settings instance.
+	 *
+	 * @return Settings
+	 */
+	public function get_settings(): Settings {
+		return $this->settings;
+	}
+
+	/**
 	 * Return the carrier service selected in settings.
 	 *
 	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
