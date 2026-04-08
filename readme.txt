@@ -160,6 +160,10 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 * Fixed: Rate cache key includes box config and display settings to prevent stale cached rates after settings changes.
 * Fixed: ShipStation now sends the configured serviceCode and packageCode in rate requests.
 * CI: Production ZIP artifact is now built and uploaded automatically after every successful CI run.
+* Security: Escaped CSS class attribute output on the settings page admin notice.
+* Security: Sanitized numerical dimension/weight inputs in the Test Pricing form.
+* Security: Guarded `$_SERVER['REQUEST_METHOD']` access with `isset()` check.
+* Improved: `Packing_Service::pack_items()` now accepts an optional `$boxes` parameter to pack against custom box sets.
 
 = 1.1.0 =
 * New: ShipStation carrier support (Basic-Auth, `GET /shipments/getrates`).
