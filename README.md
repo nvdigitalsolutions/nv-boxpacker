@@ -152,7 +152,7 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| **Show All Options** | Checkbox | Off | Display separate shipping options for different packing strategies. When enabled, the plugin runs two strategies — all boxes (optimised cubic + flat rate mix) and flat-rate only — and offers each as a distinct rate with descriptive box-name labels. When disabled, only the single cheapest combined rate is shown. |
+| **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. When enabled, each packed package is rated against all configured boxes; the cartesian product of those candidates produces every possible plan, each offered as a distinct rate with descriptive box-name labels (repeated box names consolidated, e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the single cheapest combined rate is shown. |
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority Mail (Optimized) (2 packages)". Uses proper singular/plural forms. |
 
 ---
@@ -227,7 +227,7 @@ The plugin registers a native **WC_Shipping_Method** (`fk_usps_optimizer`) so it
 3. Packed packages are rate-shopped against the active carrier API.
 4. Rates are cached in a transient for 30 minutes. The cache key includes carrier, service code, box configuration, display settings, item dimensions, and destination — so rates update immediately when any of these change.
 
-When **Show All Options** is enabled, each rate option shows a descriptive label such as "USPS Priority Mail (Optimized) — 2× Small Flat Rate Box + Large Flat Rate Box" or "USPS Priority Mail (Optimized) — Flat Rate — 2× USPS Medium Flat Rate Box". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small").
+When **Show All Options** is enabled, each rate option shows a descriptive label built from the method title and the box names in that combination, such as "USPS Priority Mail (Optimized) — 2× Small Flat Rate Box + Large Flat Rate Box". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first.
 
 ---
 
@@ -314,8 +314,8 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 |---|---|---|
 | `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, registers the WooCommerce shipping method, and wires `woocommerce_checkout_order_processed`. |
 | `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting (including `is_show_all_options_enabled()`, `is_show_package_count_enabled()`, and `get_service_code()`). Renders the settings admin page. |
-| `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live USPS rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via the active carrier, and handles "Show All Options" strategy-based packing and rate caching. |
-| `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. Items without dimensions are separated and packed individually via fallback. Packed package dimensions use inner box dimensions. |
+| `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live USPS rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via the active carrier, and handles "Show All Options" via cartesian product of rated box candidates per package, with rate caching. |
+| `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. `pack_items()` accepts an optional `$boxes` parameter to override the configured box definitions. Items without dimensions are separated and packed individually via fallback. Packed package dimensions use inner box dimensions. |
 | `ShipEngine_Service` | `includes/class-shipengine-service.php` | Rate-shops packed packages against the ShipEngine v1 API (`POST /v1/rates`). Supports both order-based and address-based rate requests. |
 | `ShipStation_Service` | `includes/class-shipstation-service.php` | Rate-shops packed packages against the ShipStation API (`GET /shipments/getrates`) using HTTP Basic Auth. Mirrors the ShipEngine interface. Prepends `[SANDBOX]` to log messages when sandbox mode is active. |
 | `Test_Pricing_Service` | `includes/class-test-pricing-service.php` | Accepts raw form items, expands them by quantity, packs them, and delegates to the active carrier service. Returns a results array consumed by `Admin_Test_UI`. |
@@ -488,7 +488,7 @@ Tests live in `tests/Unit/`. A `tests/bootstrap.php` file provides WordPress and
 | `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection, `serviceCode`/`packageCode` in requests, `build_all_test_package_plans()`. |
 | `tests/Unit/TestPricingServiceTest.php` | Item expansion, carrier routing, warning generation. |
 | `tests/Unit/AdminTestUiTest.php` | Page rendering, nonce flow, form repopulation, results table, sandbox badge. |
-| `tests/Unit/ShippingMethodTest.php` | Rate calculation, caching, cache key composition, show-all-options strategies, show-package-count labels. |
+| `tests/Unit/ShippingMethodTest.php` | Rate calculation, caching, cache key composition (carrier, boxes, display settings, service code), show-package-count labels. |
 
 ### Building
 
@@ -573,7 +573,7 @@ fk-usps-optimizer/
 ### 1.2.0
 
 - **New:** WooCommerce Shipping Zones integration — the plugin now registers as a native `WC_Shipping_Method` (`fk_usps_optimizer`) that can be added to any shipping zone via **WooCommerce → Settings → Shipping**.
-- **New:** **Show All Options** setting — when enabled, the plugin runs two packing strategies (all boxes and flat-rate only) and displays each as a separate shipping option in the cart/checkout with descriptive box-name labels. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box").
+- **New:** **Show All Options** setting — when enabled, every combination (cartesian product) of rated box candidates per packed package is offered as a separate shipping option in the cart/checkout with descriptive box-name labels. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box"). Duplicate combinations are deduplicated and results are sorted cheapest-first.
 - **New:** **Show Package Count** setting — appends the package count to each shipping option label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural forms via `_n()`.
 - **New:** **USPS Service Code** setting — configurable service code (default `usps_priority_mail`) sent to both ShipEngine and ShipStation for rate requests.
 - **New:** `build_all_test_package_plans()` method on both `ShipEngine_Service` and `ShipStation_Service` — returns all rated plans for a package sorted cheapest-first, used by the "Show All Options" feature.
@@ -584,6 +584,10 @@ fk-usps-optimizer/
 - **Fixed:** Rate cache key now includes carrier, service code, show-all-options, show-package-count, and box configuration — preventing stale cached rates after settings changes.
 - **Fixed:** ShipStation `request_rate()` now sends the configured `serviceCode` and `packageCode` instead of `null`, so only the intended service is rated (previously returned rates for all services, producing incorrect pricing).
 - **CI:** CI pipeline (`ci.yml`) now builds a production ZIP artifact after all tests pass, downloadable from the GitHub Actions **Actions** tab for 30 days.
+- **Security:** Escaped CSS class attribute output on the settings page admin notice.
+- **Security:** Sanitized numerical dimension/weight inputs in the Test Pricing form using `sanitize_text_field()`.
+- **Security:** Guarded `$_SERVER['REQUEST_METHOD']` access with `isset()` check before comparison.
+- **Improved:** `Packing_Service::pack_items()` now accepts an optional `$boxes` parameter to override the configured box definitions, enabling callers to pack against custom box sets without modifying plugin settings.
 
 ### 1.1.0
 
