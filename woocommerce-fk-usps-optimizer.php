@@ -3,12 +3,30 @@
  * Plugin Name: FunnelKit USPS Priority Shipping Optimizer
  * Description: Optimizes WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat rate boxes.
  * Version: 1.2.0
- * Author: OpenAI
+ * Author: NV Digital Solutions
+ * Author URI: https://nvdigitalsolutions.com
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Text Domain: fk-usps-optimizer
+ * License: GPLv3
+ * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  *
  * @package FK_USPS_Optimizer
+ *
+ * Copyright (C) 2025 NV Digital Solutions
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
