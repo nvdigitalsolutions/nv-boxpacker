@@ -80,6 +80,20 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Build ALL shipping plans using an explicit ship-to address.
+	 *
+	 * Returns every rated candidate plan instead of only the cheapest.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipStation-compatible destination address.
+	 * @param int   $package_number 1-based package sequence number.
+	 * @return array List of shipping plans, sorted cheapest first.
+	 */
+	public function build_all_test_package_plans( array $package, array $ship_to, int $package_number ): array {
+		return $this->build_all_plans_for_address( $package, $ship_to, $package_number );
+	}
+
+	/**
 	 * Test the ShipStation API connection by fetching the list of carriers.
 	 *
 	 * When $api_key or $api_secret are provided (e.g. passed directly from the
@@ -227,7 +241,7 @@ class ShipStation_Service {
 					'mode'           => $candidate['mode'],
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
-					'service_code'   => (string) ( $rate['serviceCode'] ?? 'usps_priority_mail' ),
+					'service_code'   => (string) ( $rate['serviceCode'] ?? $this->settings->get_service_code() ),
 					'rate_amount'    => (float) $rate['shipmentCost'],
 					'currency'       => 'USD',
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -240,6 +254,53 @@ class ShipStation_Service {
 		}
 
 		return $best_plan;
+	}
+
+	/**
+	 * Build ALL shipping plans for a given address (every rated candidate).
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipStation-compatible destination address.
+	 * @param int   $package_number 1-based package sequence number.
+	 * @param int   $order_id       Order ID for log context; 0 for test runs.
+	 * @return array List of shipping plans, sorted cheapest first.
+	 */
+	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
+		$candidates = $this->build_candidates( $package );
+		$plans      = array();
+
+		foreach ( $candidates as $candidate ) {
+			$response = $this->request_rate( $ship_to, $candidate, $order_id );
+
+			if ( ! $response['success'] ) {
+				continue;
+			}
+
+			$rate    = $response['rate'];
+			$plans[] = array(
+				'package_number' => $package_number,
+				'mode'           => $candidate['mode'],
+				'package_code'   => $candidate['package_code'],
+				'package_name'   => $candidate['package_name'],
+				'service_code'   => (string) ( $rate['serviceCode'] ?? $this->settings->get_service_code() ),
+				'rate_amount'    => (float) $rate['shipmentCost'],
+				'currency'       => 'USD',
+				'weight_oz'      => (float) $candidate['weight_oz'],
+				'dimensions'     => $candidate['dimensions'],
+				'cubic_tier'     => $candidate['cubic_tier'],
+				'packing_list'   => $this->build_packing_list( $package['items'] ),
+				'items'          => $package['items'],
+			);
+		}
+
+		usort(
+			$plans,
+			static function ( array $a, array $b ): int {
+				return (float) $a['rate_amount'] <=> (float) $b['rate_amount'];
+			}
+		);
+
+		return $plans;
 	}
 
 	// -------------------------------------------------------------------------
@@ -330,11 +391,12 @@ class ShipStation_Service {
 			return array( 'success' => false );
 		}
 
-		$ship_from = $this->settings->get_ship_from_address();
+		$ship_from    = $this->settings->get_ship_from_address();
+		$service_code = $this->settings->get_service_code();
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => null,
+			'serviceCode'    => '' !== $service_code ? $service_code : null,
 			'packageCode'    => null,
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',
