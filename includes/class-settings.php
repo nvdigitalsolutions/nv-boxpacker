@@ -237,7 +237,7 @@ class Settings {
 			<h1><?php echo esc_html__( 'FunnelKit USPS Priority Shipping Optimizer', 'fk-usps-optimizer' ); ?></h1>
 
 			<?php if ( is_array( $test_result ) ) : ?>
-			<div class="notice <?php echo $test_result['success'] ? 'notice-success' : 'notice-error'; ?> is-dismissible">
+			<div class="notice <?php echo esc_attr( $test_result['success'] ? 'notice-success' : 'notice-error' ); ?> is-dismissible">
 				<p><?php echo esc_html( $test_result['message'] ); ?></p>
 			</div>
 			<?php endif; ?>

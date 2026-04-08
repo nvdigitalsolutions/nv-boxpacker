@@ -89,7 +89,7 @@ class Admin_Test_UI {
 		);
 		$errors = array();
 
-		if ( 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
 			// Verify nonce before accessing any other POST data.
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce is verified on the next line via wp_verify_nonce.
 			$raw_nonce = sanitize_key( wp_unslash( $_POST['fk_usps_test_nonce'] ?? '' ) );
@@ -370,10 +370,10 @@ class Admin_Test_UI {
 				$items[] = array(
 					'name'      => sanitize_text_field( wp_unslash( $raw['name'] ?? '' ) ),
 					'qty'       => max( 1, (int) ( $raw['qty'] ?? 1 ) ),
-					'length'    => (string) ( $raw['length'] ?? '' ),
-					'width'     => (string) ( $raw['width'] ?? '' ),
-					'height'    => (string) ( $raw['height'] ?? '' ),
-					'weight_oz' => (string) ( $raw['weight_oz'] ?? '' ),
+					'length'    => sanitize_text_field( wp_unslash( (string) ( $raw['length'] ?? '' ) ) ),
+					'width'     => sanitize_text_field( wp_unslash( (string) ( $raw['width'] ?? '' ) ) ),
+					'height'    => sanitize_text_field( wp_unslash( (string) ( $raw['height'] ?? '' ) ) ),
+					'weight_oz' => sanitize_text_field( wp_unslash( (string) ( $raw['weight_oz'] ?? '' ) ) ),
 				);
 			}
 		}
