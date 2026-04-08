@@ -85,29 +85,9 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$plugin   = Plugin::bootstrap();
 		$settings = $plugin->get_settings();
 
-		// Check transient cache to avoid excessive API calls.
-		$cache_key = $this->get_rate_cache_key( $items, $destination );
-		$cached    = get_transient( $cache_key );
-
-		if ( false !== $cached && isset( $cached['rates'] ) ) {
-			foreach ( $cached['rates'] as $idx => $rate ) {
-				if ( (float) $rate['cost'] > 0 ) {
-					$this->add_rate(
-						array(
-							'id'    => $this->get_rate_id() . ( $idx > 0 ? ':' . $idx : '' ),
-							'label' => $rate['label'],
-							'cost'  => (float) $rate['cost'],
-						)
-					);
-				}
-			}
-			return;
-		}
-
 		$packed_packages = $plugin->get_packing_service()->pack_items( $items );
 
 		if ( empty( $packed_packages ) ) {
-			set_transient( $cache_key, array( 'rates' => array() ), 30 * MINUTE_IN_SECONDS );
 			return;
 		}
 
@@ -120,11 +100,8 @@ class Shipping_Method extends \WC_Shipping_Method {
 		}
 
 		if ( empty( $rates ) ) {
-			set_transient( $cache_key, array( 'rates' => array() ), 5 * MINUTE_IN_SECONDS );
 			return;
 		}
-
-		set_transient( $cache_key, array( 'rates' => $rates ), 30 * MINUTE_IN_SECONDS );
 
 		foreach ( $rates as $idx => $rate ) {
 			$this->add_rate(
@@ -371,44 +348,5 @@ class Shipping_Method extends \WC_Shipping_Method {
 			'country_code'                  => $destination['country'] ?? 'US',
 			'address_residential_indicator' => 'unknown',
 		);
-	}
-
-	/**
-	 * Generate a transient cache key based on items and destination.
-	 *
-	 * @param array $items       Flat item list.
-	 * @param array $destination Shipping destination.
-	 * @return string Transient key (max 172 chars, within WP limit).
-	 */
-	protected function get_rate_cache_key( array $items, array $destination ): string {
-		$settings = get_option( Settings::OPTION_KEY, array() );
-
-		$data = array(
-			'carrier'            => $settings['carrier'] ?? 'shipengine',
-			'service_code'       => $settings['service_code'] ?? 'usps_priority_mail',
-			'show_all_options'   => $settings['show_all_options'] ?? '0',
-			'show_package_count' => $settings['show_package_count'] ?? '0',
-			'boxes_json'         => $settings['boxes_json'] ?? '',
-			'items'              => array_map(
-				static function ( array $item ): array {
-					return array(
-						'id' => $item['product_id'],
-						'l'  => $item['length'],
-						'w'  => $item['width'],
-						'h'  => $item['height'],
-						'wt' => $item['weight_oz'],
-					);
-				},
-				$items
-			),
-			'dest'               => array(
-				$destination['country'] ?? '',
-				$destination['state'] ?? '',
-				$destination['postcode'] ?? '',
-				$destination['city'] ?? '',
-			),
-		);
-
-		return 'fk_usps_rate_' . md5( wp_json_encode( $data ) );
 	}
 }
