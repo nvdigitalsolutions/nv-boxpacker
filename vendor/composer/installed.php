@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/fix-package-pricing-display',
         'version' => 'dev-copilot/fix-package-pricing-display',
-        'reference' => 'b37bbadde7148eb424d8a18f24c998e8b53682cd',
+        'reference' => '2fa66929529741c1bf96f75f045ede237aadbeec',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/fix-package-pricing-display',
             'version' => 'dev-copilot/fix-package-pricing-display',
-            'reference' => 'b37bbadde7148eb424d8a18f24c998e8b53682cd',
+            'reference' => '2fa66929529741c1bf96f75f045ede237aadbeec',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
