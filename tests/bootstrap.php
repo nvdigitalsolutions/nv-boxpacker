@@ -225,6 +225,19 @@ function __( string $text, string $domain = 'default' ): string {
 	return $text;
 }
 
+/**
+ * Retrieve the translation of $text (singular or plural) based on $number.
+ *
+ * @param string $single Singular text.
+ * @param string $plural Plural text.
+ * @param int    $number Number to determine singular/plural.
+ * @param string $domain Text domain.
+ * @return string Singular or plural text.
+ */
+function _n( string $single, string $plural, int $number, string $domain = 'default' ): string {
+	return 1 === $number ? $single : $plural;
+}
+
 /** Echo a translated string. */
 function _e( string $text, string $domain = 'default' ): void {
 	echo $text;
