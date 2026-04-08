@@ -541,6 +541,63 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// build_all_test_package_plans
+	// -------------------------------------------------------------------------
+
+	public function test_build_all_test_package_plans_returns_all_sorted(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->configure_credentials();
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			$cost = 1 === $call ? 11.00 : 7.00;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => $cost, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 2, $plans );
+		$this->assertSame( 7.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 11.00, $plans[1]['rate_amount'] );
+	}
+
+	public function test_build_all_test_package_plans_returns_empty_when_no_boxes(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array() );
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertSame( array(), $plans );
+	}
+
+	public function test_build_all_test_package_plans_uses_configured_service_code(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_ground_advantage', 'shipmentCost' => 4.99, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_ground_advantage', $plans[0]['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// test_connection
 	// -------------------------------------------------------------------------
 

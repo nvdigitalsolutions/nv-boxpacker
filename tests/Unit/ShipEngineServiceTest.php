@@ -605,6 +605,84 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// build_all_test_package_plans
+	// -------------------------------------------------------------------------
+
+	public function test_build_all_test_package_plans_returns_all_candidates_sorted(): void {
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B',
+			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
+			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
+
+		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			$amount = 1 === $call ? 9.00 : 6.00;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					'rate_response' => array(
+						'rates' => array( array( 'shipping_amount' => array( 'amount' => $amount, 'currency' => 'USD' ) ) ),
+					),
+				) ),
+			);
+		};
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 2, $plans );
+		$this->assertSame( 6.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 9.00, $plans[1]['rate_amount'] );
+	}
+
+	public function test_build_all_test_package_plans_returns_empty_when_no_candidates(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array() );
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertSame( array(), $plans );
+	}
+
+	public function test_build_all_test_package_plans_uses_configured_service_code(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_service_code' )->willReturn( 'usps_ground_advantage' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array( array( 'shipping_amount' => array( 'amount' => 5.50, 'currency' => 'USD' ) ) ),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_ground_advantage', $plans[0]['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// log
 	// -------------------------------------------------------------------------
 

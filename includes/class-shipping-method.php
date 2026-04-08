@@ -198,7 +198,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array of rate entries (label + cost), or empty on failure.
 	 */
 	protected function calculate_all_options( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$carrier_service  = $plugin->get_carrier_service();
+		$carrier_service   = $plugin->get_carrier_service();
 		$per_package_plans = array();
 
 		foreach ( $packed_packages as $index => $packed ) {
@@ -220,8 +220,8 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$labels = array();
 
 			foreach ( $combo as $plan ) {
-				$total    += (float) $plan['rate_amount'];
-				$labels[]  = $plan['package_name'];
+				$total   += (float) $plan['rate_amount'];
+				$labels[] = $plan['package_name'];
 			}
 
 			if ( $total <= 0 ) {

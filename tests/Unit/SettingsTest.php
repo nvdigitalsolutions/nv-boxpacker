@@ -524,6 +524,73 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// show_all_options / show_package_count / service_code
+	// -------------------------------------------------------------------------
+
+	public function test_show_all_options_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_all_options_enabled() );
+	}
+
+	public function test_show_all_options_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_all_options' => '1' );
+		$this->assertTrue( $this->settings->is_show_all_options_enabled() );
+	}
+
+	public function test_show_package_count_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_package_count_enabled() );
+	}
+
+	public function test_show_package_count_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_package_count' => '1' );
+		$this->assertTrue( $this->settings->is_show_package_count_enabled() );
+	}
+
+	public function test_service_code_defaults_to_usps_priority_mail(): void {
+		$this->assertSame( 'usps_priority_mail', $this->settings->get_service_code() );
+	}
+
+	public function test_service_code_returns_saved_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'service_code' => 'usps_ground_advantage' );
+		$this->assertSame( 'usps_ground_advantage', $this->settings->get_service_code() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_show_all_options(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'show_all_options' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'show_all_options', $output );
+	}
+
+	public function test_render_field_outputs_checkbox_for_show_package_count(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'show_package_count' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'show_package_count', $output );
+	}
+
+	public function test_render_field_service_code_shows_description(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'service_code' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'input', $output );
+		$this->assertStringContainsString( 'service_code', $output );
+		$this->assertStringContainsString( 'flat-rate', $output );
+	}
+
+	public function test_sanitize_settings_includes_new_checkbox_fields(): void {
+		$input  = $this->empty_settings_input();
+		$input['show_all_options']   = '1';
+		$input['show_package_count'] = '1';
+		$input['service_code']       = 'usps_ground_advantage';
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_all_options'] );
+		$this->assertSame( '1', $result['show_package_count'] );
+		$this->assertSame( 'usps_ground_advantage', $result['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
 
