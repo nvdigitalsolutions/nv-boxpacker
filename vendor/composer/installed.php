@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/rebuild-zip-file-another-one',
-        'version' => 'dev-copilot/rebuild-zip-file-another-one',
-        'reference' => 'e18e5921d1cad43a18cfbe5f9b4c2f547041b461',
+        'pretty_version' => 'dev-copilot/ensure-shipping-options-are-not-cached',
+        'version' => 'dev-copilot/ensure-shipping-options-are-not-cached',
+        'reference' => 'ae77726df1915747ce4aada06e3344ec18d864b6',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/rebuild-zip-file-another-one',
-            'version' => 'dev-copilot/rebuild-zip-file-another-one',
-            'reference' => 'e18e5921d1cad43a18cfbe5f9b4c2f547041b461',
+            'pretty_version' => 'dev-copilot/ensure-shipping-options-are-not-cached',
+            'version' => 'dev-copilot/ensure-shipping-options-are-not-cached',
+            'reference' => 'ae77726df1915747ce4aada06e3344ec18d864b6',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
