@@ -105,7 +105,7 @@ class ShipEngine_Service {
 					'mode'           => $candidate['mode'],
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
-					'service_code'   => 'usps_priority_mail',
+					'service_code'   => (string) ( $rate['service_code'] ?? $this->settings->get_service_code() ),
 					'rate_amount'    => (float) $rate['shipping_amount']['amount'],
 					'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -147,7 +147,7 @@ class ShipEngine_Service {
 				'mode'           => $candidate['mode'],
 				'package_code'   => $candidate['package_code'],
 				'package_name'   => $candidate['package_name'],
-				'service_code'   => 'usps_priority_mail',
+				'service_code'   => (string) ( $rate['service_code'] ?? $this->settings->get_service_code() ),
 				'rate_amount'    => (float) $rate['shipping_amount']['amount'],
 				'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 				'weight_oz'      => (float) $candidate['weight_oz'],
@@ -167,6 +167,10 @@ class ShipEngine_Service {
 
 		return $plans;
 	}
+
+	/**
+	 * Build candidate shipments from available boxes for a package.
+	 *
 	 * @param array $package Packed package data.
 	 * @return array Candidate shipments.
 	 */
@@ -253,31 +257,38 @@ class ShipEngine_Service {
 			return array( 'success' => false );
 		}
 
+		$service_code = $this->settings->get_service_code();
+
+		$shipment = array(
+			'validate_address' => 'no_validation',
+			'ship_to'          => $ship_to,
+			'ship_from'        => $this->settings->get_ship_from_address(),
+			'packages'         => array(
+				array(
+					'package_code' => $candidate['package_code'],
+					'weight'       => array(
+						'value' => round( $candidate['weight_oz'], 2 ),
+						'unit'  => 'ounce',
+					),
+					'dimensions'   => array(
+						'unit'   => 'inch',
+						'length' => $candidate['dimensions']['length'],
+						'width'  => $candidate['dimensions']['width'],
+						'height' => $candidate['dimensions']['height'],
+					),
+				),
+			),
+		);
+
+		if ( '' !== $service_code ) {
+			$shipment['service_code'] = $service_code;
+		}
+
 		$payload = array(
 			'rate_options' => array(
 				'carrier_ids' => array( $carrier_id ),
 			),
-			'shipment'     => array(
-				'validate_address' => 'no_validation',
-				'ship_to'          => $ship_to,
-				'ship_from'        => $this->settings->get_ship_from_address(),
-				'packages'         => array(
-					array(
-						'package_code' => $candidate['package_code'],
-						'weight'       => array(
-							'value' => round( $candidate['weight_oz'], 2 ),
-							'unit'  => 'ounce',
-						),
-						'dimensions'   => array(
-							'unit'   => 'inch',
-							'length' => $candidate['dimensions']['length'],
-							'width'  => $candidate['dimensions']['width'],
-							'height' => $candidate['dimensions']['height'],
-						),
-					),
-				),
-				'service_code'     => 'usps_priority_mail',
-			),
+			'shipment'     => $shipment,
 		);
 
 		$response = wp_remote_post(

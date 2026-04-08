@@ -76,6 +76,7 @@ class Settings {
 
 		$fields = array(
 			'carrier'                  => __( 'Shipping Carrier API', 'fk-usps-optimizer' ),
+			'service_code'             => __( 'Service Code', 'fk-usps-optimizer' ),
 			'shipengine_api_key'       => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
 			'shipengine_carrier_id'    => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
 			'shipstation_api_key'      => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
@@ -196,6 +197,18 @@ class Settings {
 			return;
 		}
 
+		if ( 'service_code' === $key ) {
+			printf(
+				'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( $value ),
+				esc_html__( 'Carrier service code used for rate requests (e.g. usps_priority_mail, usps_first_class_mail, usps_ground_advantage). Leave empty to retrieve all available services.', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
 		if ( 'boxes_json' === $key ) {
 			printf(
 				'<textarea class="large-text code" rows="16" name="%1$s[%2$s]">%3$s</textarea><p class="description">%4$s</p>',
@@ -266,6 +279,7 @@ class Settings {
 		$output = array();
 
 		$string_fields = array(
+			'service_code',
 			'shipengine_api_key',
 			'shipengine_carrier_id',
 			'shipstation_api_key',
@@ -348,6 +362,7 @@ class Settings {
 			$saved,
 			array(
 				'carrier'                  => 'shipengine',
+				'service_code'             => 'usps_priority_mail',
 				'shipengine_api_key'       => '',
 				'shipengine_carrier_id'    => '',
 				'shipstation_api_key'      => '',
@@ -446,6 +461,16 @@ class Settings {
 	public function get_carrier(): string {
 		$settings = $this->get_settings();
 		return (string) apply_filters( 'fk_usps_optimizer_carrier', $settings['carrier'] );
+	}
+
+	/**
+	 * Get the configured shipping service code.
+	 *
+	 * @return string Service code (e.g. 'usps_priority_mail').
+	 */
+	public function get_service_code(): string {
+		$settings = $this->get_settings();
+		return (string) apply_filters( 'fk_usps_optimizer_service_code', $settings['service_code'] );
 	}
 
 	/**
