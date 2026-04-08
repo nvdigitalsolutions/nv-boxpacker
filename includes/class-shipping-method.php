@@ -325,7 +325,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$raw_height = $product->get_height( 'edit' );
 			$raw_weight = $product->get_weight( 'edit' );
 
-			$has_dimensions = ( $raw_length && $raw_width && $raw_height );
+			$has_dimensions = ( '' !== $raw_length && '' !== $raw_width && '' !== $raw_height );
 			$length         = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
 			$width          = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
 			$height         = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
