@@ -80,6 +80,7 @@ return array(
     'FK_USPS_Optimizer\\Settings' => $baseDir . '/includes/class-settings.php',
     'FK_USPS_Optimizer\\ShipEngine_Service' => $baseDir . '/includes/class-shipengine-service.php',
     'FK_USPS_Optimizer\\ShipStation_Service' => $baseDir . '/includes/class-shipstation-service.php',
+    'FK_USPS_Optimizer\\Shipping_Method' => $baseDir . '/includes/class-shipping-method.php',
     'FK_USPS_Optimizer\\Test_Pricing_Service' => $baseDir . '/includes/class-test-pricing-service.php',
     'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\Plugin' => $vendorDir . '/dealerdirect/phpcodesniffer-composer-installer/src/Plugin.php',
     'PHPCSUtils\\AbstractSniffs\\AbstractArrayDeclarationSniff' => $vendorDir . '/phpcsstandards/phpcsutils/PHPCSUtils/AbstractSniffs/AbstractArrayDeclarationSniff.php',

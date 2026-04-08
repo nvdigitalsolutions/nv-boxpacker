@@ -135,6 +135,10 @@ class Plugin {
 		$this->admin_test_ui->register();
 		$this->export_service->register();
 
+		// Register as a WooCommerce shipping method so it appears in shipping zones.
+		require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipping-method.php';
+		add_filter( 'woocommerce_shipping_methods', array( $this, 'register_shipping_method' ) );
+
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
 		add_action( 'wp_ajax_fk_usps_test_connection', array( $this, 'handle_test_connection_ajax' ) );
 	}
@@ -160,6 +164,8 @@ class Plugin {
 			return;
 		}
 
+		$carrier_service = $this->get_carrier_service();
+
 		$plan = array(
 			'created_at'          => current_time( 'mysql', true ),
 			'total_package_count' => 0,
@@ -180,7 +186,7 @@ class Plugin {
 			}
 
 			foreach ( $packed_packages as $index => $package ) {
-				$package_plan = $this->shipengine_service->build_package_plan( $order, $package, $index + 1 );
+				$package_plan = $carrier_service->build_package_plan( $order, $package, $index + 1 );
 
 				if ( empty( $package_plan ) ) {
 					$plan['warnings'][] = sprintf(
@@ -200,11 +206,11 @@ class Plugin {
 			$plan['total_package_count'] = count( $plan['packages'] );
 
 			if ( 0 === $plan['total_package_count'] ) {
-				$plan['warnings'][] = __( 'All rate-shopping attempts failed. Review ShipEngine configuration and box setup.', 'fk-usps-optimizer' );
+				$plan['warnings'][] = __( 'All rate-shopping attempts failed. Review carrier API configuration and box setup.', 'fk-usps-optimizer' );
 			}
 		} catch ( \Throwable $throwable ) {
 			$plan['warnings'][] = $throwable->getMessage();
-			$this->shipengine_service->log(
+			$this->log(
 				'Order planning failed',
 				array(
 					'order_id' => $order->get_id(),
@@ -256,5 +262,55 @@ class Plugin {
 		}
 
 		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Register the plugin's shipping method with WooCommerce.
+	 *
+	 * @param array $methods Registered shipping method classes.
+	 * @return array Updated shipping methods.
+	 */
+	public function register_shipping_method( array $methods ): array {
+		$methods['fk_usps_optimizer'] = '\FK_USPS_Optimizer\Shipping_Method';
+		return $methods;
+	}
+
+	/**
+	 * Get the packing service instance.
+	 *
+	 * @return Packing_Service
+	 */
+	public function get_packing_service(): Packing_Service {
+		return $this->packing_service;
+	}
+
+	/**
+	 * Return the carrier service selected in settings.
+	 *
+	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
+	 */
+	public function get_carrier_service() {
+		if ( 'shipstation' === $this->settings->get_carrier() ) {
+			return $this->shipstation_service;
+		}
+
+		return $this->shipengine_service;
+	}
+
+	/**
+	 * Log a debug message via the WooCommerce logger.
+	 *
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
+	 * @return void
+	 */
+	protected function log( string $message, array $context = array() ): void {
+		if ( ! $this->settings->is_debug_logging_enabled() ) {
+			return;
+		}
+
+		if ( function_exists( 'wc_get_logger' ) ) {
+			wc_get_logger()->debug( $message . ' ' . wp_json_encode( $context ), array( 'source' => 'fk-usps-optimizer' ) );
+		}
 	}
 }

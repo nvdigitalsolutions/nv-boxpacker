@@ -1,0 +1,245 @@
+<?php
+/**
+ * WooCommerce Shipping Method for the FK USPS Optimizer plugin.
+ *
+ * Registers the USPS Priority Shipping Optimizer as a shipping method
+ * that can be added to WooCommerce shipping zones and provides live
+ * optimized USPS Priority rates during cart and checkout.
+ *
+ * @package FK_USPS_Optimizer
+ */
+
+namespace FK_USPS_Optimizer;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * WooCommerce shipping method providing optimized USPS Priority Mail rates.
+ */
+class Shipping_Method extends \WC_Shipping_Method {
+
+	/**
+	 * Constructor.
+	 *
+	 * @param int $instance_id Shipping method instance ID.
+	 */
+	public function __construct( $instance_id = 0 ) {
+		$this->id                 = 'fk_usps_optimizer';
+		$this->instance_id        = absint( $instance_id );
+		$this->method_title       = __( 'USPS Priority Optimizer', 'fk-usps-optimizer' );
+		$this->method_description = __( 'Optimized USPS Priority Mail rates using cubic and flat rate box packing.', 'fk-usps-optimizer' );
+		$this->supports           = array(
+			'shipping-zones',
+			'instance-settings',
+			'instance-settings-modal',
+		);
+
+		$this->init_form_fields();
+		$this->init_settings();
+
+		$this->title   = $this->get_option( 'title', $this->method_title );
+		$this->enabled = $this->get_option( 'enabled', 'yes' );
+
+		add_action( 'woocommerce_update_options_shipping_' . $this->id, array( $this, 'process_admin_options' ) );
+	}
+
+	/**
+	 * Define settings fields for shipping method instances.
+	 */
+	public function init_form_fields(): void {
+		$this->instance_form_fields = array(
+			'title' => array(
+				'title'   => __( 'Method Title', 'fk-usps-optimizer' ),
+				'type'    => 'text',
+				'default' => __( 'USPS Priority Mail (Optimized)', 'fk-usps-optimizer' ),
+			),
+		);
+	}
+
+	/**
+	 * Calculate shipping rates for a package.
+	 *
+	 * Packs the cart items using BoxPacker, fetches USPS rates from the
+	 * configured carrier API (ShipEngine or ShipStation), and adds the
+	 * combined optimized rate.
+	 *
+	 * @param array $package WooCommerce shipping package.
+	 */
+	public function calculate_shipping( $package = array() ) {
+		$destination = $package['destination'] ?? array();
+
+		if ( empty( $destination['country'] ) || empty( $destination['postcode'] ) ) {
+			return;
+		}
+
+		$items = $this->extract_items( $package );
+
+		if ( empty( $items ) ) {
+			return;
+		}
+
+		// Check transient cache to avoid excessive API calls.
+		$cache_key = $this->get_rate_cache_key( $items, $destination );
+		$cached    = get_transient( $cache_key );
+
+		if ( false !== $cached && isset( $cached['cost'] ) ) {
+			if ( (float) $cached['cost'] > 0 ) {
+				$this->add_rate(
+					array(
+						'id'    => $this->get_rate_id(),
+						'label' => $this->title,
+						'cost'  => (float) $cached['cost'],
+					)
+				);
+			}
+			return;
+		}
+
+		$plugin          = Plugin::bootstrap();
+		$packed_packages = $plugin->get_packing_service()->pack_items( $items );
+
+		if ( empty( $packed_packages ) ) {
+			set_transient( $cache_key, array( 'cost' => 0 ), 30 * MINUTE_IN_SECONDS );
+			return;
+		}
+
+		$ship_to         = $this->build_ship_to( $destination );
+		$carrier_service = $plugin->get_carrier_service();
+		$total_cost      = 0.0;
+		$all_rated       = true;
+
+		foreach ( $packed_packages as $index => $packed ) {
+			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+
+			if ( empty( $plan ) ) {
+				$all_rated = false;
+				break;
+			}
+
+			$total_cost += (float) $plan['rate_amount'];
+		}
+
+		if ( ! $all_rated || $total_cost <= 0 ) {
+			set_transient( $cache_key, array( 'cost' => 0 ), 5 * MINUTE_IN_SECONDS );
+			return;
+		}
+
+		set_transient( $cache_key, array( 'cost' => $total_cost ), 30 * MINUTE_IN_SECONDS );
+
+		$this->add_rate(
+			array(
+				'id'    => $this->get_rate_id(),
+				'label' => $this->title,
+				'cost'  => $total_cost,
+			)
+		);
+	}
+
+	/**
+	 * Extract shippable items from a WooCommerce shipping package.
+	 *
+	 * Converts cart contents into the flat item array expected by
+	 * Packing_Service::pack_items().
+	 *
+	 * @param array $package WooCommerce shipping package.
+	 * @return array Flat list of item arrays.
+	 */
+	protected function extract_items( array $package ): array {
+		$items = array();
+
+		foreach ( $package['contents'] ?? array() as $cart_item ) {
+			$product = $cart_item['data'] ?? null;
+
+			if ( ! $product instanceof \WC_Product || ! $product->needs_shipping() ) {
+				continue;
+			}
+
+			$raw_length = $product->get_length( 'edit' );
+			$raw_width  = $product->get_width( 'edit' );
+			$raw_height = $product->get_height( 'edit' );
+			$raw_weight = $product->get_weight( 'edit' );
+			$length     = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
+			$width      = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
+			$height     = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
+			$weight     = (float) wc_get_weight( $raw_weight ? $raw_weight : 0.1, 'oz' );
+			$qty        = max( 1, (int) ( $cart_item['quantity'] ?? 1 ) );
+
+			for ( $i = 0; $i < $qty; $i++ ) {
+				$items[] = array(
+					'product_id' => $product->get_id(),
+					'name'       => $product->get_name(),
+					'length'     => $length,
+					'width'      => $width,
+					'height'     => $height,
+					'weight_oz'  => $weight,
+					'sku'        => $product->get_sku(),
+				);
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Build a ship-to address array from a WooCommerce destination.
+	 *
+	 * The returned format is compatible with both ShipEngine_Service and
+	 * ShipStation_Service build_test_package_plan() methods.
+	 *
+	 * @param array $destination WooCommerce shipping destination.
+	 * @return array Carrier-compatible ship-to address.
+	 */
+	protected function build_ship_to( array $destination ): array {
+		return array(
+			'name'                          => '',
+			'company_name'                  => '',
+			'phone'                         => '',
+			'address_line1'                 => $destination['address'] ?? ( $destination['address_1'] ?? '' ),
+			'address_line2'                 => $destination['address_2'] ?? '',
+			'city_locality'                 => $destination['city'] ?? '',
+			'state_province'                => $destination['state'] ?? '',
+			'postal_code'                   => $destination['postcode'] ?? '',
+			'country_code'                  => $destination['country'] ?? 'US',
+			'address_residential_indicator' => 'unknown',
+		);
+	}
+
+	/**
+	 * Generate a transient cache key based on items and destination.
+	 *
+	 * @param array $items       Flat item list.
+	 * @param array $destination Shipping destination.
+	 * @return string Transient key (max 172 chars, within WP limit).
+	 */
+	protected function get_rate_cache_key( array $items, array $destination ): string {
+		// Include the active carrier in the hash so a carrier switch invalidates the cache.
+		$settings    = get_option( Settings::OPTION_KEY, array() );
+		$carrier_key = $settings['carrier'] ?? 'shipengine';
+
+		$data = array(
+			'carrier' => $carrier_key,
+			'items'   => array_map(
+				static function ( array $item ): array {
+					return array(
+						'id' => $item['product_id'],
+						'l'  => $item['length'],
+						'w'  => $item['width'],
+						'h'  => $item['height'],
+						'wt' => $item['weight_oz'],
+					);
+				},
+				$items
+			),
+			'dest'    => array(
+				$destination['country'] ?? '',
+				$destination['state'] ?? '',
+				$destination['postcode'] ?? '',
+				$destination['city'] ?? '',
+			),
+		);
+
+		return 'fk_usps_rate_' . md5( wp_json_encode( $data ) );
+	}
+}

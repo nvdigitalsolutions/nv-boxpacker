@@ -225,7 +225,7 @@ class ShipEngine_Service {
 		$response = wp_remote_post(
 			'https://api.shipengine.com/v1/rates',
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',
@@ -426,7 +426,7 @@ class ShipEngine_Service {
 		$response = wp_remote_get(
 			'https://api.shipengine.com/v1/carriers',
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',
