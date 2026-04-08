@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/implement-shipping-method-refactor',
-        'version' => 'dev-copilot/implement-shipping-method-refactor',
-        'reference' => '587131e1658fd14e86ed8f8ab0152182ba679c9b',
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '1b4b95eef8afb28e6593dd33a9c38fef13e3da4b',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/implement-shipping-method-refactor',
-            'version' => 'dev-copilot/implement-shipping-method-refactor',
-            'reference' => '587131e1658fd14e86ed8f8ab0152182ba679c9b',
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '1b4b95eef8afb28e6593dd33a9c38fef13e3da4b',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
