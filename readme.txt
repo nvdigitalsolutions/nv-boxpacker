@@ -18,10 +18,23 @@ This plugin prepares USPS Priority shipping plans for WooCommerce orders by:
 * packing them with `dvdoug/boxpacker` when available (falls back to a single-item-per-box strategy otherwise),
 * comparing custom cubic boxes and USPS flat-rate boxes,
 * requesting USPS Priority rates from either **ShipEngine** or **ShipStation**,
-* storing a package-by-package plan on the order for admin review and PirateShip export, and
-* providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order.
+* storing a package-by-package plan on the order for admin review and PirateShip export,
+* providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order, and
+* registering a native **WooCommerce Shipping Method** so it appears in shipping zones and provides live optimized rates during cart and checkout.
 
 When selecting a carrier on the settings page, only the relevant credential fields are shown — the other carrier's fields are hidden automatically. A **Test Connection** button lets you verify your ShipEngine API key and carrier ID inline, without reloading the page.
+
+= Shipping Zones =
+
+The plugin registers as a WooCommerce shipping method that can be added to any shipping zone. Navigate to **WooCommerce → Settings → Shipping** and add the **USPS Priority Optimizer** method to the desired zones.
+
+= Display Settings =
+
+**Show All Options** — When enabled, every combination of rated box candidates (cartesian product) is offered as a separate shipping option in the cart and checkout. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box").
+
+**Show Package Count** — When enabled, the package count is appended to each shipping label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural handling.
+
+**USPS Service Code** — Configure which USPS service code is sent to the carrier API (default: `usps_priority_mail`). This applies to both ShipEngine and ShipStation.
 
 = Carriers =
 
@@ -89,6 +102,10 @@ No data is transmitted to these services until you configure your API credential
 
 == Frequently Asked Questions ==
 
+= How do I add this to my WooCommerce shipping zones? =
+
+Navigate to **WooCommerce → Settings → Shipping**, select a zone, click **Add shipping method**, and choose **USPS Priority Optimizer**. The plugin will provide live optimized rates during cart and checkout for customers in that zone.
+
 = Does it support carriers other than USPS? =
 
 The plugin is optimized for USPS Priority Mail (cubic and flat-rate). When using ShipStation you can configure any carrier code (e.g. `stamps_com`, `fedex`), but only cubic/flat-rate logic and cubic eligibility checks apply.
@@ -117,6 +134,10 @@ Use the provided filters:
 
 The plugin falls back to a one-item-per-box strategy that fits each item into the smallest configured box that accommodates it.
 
+= What happens to products without dimensions? =
+
+Items that do not have length, width, and height set in WooCommerce are automatically detected and packed individually (one item per box) via the fallback packer. This prevents BoxPacker from using default 1×1×1 inch dimensions, which would produce incorrect packing results.
+
 = Where are debug logs written? =
 
 To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug logging in settings and view logs at **WooCommerce → Status → Logs**.
@@ -128,8 +149,16 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 == Changelog ==
 
 = 1.2.0 =
+* New: WooCommerce Shipping Zones integration — register as a native WC_Shipping_Method for live rates during cart and checkout.
+* New: **Show All Options** setting — display all rated box candidate combinations as separate shipping options.
+* New: **Show Package Count** setting — append package count to shipping labels with proper singular/plural forms.
+* New: **USPS Service Code** setting — configurable service code (default usps_priority_mail) for rate requests.
 * New: Carrier credential fields show/hide automatically when switching the **Shipping Carrier API** dropdown — no page save needed.
 * Improved: **Test Connection** button now uses AJAX and displays the result inline without reloading the page.
+* Fixed: Packed packages now use box inner dimensions so the same box type matches as a rate candidate.
+* Fixed: Items without WooCommerce dimensions are packed individually via fallback instead of using incorrect defaults.
+* Fixed: Rate cache key includes box config and display settings to prevent stale cached rates after settings changes.
+* Fixed: ShipStation now sends the configured serviceCode and packageCode in rate requests.
 * CI: Production ZIP artifact is now built and uploaded automatically after every successful CI run.
 
 = 1.1.0 =
