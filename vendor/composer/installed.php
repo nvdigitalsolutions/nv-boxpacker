@@ -3,7 +3,7 @@
         'name' => 'openai/fk-usps-optimizer',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'c82dce477b9becff4370edddf91bfd5484927f86',
+        'reference' => '23619693989e8d2ac19dac669b10778fb2ee8031',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'openai/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'c82dce477b9becff4370edddf91bfd5484927f86',
+            'reference' => '23619693989e8d2ac19dac669b10778fb2ee8031',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
