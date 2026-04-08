@@ -874,6 +874,7 @@ class WC_Order {
 	public function get_shipping_country(): string { return ''; }
 	public function update_meta_data( string $key, $value ): void {}
 	public function save(): int { return 0; }
+	public function add_order_note( string $note, int $is_customer_note = 0, bool $added_by_user = false ): int { return 0; }
 
 	/**
 	 * Get order meta data.
