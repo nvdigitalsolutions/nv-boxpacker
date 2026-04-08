@@ -275,7 +275,7 @@ class PackingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_pack_fallback_produces_one_package_per_item(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+		$boxes = $this->make_boxes();
 
 		$items = array(
 			array(
@@ -300,13 +300,13 @@ class PackingServiceTest extends TestCase {
 			),
 		);
 
-		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+		$result = $this->call_protected( 'pack_fallback', array( $items, $boxes ) );
 
 		$this->assertCount( 2, $result );
 	}
 
 	public function test_pack_fallback_each_package_contains_correct_weight(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+		$boxes = $this->make_boxes();
 
 		$items = array(
 			array(
@@ -331,14 +331,14 @@ class PackingServiceTest extends TestCase {
 			),
 		);
 
-		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+		$result = $this->call_protected( 'pack_fallback', array( $items, $boxes ) );
 
 		$this->assertSame( 8.0, $result[0]['weight_oz'] );
 		$this->assertSame( 12.0, $result[1]['weight_oz'] );
 	}
 
 	public function test_pack_fallback_sets_dimensions_from_box(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+		$boxes = $this->make_boxes();
 
 		$items = array(
 			array(
@@ -353,7 +353,7 @@ class PackingServiceTest extends TestCase {
 			),
 		);
 
-		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+		$result = $this->call_protected( 'pack_fallback', array( $items, $boxes ) );
 
 		// Item fits in Small box (inner 8×8×6); dimensions should use inner dims.
 		$this->assertSame( 8.0, $result[0]['dimensions']['length'] );
@@ -378,7 +378,6 @@ class PackingServiceTest extends TestCase {
 				'max_weight'   => 20,
 			),
 		);
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
 
 		$items = array(
 			array(
@@ -393,7 +392,7 @@ class PackingServiceTest extends TestCase {
 			),
 		);
 
-		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+		$result = $this->call_protected( 'pack_fallback', array( $items, $boxes ) );
 
 		// Should use inner dimensions, not outer.
 		$this->assertSame( 9.0, $result[0]['dimensions']['length'] );
@@ -402,7 +401,7 @@ class PackingServiceTest extends TestCase {
 	}
 
 	public function test_pack_fallback_uses_item_dims_when_no_box_matches(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+		$boxes = $this->make_boxes();
 
 		$items = array(
 			array(
@@ -417,7 +416,7 @@ class PackingServiceTest extends TestCase {
 			),
 		);
 
-		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+		$result = $this->call_protected( 'pack_fallback', array( $items, $boxes ) );
 
 		// Fallback box has no inner_* keys, so item dimensions are used.
 		$this->assertSame( 24.0, $result[0]['dimensions']['length'] );

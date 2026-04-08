@@ -52,12 +52,17 @@ class Packing_Service {
 	 * Additional keys (product_id, item_id, sku, etc.) are preserved and returned
 	 * in the packed-package item lists.
 	 *
-	 * @param array $items Flat list of item arrays.
+	 * @param array      $items Flat list of item arrays.
+	 * @param array|null $boxes Optional box definitions to use instead of settings.
 	 * @return array Packed packages.
 	 */
-	public function pack_items( array $items ): array {
+	public function pack_items( array $items, ?array $boxes = null ): array {
 		if ( empty( $items ) ) {
 			return array();
+		}
+
+		if ( null === $boxes ) {
+			$boxes = $this->settings->get_boxes();
 		}
 
 		// Split items into those with real dimensions (optimise via BoxPacker)
@@ -78,15 +83,15 @@ class Packing_Service {
 		// Pack measured items with BoxPacker when available.
 		if ( ! empty( $measured ) ) {
 			if ( class_exists( '\DVDoug\BoxPacker\Packer' ) ) {
-				$packages = $this->pack_with_boxpacker( $measured );
+				$packages = $this->pack_with_boxpacker( $measured, $boxes );
 			} else {
-				$packages = $this->pack_fallback( $measured );
+				$packages = $this->pack_fallback( $measured, $boxes );
 			}
 		}
 
 		// Unmeasured items always get one-item-per-box via fallback.
 		if ( ! empty( $unmeasured ) ) {
-			$packages = array_merge( $packages, $this->pack_fallback( $unmeasured ) );
+			$packages = array_merge( $packages, $this->pack_fallback( $unmeasured, $boxes ) );
 		}
 
 		return $packages;
@@ -146,12 +151,13 @@ class Packing_Service {
 	 * Pack items using the DVDoug BoxPacker library.
 	 *
 	 * @param array $items Shippable items to pack.
+	 * @param array $boxes Box definitions to use.
 	 * @return array Packed packages.
 	 */
-	protected function pack_with_boxpacker( array $items ): array {
+	protected function pack_with_boxpacker( array $items, array $boxes ): array {
 		$packer = new \DVDoug\BoxPacker\Packer();
 
-		foreach ( $this->settings->get_boxes() as $box_definition ) {
+		foreach ( $boxes as $box_definition ) {
 			$packer->addBox( new BoxPacker_Box( $this->convert_box_to_boxpacker_units( $box_definition ) ) );
 		}
 
@@ -204,11 +210,11 @@ class Packing_Service {
 	 * Fallback packing strategy when BoxPacker is not available.
 	 *
 	 * @param array $items Shippable items to pack.
+	 * @param array $boxes Box definitions to use.
 	 * @return array Packed packages.
 	 */
-	protected function pack_fallback( array $items ): array {
+	protected function pack_fallback( array $items, array $boxes ): array {
 		$packages = array();
-		$boxes    = $this->settings->get_boxes();
 
 		foreach ( $items as $item ) {
 			$selected_box = $this->match_item_to_box( $item, $boxes );
