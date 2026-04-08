@@ -169,7 +169,14 @@ class ShipStation_Service {
 			}
 
 			if ( ! $found ) {
-				$valid_codes = array_column( $carriers, 'code' );
+				$valid_codes = array_filter(
+					array_map(
+						static function ( $carrier ) {
+							return is_array( $carrier ) && isset( $carrier['code'] ) ? $carrier['code'] : null;
+						},
+						$carriers
+					)
+				);
 				return array(
 					'success' => false,
 					'message' => sprintf(
