@@ -135,6 +135,10 @@ class Plugin {
 		$this->admin_test_ui->register();
 		$this->export_service->register();
 
+		// Register as a WooCommerce shipping method so it appears in shipping zones.
+		require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipping-method.php';
+		add_filter( 'woocommerce_shipping_methods', array( $this, 'register_shipping_method' ) );
+
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
 		add_action( 'wp_ajax_fk_usps_test_connection', array( $this, 'handle_test_connection_ajax' ) );
 	}
@@ -261,11 +265,31 @@ class Plugin {
 	}
 
 	/**
+	 * Register the plugin's shipping method with WooCommerce.
+	 *
+	 * @param array $methods Registered shipping method classes.
+	 * @return array Updated shipping methods.
+	 */
+	public function register_shipping_method( array $methods ): array {
+		$methods['fk_usps_optimizer'] = '\FK_USPS_Optimizer\Shipping_Method';
+		return $methods;
+	}
+
+	/**
+	 * Get the packing service instance.
+	 *
+	 * @return Packing_Service
+	 */
+	public function get_packing_service(): Packing_Service {
+		return $this->packing_service;
+	}
+
+	/**
 	 * Return the carrier service selected in settings.
 	 *
 	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
 	 */
-	protected function get_carrier_service() {
+	public function get_carrier_service() {
 		if ( 'shipstation' === $this->settings->get_carrier() ) {
 			return $this->shipstation_service;
 		}
