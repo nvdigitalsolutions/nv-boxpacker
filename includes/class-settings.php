@@ -82,6 +82,8 @@ class Settings {
 			'shipstation_api_secret'   => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
 			'shipstation_carrier_code' => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
 			'sandbox_mode'             => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'show_all_options'         => __( 'Show All Package Options', 'fk-usps-optimizer' ),
+			'show_package_count'       => __( 'Show Package Count', 'fk-usps-optimizer' ),
 			'ship_from_name'           => __( 'Ship From Name', 'fk-usps-optimizer' ),
 			'ship_from_company'        => __( 'Ship From Company', 'fk-usps-optimizer' ),
 			'ship_from_phone'          => __( 'Ship From Phone', 'fk-usps-optimizer' ),
@@ -160,9 +162,14 @@ class Settings {
 			return;
 		}
 
-		if ( in_array( $key, array( 'debug_logging', 'sandbox_mode' ), true ) ) {
+		$checkbox_fields = array( 'debug_logging', 'sandbox_mode', 'show_all_options', 'show_package_count' );
+		if ( in_array( $key, $checkbox_fields, true ) ) {
 			if ( 'debug_logging' === $key ) {
 				$label = esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' );
+			} elseif ( 'show_all_options' === $key ) {
+				$label = esc_html__( 'Display all available shipping options at checkout instead of only the cheapest.', 'fk-usps-optimizer' );
+			} elseif ( 'show_package_count' === $key ) {
+				$label = esc_html__( 'Append the number of packages to the shipping label, e.g. "Packages (2)".', 'fk-usps-optimizer' );
 			} else {
 				$label = esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' );
 			}
@@ -279,10 +286,12 @@ class Settings {
 			$output[ $field ] = isset( $input[ $field ] ) ? sanitize_text_field( (string) $input[ $field ] ) : '';
 		}
 
-		$output['carrier']       = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
-		$output['debug_logging'] = empty( $input['debug_logging'] ) ? '0' : '1';
-		$output['sandbox_mode']  = empty( $input['sandbox_mode'] ) ? '0' : '1';
-		$output['boxes_json']    = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
+		$output['carrier']            = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
+		$output['debug_logging']      = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']       = empty( $input['sandbox_mode'] ) ? '0' : '1';
+		$output['show_all_options']   = empty( $input['show_all_options'] ) ? '0' : '1';
+		$output['show_package_count'] = empty( $input['show_package_count'] ) ? '0' : '1';
+		$output['boxes_json']         = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
 		return $output;
 	}
@@ -345,6 +354,8 @@ class Settings {
 				'shipstation_api_secret'   => '',
 				'shipstation_carrier_code' => 'stamps_com',
 				'sandbox_mode'             => '0',
+				'show_all_options'         => '0',
+				'show_package_count'       => '0',
 				'ship_from_name'           => '',
 				'ship_from_company'        => '',
 				'ship_from_phone'          => '',
@@ -478,6 +489,31 @@ class Settings {
 	public function is_sandbox_mode_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) $settings['sandbox_mode'];
+	}
+
+	/**
+	 * Check whether all shipping options should be displayed at checkout.
+	 *
+	 * When enabled, all rated box candidates are shown as separate shipping
+	 * options instead of only the cheapest.
+	 *
+	 * @return bool Whether to show all package options.
+	 */
+	public function is_show_all_options_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['show_all_options'];
+	}
+
+	/**
+	 * Check whether the package count should be appended to the shipping label.
+	 *
+	 * When enabled, labels display the number of packages, e.g. "Packages (2)".
+	 *
+	 * @return bool Whether to show the package count.
+	 */
+	public function is_show_package_count_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['show_package_count'];
 	}
 
 	/**

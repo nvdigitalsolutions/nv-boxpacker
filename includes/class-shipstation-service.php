@@ -80,6 +80,20 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Build ALL USPS Priority shipping plans using an explicit ship-to address.
+	 *
+	 * Returns every rated candidate plan instead of only the cheapest.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipStation-compatible destination address.
+	 * @param int   $package_number 1-based package sequence number.
+	 * @return array List of shipping plans, sorted cheapest first.
+	 */
+	public function build_all_test_package_plans( array $package, array $ship_to, int $package_number ): array {
+		return $this->build_all_plans_for_address( $package, $ship_to, $package_number );
+	}
+
+	/**
 	 * Test the ShipStation API connection by fetching the list of carriers.
 	 *
 	 * When $api_key or $api_secret are provided (e.g. passed directly from the
