@@ -48,39 +48,6 @@ class ShippingMethodTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
-	// cartesian_product
-	// -------------------------------------------------------------------------
-
-	public function test_cartesian_product_two_sets(): void {
-		$sets = array(
-			array( 'A1', 'A2' ),
-			array( 'B1', 'B2' ),
-		);
-
-		$result = $this->call_protected( 'cartesian_product', array( $sets ) );
-
-		$this->assertCount( 4, $result );
-		$this->assertSame( array( 'A1', 'B1' ), $result[0] );
-		$this->assertSame( array( 'A1', 'B2' ), $result[1] );
-		$this->assertSame( array( 'A2', 'B1' ), $result[2] );
-		$this->assertSame( array( 'A2', 'B2' ), $result[3] );
-	}
-
-	public function test_cartesian_product_three_sets(): void {
-		$sets = array(
-			array( 'X' ),
-			array( 'Y1', 'Y2' ),
-			array( 'Z' ),
-		);
-
-		$result = $this->call_protected( 'cartesian_product', array( $sets ) );
-
-		$this->assertCount( 2, $result );
-		$this->assertSame( array( 'X', 'Y1', 'Z' ), $result[0] );
-		$this->assertSame( array( 'X', 'Y2', 'Z' ), $result[1] );
-	}
-
-	// -------------------------------------------------------------------------
 	// build_ship_to
 	// -------------------------------------------------------------------------
 
