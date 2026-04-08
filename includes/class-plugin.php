@@ -311,7 +311,7 @@ class Plugin {
 	}
 
 	/**
-	 * Build a human-readable order note summarising the shipping plan.
+	 * Build a human-readable order note summarizing the shipping plan.
 	 *
 	 * @param array $plan Shipping plan data.
 	 * @return string Formatted note text.
