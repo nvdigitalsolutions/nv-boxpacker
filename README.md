@@ -1,4 +1,4 @@
-# FunnelKit USPS Priority Shipping Optimizer
+# USPS Priority Shipping Optimizer
 
 A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit orders by packing items into custom cubic boxes and USPS flat-rate boxes, rate-shopping through ShipEngine or ShipStation, and producing package-level plans suitable for PirateShip export.
 
