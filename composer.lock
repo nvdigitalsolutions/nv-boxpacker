@@ -5,6 +5,7 @@
         "This file is @generated automatically"
     ],
     "content-hash": "714088765e6033a129fb225e88c88142",
+    "content-hash": "6da3135597c352605b4d244e8fd1fc6a",
     "packages": [
         {
             "name": "dvdoug/boxpacker",
