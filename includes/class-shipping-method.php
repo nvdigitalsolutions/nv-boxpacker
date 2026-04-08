@@ -63,9 +63,9 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 *
 	 * Packs the cart items using BoxPacker, fetches USPS rates from the
 	 * configured carrier API (ShipEngine or ShipStation), and adds the
-	 * combined optimized rate.  When "Show All Options" is enabled, two
-	 * packing strategies are run — all boxes (cubic + flat rate) and
-	 * flat-rate only — producing separate shipping options.
+	 * combined optimized rate.  When "Show All Options" is enabled, every
+	 * combination (cartesian product) of rated box candidates is offered as
+	 * a separate shipping option.
 	 *
 	 * @param array $package WooCommerce shipping package.
 	 */
@@ -106,15 +106,16 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 		$packed_packages = $plugin->get_packing_service()->pack_items( $items );
 
+		if ( empty( $packed_packages ) ) {
+			set_transient( $cache_key, array( 'rates' => array() ), 30 * MINUTE_IN_SECONDS );
+			return;
+		}
+
 		$ship_to = $this->build_ship_to( $destination );
 
 		if ( $settings->is_show_all_options_enabled() ) {
-			$rates = $this->calculate_all_options( $plugin, $items, $packed_packages, $ship_to, $settings );
+			$rates = $this->calculate_all_options( $plugin, $packed_packages, $ship_to, $settings );
 		} else {
-			if ( empty( $packed_packages ) ) {
-				set_transient( $cache_key, array( 'rates' => array() ), 30 * MINUTE_IN_SECONDS );
-				return;
-			}
 			$rates = $this->calculate_cheapest_option( $plugin, $packed_packages, $ship_to, $settings );
 		}
 
@@ -149,61 +150,118 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array with a single rate entry, or empty on failure.
 	 */
 	protected function calculate_cheapest_option( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$rate = $this->rate_packing_strategy( $plugin, $packed_packages, $ship_to, $settings, $this->title );
+		$carrier_service = $plugin->get_carrier_service();
+		$total_cost      = 0.0;
+		$all_rated       = true;
+		$package_count   = count( $packed_packages );
 
-		if ( empty( $rate ) ) {
+		foreach ( $packed_packages as $index => $packed ) {
+			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+
+			if ( empty( $plan ) ) {
+				$all_rated = false;
+				break;
+			}
+
+			$total_cost += (float) $plan['rate_amount'];
+		}
+
+		if ( ! $all_rated || $total_cost <= 0 ) {
 			return array();
 		}
 
-		return array( $rate );
+		$label = $this->title;
+		if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
+			$label = sprintf(
+				/* translators: 1: method title, 2: package count. */
+				_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+				$this->title,
+				$package_count
+			);
+		}
+
+		return array(
+			array(
+				'label' => $label,
+				'cost'  => $total_cost,
+			),
+		);
 	}
 
 	/**
-	 * Calculate shipping options using multiple packing strategies.
+	 * Calculate all shipping option combinations via cartesian product.
 	 *
-	 * Runs two strategies: one using all available boxes (optimised mix of
-	 * cubic and flat rate) and one using only flat-rate boxes.  Each
-	 * strategy produces an independent packing and a single summed rate.
+	 * For each packed package, all rated candidates are collected.  The
+	 * cartesian product of every package's candidates produces all possible
+	 * shipping plans; each plan is offered as a separate WooCommerce rate.
 	 *
-	 * @param Plugin   $plugin              Plugin instance.
-	 * @param array    $items               Flat item list from extract_items().
-	 * @param array    $all_packed_packages  Packages already packed with all boxes.
-	 * @param array    $ship_to             Carrier-compatible destination address.
-	 * @param Settings $settings            Plugin settings.
+	 * @param Plugin   $plugin          Plugin instance.
+	 * @param array    $packed_packages Packed packages from Packing_Service.
+	 * @param array    $ship_to         Carrier-compatible destination address.
+	 * @param Settings $settings        Plugin settings.
 	 * @return array Array of rate entries (label + cost), or empty on failure.
 	 */
-	protected function calculate_all_options( Plugin $plugin, array $items, array $all_packed_packages, array $ship_to, Settings $settings ): array {
-		$rates = array();
+	protected function calculate_all_options( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
+		$carrier_service   = $plugin->get_carrier_service();
+		$per_package_plans = array();
 
-		// Strategy 1: All boxes (optimised mix of cubic + flat rate).
-		if ( ! empty( $all_packed_packages ) ) {
-			$rate = $this->rate_packing_strategy( $plugin, $all_packed_packages, $ship_to, $settings, $this->title, true );
-			if ( ! empty( $rate ) ) {
-				$rates[] = $rate;
+		foreach ( $packed_packages as $index => $packed ) {
+			$plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+
+			if ( empty( $plans ) ) {
+				return array();
 			}
+
+			$per_package_plans[] = $plans;
 		}
 
-		// Strategy 2: Flat-rate boxes only.
-		$all_boxes       = $settings->get_boxes();
-		$flat_rate_boxes = array_values(
-			array_filter(
-				$all_boxes,
-				static function ( array $box ): bool {
-					return 'flat_rate' === ( $box['box_type'] ?? '' );
-				}
-			)
-		);
+		$combos        = $this->cartesian_product( $per_package_plans );
+		$package_count = count( $packed_packages );
+		$rates         = array();
+		$seen_labels   = array();
 
-		if ( ! empty( $flat_rate_boxes ) ) {
-			$flat_packed = $plugin->get_packing_service()->pack_items( $items, $flat_rate_boxes );
-			if ( ! empty( $flat_packed ) ) {
-				/* translators: %s: method title. */
-				$flat_label = sprintf( __( '%s — Flat Rate', 'fk-usps-optimizer' ), $this->title );
-				$rate       = $this->rate_packing_strategy( $plugin, $flat_packed, $ship_to, $settings, $flat_label, true );
-				if ( ! empty( $rate ) ) {
-					$rates[] = $rate;
-				}
+		foreach ( $combos as $combo ) {
+			$total = 0.0;
+			$names = array();
+
+			foreach ( $combo as $plan ) {
+				$total  += (float) $plan['rate_amount'];
+				$names[] = $plan['package_name'];
 			}
+
+			if ( $total <= 0 ) {
+				continue;
+			}
+
+			// Consolidate repeated box names: "Small + Small + Large" → "2× Small + Large".
+			$grouped = array_count_values( $names );
+			$parts   = array();
+			foreach ( $grouped as $name => $count ) {
+				$parts[] = $count > 1
+					? sprintf( '%d× %s', $count, $name )
+					: $name;
+			}
+			$label = $this->title . ' — ' . implode( ' + ', $parts );
+
+			if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
+				$label = sprintf(
+					/* translators: 1: combined label, 2: package count. */
+					_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+					$label,
+					$package_count
+				);
+			}
+
+			// Deduplicate equivalent combos (permutations of the same set of box types).
+			if ( isset( $seen_labels[ $label ] ) ) {
+				continue;
+			}
+			$seen_labels[ $label ] = true;
+
+			$rates[] = array(
+				'label' => $label,
+				'cost'  => $total,
+			);
 		}
 
 		// Sort cheapest-first.
@@ -218,68 +276,29 @@ class Shipping_Method extends \WC_Shipping_Method {
 	}
 
 	/**
-	 * Rate a single packing strategy by summing the cheapest candidate per package.
+	 * Compute the cartesian product of multiple arrays of plans.
 	 *
-	 * Collects box names from each rated plan and builds a consolidated
-	 * label (e.g. "2× Small + Large") appended to the base label.
+	 * Given [[A1, A2], [B1, B2]] returns [[A1, B1], [A1, B2], [A2, B1], [A2, B2]].
 	 *
-	 * @param Plugin   $plugin          Plugin instance.
-	 * @param array    $packed_packages Packed packages from Packing_Service.
-	 * @param array    $ship_to         Carrier-compatible destination address.
-	 * @param Settings $settings        Plugin settings.
-	 * @param string   $base_label      Base label for this strategy.
-	 * @param bool     $show_box_names  Whether to append box names to the label.
-	 * @return array Single rate entry (label + cost), or empty on failure.
+	 * @param array $sets Array of arrays, one per package.
+	 * @return array Array of combinations.
 	 */
-	protected function rate_packing_strategy( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings, string $base_label, bool $show_box_names = false ): array {
-		$carrier_service = $plugin->get_carrier_service();
-		$total_cost      = 0.0;
-		$all_rated       = true;
-		$package_count   = count( $packed_packages );
-		$names           = array();
+	protected function cartesian_product( array $sets ): array {
+		$result = array( array() );
 
-		foreach ( $packed_packages as $index => $packed ) {
-			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+		foreach ( $sets as $set ) {
+			$new_result = array();
 
-			if ( empty( $plan ) ) {
-				$all_rated = false;
-				break;
+			foreach ( $result as $combo ) {
+				foreach ( $set as $item ) {
+					$new_result[] = array_merge( $combo, array( $item ) );
+				}
 			}
 
-			$total_cost += (float) $plan['rate_amount'];
-			$names[]     = $plan['package_name'];
+			$result = $new_result;
 		}
 
-		if ( ! $all_rated || $total_cost <= 0 ) {
-			return array();
-		}
-
-		// Build descriptive label from box names: "Small + Small + Large" → "2× Small + Large".
-		$label = $base_label;
-		if ( $show_box_names && ! empty( $names ) ) {
-			$grouped = array_count_values( $names );
-			$parts   = array();
-			foreach ( $grouped as $name => $count ) {
-				$parts[] = $count > 1
-					? sprintf( '%d× %s', $count, $name )
-					: $name;
-			}
-			$label .= ' — ' . implode( ' + ', $parts );
-		}
-
-		if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
-			$label = sprintf(
-				/* translators: 1: combined label, 2: package count. */
-				_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
-				$label,
-				$package_count
-			);
-		}
-
-		return array(
-			'label' => $label,
-			'cost'  => $total_cost,
-		);
+		return $result;
 	}
 
 	/**

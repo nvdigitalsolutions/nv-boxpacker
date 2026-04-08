@@ -166,7 +166,7 @@ class Settings {
 		$checkbox_fields = array(
 			'debug_logging'      => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
 			'sandbox_mode'       => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
-			'show_all_options'   => esc_html__( 'Display separate shipping options for flat-rate-only and optimised (cubic + flat rate) packing strategies.', 'fk-usps-optimizer' ),
+			'show_all_options'   => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
 			'show_package_count' => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
 		);
 
@@ -505,9 +505,9 @@ class Settings {
 	/**
 	 * Check whether "Show All Options" is enabled.
 	 *
-	 * When active, calculate_shipping() runs two packing strategies
-	 * (all boxes and flat-rate only) and displays each as a separate
-	 * shipping option instead of summing to a single cheapest rate.
+	 * When active, calculate_shipping() displays all rated box candidates as
+	 * separate shipping options via cartesian product instead of summing to a
+	 * single cheapest rate.
 	 *
 	 * @return bool Whether "Show All Options" is enabled.
 	 */
