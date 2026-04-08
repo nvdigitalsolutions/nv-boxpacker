@@ -399,8 +399,8 @@ class ShipStation_Service {
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => null,
-			'packageCode'    => null,
+			'serviceCode'    => $this->settings->get_service_code(),
+			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',
 			'toCountry'      => $ship_to['country_code'] ?? 'US',

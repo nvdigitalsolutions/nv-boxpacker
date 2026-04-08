@@ -421,6 +421,37 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'usps_first', $result['rate']['serviceCode'] );
 	}
 
+	/**
+	 * Verify the API payload includes the configured service code and candidate package code.
+	 */
+	public function test_request_rate_sends_service_code_and_package_code_in_payload(): void {
+		$this->configure_credentials();
+
+		$captured_body = null;
+
+		$GLOBALS['_test_wp_remote_post'] = function ( string $url, array $args ) use ( &$captured_body ) {
+			$captured_body = json_decode( $args['body'], true );
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => wp_json_encode(
+					array(
+						array(
+							'serviceCode'  => 'usps_priority_mail',
+							'shipmentCost' => 7.50,
+							'otherCost'    => 0.00,
+						),
+					)
+				),
+			);
+		};
+
+		$this->call_protected( 'request_rate', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertNotNull( $captured_body, 'Payload was not captured.' );
+		$this->assertSame( 'usps_priority_mail', $captured_body['serviceCode'] );
+		$this->assertSame( 'package', $captured_body['packageCode'] );
+	}
+
 	public function test_request_rate_success_returns_rate_array(): void {
 		$this->configure_credentials();
 		$this->mock_rate_response( 9.99 );
