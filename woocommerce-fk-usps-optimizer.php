@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FunnelKit USPS Priority Shipping Optimizer
  * Description: Optimizes WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat rate boxes.
- * Version: 1.0.1
+ * Version: 1.2.0
  * Author: OpenAI
  * Requires at least: 6.0
  * Requires PHP: 8.0
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'FK_USPS_OPTIMIZER_VERSION', '1.0.1' );
+define( 'FK_USPS_OPTIMIZER_VERSION', '1.2.0' );
 define( 'FK_USPS_OPTIMIZER_FILE', __FILE__ );
 define( 'FK_USPS_OPTIMIZER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FK_USPS_OPTIMIZER_URL', plugin_dir_url( __FILE__ ) );

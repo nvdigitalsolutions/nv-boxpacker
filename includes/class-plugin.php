@@ -160,6 +160,8 @@ class Plugin {
 			return;
 		}
 
+		$carrier_service = $this->get_carrier_service();
+
 		$plan = array(
 			'created_at'          => current_time( 'mysql', true ),
 			'total_package_count' => 0,
@@ -180,7 +182,7 @@ class Plugin {
 			}
 
 			foreach ( $packed_packages as $index => $package ) {
-				$package_plan = $this->shipengine_service->build_package_plan( $order, $package, $index + 1 );
+				$package_plan = $carrier_service->build_package_plan( $order, $package, $index + 1 );
 
 				if ( empty( $package_plan ) ) {
 					$plan['warnings'][] = sprintf(
@@ -200,11 +202,11 @@ class Plugin {
 			$plan['total_package_count'] = count( $plan['packages'] );
 
 			if ( 0 === $plan['total_package_count'] ) {
-				$plan['warnings'][] = __( 'All rate-shopping attempts failed. Review ShipEngine configuration and box setup.', 'fk-usps-optimizer' );
+				$plan['warnings'][] = __( 'All rate-shopping attempts failed. Review carrier API configuration and box setup.', 'fk-usps-optimizer' );
 			}
 		} catch ( \Throwable $throwable ) {
 			$plan['warnings'][] = $throwable->getMessage();
-			$this->shipengine_service->log(
+			$this->log(
 				'Order planning failed',
 				array(
 					'order_id' => $order->get_id(),
@@ -256,5 +258,35 @@ class Plugin {
 		}
 
 		wp_send_json_success( $result );
+	}
+
+	/**
+	 * Return the carrier service selected in settings.
+	 *
+	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
+	 */
+	protected function get_carrier_service() {
+		if ( 'shipstation' === $this->settings->get_carrier() ) {
+			return $this->shipstation_service;
+		}
+
+		return $this->shipengine_service;
+	}
+
+	/**
+	 * Log a debug message via the WooCommerce logger.
+	 *
+	 * @param string $message Log message.
+	 * @param array  $context Additional context.
+	 * @return void
+	 */
+	protected function log( string $message, array $context = array() ): void {
+		if ( ! $this->settings->is_debug_logging_enabled() ) {
+			return;
+		}
+
+		if ( function_exists( 'wc_get_logger' ) ) {
+			wc_get_logger()->debug( $message . ' ' . wp_json_encode( $context ), array( 'source' => 'fk-usps-optimizer' ) );
+		}
 	}
 }

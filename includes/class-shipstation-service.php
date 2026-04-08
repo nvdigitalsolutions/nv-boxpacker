@@ -115,7 +115,7 @@ class ShipStation_Service {
 		$response = wp_remote_get(
 			$endpoint,
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
@@ -152,6 +152,34 @@ class ShipStation_Service {
 					$code
 				),
 			);
+		}
+
+		// Validate the configured carrier code against the account's carriers.
+		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$body         = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$carriers     = is_array( $body ) ? $body : array();
+
+		if ( '' !== $carrier_code && ! empty( $carriers ) ) {
+			$found = false;
+			foreach ( $carriers as $carrier ) {
+				if ( isset( $carrier['code'] ) && $carrier['code'] === $carrier_code ) {
+					$found = true;
+					break;
+				}
+			}
+
+			if ( ! $found ) {
+				$valid_codes = array_column( $carriers, 'code' );
+				return array(
+					'success' => false,
+					'message' => sprintf(
+						/* translators: 1: configured carrier code, 2: list of valid carrier codes. */
+						__( 'Carrier code "%1$s" was not found in your ShipStation account. Available carrier codes: %2$s', 'fk-usps-optimizer' ),
+						$carrier_code,
+						implode( ', ', $valid_codes )
+					),
+				);
+			}
 		}
 
 		return array(
@@ -290,6 +318,11 @@ class ShipStation_Service {
 			return array( 'success' => false );
 		}
 
+		if ( '' === $carrier_code ) {
+			$this->log( 'ShipStation carrier code is not configured.', array( 'order_id' => $order_id ) );
+			return array( 'success' => false );
+		}
+
 		$ship_from = $this->settings->get_ship_from_address();
 
 		$payload = array(
@@ -322,7 +355,7 @@ class ShipStation_Service {
 		$response = wp_remote_post(
 			$endpoint,
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
