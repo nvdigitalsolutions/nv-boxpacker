@@ -1,12 +1,19 @@
 name: Build
 
 on:
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: build-${{ github.event.workflow_run.head_branch || 'main' }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build plugin ZIP
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,6 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_branch || 'main' }}
           # Full history required so we can push the commit back
           fetch-depth: 0
 

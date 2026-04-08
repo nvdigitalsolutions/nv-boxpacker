@@ -81,7 +81,10 @@ class Settings {
 			'shipstation_api_key'      => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
 			'shipstation_api_secret'   => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
 			'shipstation_carrier_code' => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
+			'service_code'             => __( 'USPS Service Code', 'fk-usps-optimizer' ),
 			'sandbox_mode'             => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'show_all_options'         => __( 'Show All Options', 'fk-usps-optimizer' ),
+			'show_package_count'       => __( 'Show Package Count', 'fk-usps-optimizer' ),
 			'ship_from_name'           => __( 'Ship From Name', 'fk-usps-optimizer' ),
 			'ship_from_company'        => __( 'Ship From Company', 'fk-usps-optimizer' ),
 			'ship_from_phone'          => __( 'Ship From Phone', 'fk-usps-optimizer' ),
@@ -160,19 +163,20 @@ class Settings {
 			return;
 		}
 
-		if ( in_array( $key, array( 'debug_logging', 'sandbox_mode' ), true ) ) {
-			if ( 'debug_logging' === $key ) {
-				$label = esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' );
-			} else {
-				$label = esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' );
-			}
+		$checkbox_fields = array(
+			'debug_logging'      => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
+			'sandbox_mode'       => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
+			'show_all_options'   => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
+			'show_package_count' => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
+		);
 
+		if ( isset( $checkbox_fields[ $key ] ) ) {
 			printf(
 				'<label><input type="checkbox" name="%1$s[%2$s]" value="1" %3$s /> %4$s</label>',
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				checked( '1', (string) $value, false ),
-				$label // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
+				$checkbox_fields[ $key ] // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
 			);
 			return;
 		}
@@ -185,6 +189,18 @@ class Settings {
 				esc_attr( $key ),
 				esc_attr( $value ),
 				esc_html__( 'Your ShipEngine USPS carrier ID (e.g. se-123456). Use the "Test Connection" button below to verify.', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
+		if ( 'service_code' === $key ) {
+			printf(
+				'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( $value ),
+				esc_html__( 'USPS service code sent to the carrier API (e.g. usps_priority_mail). Supports flat-rate and cubic pricing.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -264,6 +280,7 @@ class Settings {
 			'shipstation_api_key',
 			'shipstation_api_secret',
 			'shipstation_carrier_code',
+			'service_code',
 			'ship_from_name',
 			'ship_from_company',
 			'ship_from_phone',
@@ -279,10 +296,12 @@ class Settings {
 			$output[ $field ] = isset( $input[ $field ] ) ? sanitize_text_field( (string) $input[ $field ] ) : '';
 		}
 
-		$output['carrier']       = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
-		$output['debug_logging'] = empty( $input['debug_logging'] ) ? '0' : '1';
-		$output['sandbox_mode']  = empty( $input['sandbox_mode'] ) ? '0' : '1';
-		$output['boxes_json']    = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
+		$output['carrier']            = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
+		$output['debug_logging']      = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']       = empty( $input['sandbox_mode'] ) ? '0' : '1';
+		$output['show_all_options']   = empty( $input['show_all_options'] ) ? '0' : '1';
+		$output['show_package_count'] = empty( $input['show_package_count'] ) ? '0' : '1';
+		$output['boxes_json']         = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
 		return $output;
 	}
@@ -344,7 +363,10 @@ class Settings {
 				'shipstation_api_key'      => '',
 				'shipstation_api_secret'   => '',
 				'shipstation_carrier_code' => 'stamps_com',
+				'service_code'             => 'usps_priority_mail',
 				'sandbox_mode'             => '0',
+				'show_all_options'         => '0',
+				'show_package_count'       => '0',
 				'ship_from_name'           => '',
 				'ship_from_company'        => '',
 				'ship_from_phone'          => '',
@@ -478,6 +500,47 @@ class Settings {
 	public function is_sandbox_mode_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) $settings['sandbox_mode'];
+	}
+
+	/**
+	 * Check whether "Show All Options" is enabled.
+	 *
+	 * When active, calculate_shipping() displays all rated box candidates as
+	 * separate shipping options via cartesian product instead of summing to a
+	 * single cheapest rate.
+	 *
+	 * @return bool Whether "Show All Options" is enabled.
+	 */
+	public function is_show_all_options_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['show_all_options'];
+	}
+
+	/**
+	 * Check whether "Show Package Count" is enabled.
+	 *
+	 * When active, the package count is appended to the shipping label
+	 * displayed during cart and checkout.
+	 *
+	 * @return bool Whether "Show Package Count" is enabled.
+	 */
+	public function is_show_package_count_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['show_package_count'];
+	}
+
+	/**
+	 * Get the configured USPS service code.
+	 *
+	 * This value is sent to the carrier API as the service_code parameter and
+	 * supports all USPS services including flat-rate and cubic pricing.
+	 *
+	 * @return string USPS service code (e.g. 'usps_priority_mail').
+	 */
+	public function get_service_code(): string {
+		$settings     = $this->get_settings();
+		$service_code = (string) $settings['service_code'];
+		return '' !== $service_code ? $service_code : 'usps_priority_mail';
 	}
 
 	/**
