@@ -80,7 +80,7 @@ class ShipStation_Service {
 	}
 
 	/**
-	 * Build ALL USPS Priority shipping plans using an explicit ship-to address.
+	 * Build ALL shipping plans using an explicit ship-to address.
 	 *
 	 * Returns every rated candidate plan instead of only the cheapest.
 	 *

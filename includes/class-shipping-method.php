@@ -157,10 +157,10 @@ class Shipping_Method extends \WC_Shipping_Method {
 		}
 
 		$label = $this->title;
-		if ( $show_pkg_count && $package_count > 0 ) {
+		if ( $show_pkg_count && $package_count > 1 ) {
 			$label .= ' — ' . sprintf(
 				/* translators: %d: number of packages. */
-				_n( 'Package (%d)', 'Packages (%d)', $package_count, 'fk-usps-optimizer' ),
+				__( 'Packages (%d)', 'fk-usps-optimizer' ),
 				$package_count
 			);
 		}
@@ -220,10 +220,10 @@ class Shipping_Method extends \WC_Shipping_Method {
 			}
 
 			$label = $this->title . ' — ' . implode( ' + ', $names );
-			if ( $show_pkg_count && $package_count > 0 ) {
+			if ( $show_pkg_count && $package_count > 1 ) {
 				$label .= ' — ' . sprintf(
 					/* translators: %d: number of packages. */
-					_n( 'Package (%d)', 'Packages (%d)', $package_count, 'fk-usps-optimizer' ),
+					__( 'Packages (%d)', 'fk-usps-optimizer' ),
 					$package_count
 				);
 			}
