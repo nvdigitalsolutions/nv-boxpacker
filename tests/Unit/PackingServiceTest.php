@@ -266,10 +266,56 @@ class PackingServiceTest extends TestCase {
 
 		$result = $this->call_protected( 'pack_fallback', array( $items ) );
 
-		// Item fits in Small box (8×8×6); dimensions should come from the box.
+		// Item fits in Small box (inner 8×8×6); dimensions should use inner dims.
 		$this->assertSame( 8.0, $result[0]['dimensions']['length'] );
 		$this->assertSame( 8.0, $result[0]['dimensions']['width'] );
 		$this->assertSame( 6.0, $result[0]['dimensions']['height'] );
+	}
+
+	public function test_pack_fallback_uses_inner_not_outer_dimensions(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'Thick',
+				'package_code' => 'package',
+				'package_name' => 'Thick Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 10,
+				'outer_length' => 10,
+				'outer_depth'  => 8,
+				'inner_width'  => 9,
+				'inner_length' => 9,
+				'inner_depth'  => 7,
+				'empty_weight' => 4,
+				'max_weight'   => 20,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array( 'name' => 'A', 'length' => 5.0, 'width' => 5.0, 'height' => 4.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'A' ),
+		);
+
+		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+
+		// Should use inner dimensions, not outer.
+		$this->assertSame( 9.0, $result[0]['dimensions']['length'] );
+		$this->assertSame( 9.0, $result[0]['dimensions']['width'] );
+		$this->assertSame( 7.0, $result[0]['dimensions']['height'] );
+	}
+
+	public function test_pack_fallback_uses_item_dims_when_no_box_matches(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( $this->make_boxes() );
+
+		$items = array(
+			array( 'name' => 'Big', 'length' => 24.0, 'width' => 18.0, 'height' => 15.0, 'weight_oz' => 5.0, 'product_id' => 1, 'item_id' => 1, 'sku' => 'BIG' ),
+		);
+
+		$result = $this->call_protected( 'pack_fallback', array( $items ) );
+
+		// Fallback box has no inner_* keys, so item dimensions are used.
+		$this->assertSame( 24.0, $result[0]['dimensions']['length'] );
+		$this->assertSame( 18.0, $result[0]['dimensions']['width'] );
+		$this->assertSame( 15.0, $result[0]['dimensions']['height'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -400,5 +446,46 @@ class PackingServiceTest extends TestCase {
 		$total_items  = array_sum( array_map( fn( $p ) => count( $p['items'] ), $result ) );
 
 		$this->assertSame( 3, $total_items );
+	}
+
+	public function test_pack_items_with_boxpacker_uses_inner_dimensions(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'ThickWall',
+				'package_code' => 'package',
+				'package_name' => 'Thick Wall Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 10,
+				'outer_length' => 10,
+				'outer_depth'  => 8,
+				'inner_width'  => 9,
+				'inner_length' => 9,
+				'inner_depth'  => 7,
+				'empty_weight' => 4,
+				'max_weight'   => 20,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array(
+				'product_id' => 1,
+				'name'       => 'Widget',
+				'length'     => 5.0,
+				'width'      => 5.0,
+				'height'     => 4.0,
+				'weight_oz'  => 5.0,
+				'sku'        => 'W',
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 1, $result );
+		// Packed package dimensions should use the box's inner dimensions,
+		// not outer, so that candidate matching works correctly.
+		$this->assertSame( 9.0, $result[0]['dimensions']['length'] );
+		$this->assertSame( 9.0, $result[0]['dimensions']['width'] );
+		$this->assertSame( 7.0, $result[0]['dimensions']['height'] );
 	}
 }

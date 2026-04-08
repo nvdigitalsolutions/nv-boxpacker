@@ -158,9 +158,9 @@ class Packing_Service {
 				'items'      => $packed_items,
 				'weight_oz'  => $item_weight,
 				'dimensions' => array(
-					'length' => (float) ( $display_box['outer_length'] ?? 0 ),
-					'width'  => (float) ( $display_box['outer_width'] ?? 0 ),
-					'height' => (float) ( $display_box['outer_depth'] ?? 0 ),
+					'length' => (float) ( $display_box['inner_length'] ?? 0 ),
+					'width'  => (float) ( $display_box['inner_width'] ?? 0 ),
+					'height' => (float) ( $display_box['inner_depth'] ?? 0 ),
 				),
 			);
 		}
@@ -186,9 +186,9 @@ class Packing_Service {
 				'items'      => array( $item ),
 				'weight_oz'  => $item['weight_oz'],
 				'dimensions' => array(
-					'length' => (float) ( $selected_box['outer_length'] ?? $item['length'] ),
-					'width'  => (float) ( $selected_box['outer_width'] ?? $item['width'] ),
-					'height' => (float) ( $selected_box['outer_depth'] ?? $item['height'] ),
+					'length' => (float) ( $selected_box['inner_length'] ?? $item['length'] ),
+					'width'  => (float) ( $selected_box['inner_width'] ?? $item['width'] ),
+					'height' => (float) ( $selected_box['inner_depth'] ?? $item['height'] ),
 				),
 			);
 		}
