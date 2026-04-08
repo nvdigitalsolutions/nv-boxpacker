@@ -45,6 +45,10 @@ class Packing_Service {
 	 * Pack a flat list of item arrays into boxes.
 	 *
 	 * Each item must contain: name, length, width, height (inches) and weight_oz.
+	 * Items may also include a 'has_dimensions' boolean flag.  Items without
+	 * real dimensions (has_dimensions === false) are always packed individually
+	 * via the fallback strategy so that each item gets its own box.
+	 *
 	 * Additional keys (product_id, item_id, sku, etc.) are preserved and returned
 	 * in the packed-package item lists.
 	 *
@@ -56,11 +60,36 @@ class Packing_Service {
 			return array();
 		}
 
-		if ( class_exists( '\DVDoug\BoxPacker\Packer' ) ) {
-			return $this->pack_with_boxpacker( $items );
+		// Split items into those with real dimensions (optimise via BoxPacker)
+		// and those without (fall back to one-item-per-box).
+		$measured   = array();
+		$unmeasured = array();
+
+		foreach ( $items as $item ) {
+			if ( isset( $item['has_dimensions'] ) && false === $item['has_dimensions'] ) {
+				$unmeasured[] = $item;
+			} else {
+				$measured[] = $item;
+			}
 		}
 
-		return $this->pack_fallback( $items );
+		$packages = array();
+
+		// Pack measured items with BoxPacker when available.
+		if ( ! empty( $measured ) ) {
+			if ( class_exists( '\DVDoug\BoxPacker\Packer' ) ) {
+				$packages = $this->pack_with_boxpacker( $measured );
+			} else {
+				$packages = $this->pack_fallback( $measured );
+			}
+		}
+
+		// Unmeasured items always get one-item-per-box via fallback.
+		if ( ! empty( $unmeasured ) ) {
+			$packages = array_merge( $packages, $this->pack_fallback( $unmeasured ) );
+		}
+
+		return $packages;
 	}
 
 	/**
@@ -87,22 +116,25 @@ class Packing_Service {
 			$raw_width  = $product->get_width( 'edit' );
 			$raw_height = $product->get_height( 'edit' );
 			$raw_weight = $product->get_weight( 'edit' );
-			$length     = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
-			$width      = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
-			$height     = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
-			$weight     = (float) wc_get_weight( $raw_weight ? $raw_weight : 0.1, 'oz' );
-			$qty        = max( 1, (int) $item->get_quantity() );
+
+			$has_dimensions = ( '' !== $raw_length && '' !== $raw_width && '' !== $raw_height );
+			$length         = (float) wc_get_dimension( $raw_length ? $raw_length : 1, 'in' );
+			$width          = (float) wc_get_dimension( $raw_width ? $raw_width : 1, 'in' );
+			$height         = (float) wc_get_dimension( $raw_height ? $raw_height : 1, 'in' );
+			$weight         = (float) wc_get_weight( $raw_weight ? $raw_weight : 0.1, 'oz' );
+			$qty            = max( 1, (int) $item->get_quantity() );
 
 			for ( $i = 0; $i < $qty; $i++ ) {
 				$items[] = array(
-					'item_id'    => $item_id,
-					'product_id' => $product->get_id(),
-					'name'       => $item->get_name(),
-					'length'     => $length,
-					'width'      => $width,
-					'height'     => $height,
-					'weight_oz'  => $weight,
-					'sku'        => $product->get_sku(),
+					'item_id'        => $item_id,
+					'product_id'     => $product->get_id(),
+					'name'           => $item->get_name(),
+					'length'         => $length,
+					'width'          => $width,
+					'height'         => $height,
+					'weight_oz'      => $weight,
+					'has_dimensions' => $has_dimensions,
+					'sku'            => $product->get_sku(),
 				);
 			}
 		}
@@ -158,9 +190,9 @@ class Packing_Service {
 				'items'      => $packed_items,
 				'weight_oz'  => $item_weight,
 				'dimensions' => array(
-					'length' => (float) ( $display_box['outer_length'] ?? 0 ),
-					'width'  => (float) ( $display_box['outer_width'] ?? 0 ),
-					'height' => (float) ( $display_box['outer_depth'] ?? 0 ),
+					'length' => (float) ( $display_box['inner_length'] ?? 0 ),
+					'width'  => (float) ( $display_box['inner_width'] ?? 0 ),
+					'height' => (float) ( $display_box['inner_depth'] ?? 0 ),
 				),
 			);
 		}
@@ -186,9 +218,9 @@ class Packing_Service {
 				'items'      => array( $item ),
 				'weight_oz'  => $item['weight_oz'],
 				'dimensions' => array(
-					'length' => (float) ( $selected_box['outer_length'] ?? $item['length'] ),
-					'width'  => (float) ( $selected_box['outer_width'] ?? $item['width'] ),
-					'height' => (float) ( $selected_box['outer_depth'] ?? $item['height'] ),
+					'length' => (float) ( $selected_box['inner_length'] ?? $item['length'] ),
+					'width'  => (float) ( $selected_box['inner_width'] ?? $item['width'] ),
+					'height' => (float) ( $selected_box['inner_depth'] ?? $item['height'] ),
 				),
 			);
 		}

@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
-        'name' => 'openai/fk-usps-optimizer',
-        'pretty_version' => 'dev-main',
-        'version' => 'dev-main',
-        'reference' => 'c82dce477b9becff4370edddf91bfd5484927f86',
+        'name' => 'nvdigitalsolutions/fk-usps-optimizer',
+        'pretty_version' => 'dev-copilot/code-review-wordpress-plugin',
+        'version' => 'dev-copilot/code-review-wordpress-plugin',
+        'reference' => '4f5e233fa1889fd5abfc4bc846c54a031b88d31d',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -55,10 +55,10 @@
             'aliases' => array(),
             'dev_requirement' => true,
         ),
-        'openai/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-main',
-            'version' => 'dev-main',
-            'reference' => 'c82dce477b9becff4370edddf91bfd5484927f86',
+        'nvdigitalsolutions/fk-usps-optimizer' => array(
+            'pretty_version' => 'dev-copilot/code-review-wordpress-plugin',
+            'version' => 'dev-copilot/code-review-wordpress-plugin',
+            'reference' => '4f5e233fa1889fd5abfc4bc846c54a031b88d31d',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

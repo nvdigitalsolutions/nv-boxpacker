@@ -80,6 +80,22 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Build ALL rated shipping plans for a packed package, sorted cheapest-first.
+	 *
+	 * Unlike build_test_package_plan() which returns only the single cheapest
+	 * plan, this method returns every successfully rated candidate so the caller
+	 * can present all options to the customer.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipStation-compatible destination address.
+	 * @param int   $package_number 1-based package sequence number.
+	 * @return array[] Array of shipping plans sorted by rate_amount ascending.
+	 */
+	public function build_all_test_package_plans( array $package, array $ship_to, int $package_number ): array {
+		return $this->build_all_plans_for_address( $package, $ship_to, $package_number );
+	}
+
+	/**
 	 * Test the ShipStation API connection by fetching the list of carriers.
 	 *
 	 * When $api_key or $api_secret are provided (e.g. passed directly from the
@@ -115,7 +131,7 @@ class ShipStation_Service {
 		$response = wp_remote_get(
 			$endpoint,
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
@@ -154,6 +170,41 @@ class ShipStation_Service {
 			);
 		}
 
+		// Validate the configured carrier code against the account's carriers.
+		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$body         = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$carriers     = is_array( $body ) ? $body : array();
+
+		if ( '' !== $carrier_code && ! empty( $carriers ) ) {
+			$found = false;
+			foreach ( $carriers as $carrier ) {
+				if ( isset( $carrier['code'] ) && $carrier['code'] === $carrier_code ) {
+					$found = true;
+					break;
+				}
+			}
+
+			if ( ! $found ) {
+				$valid_codes = array_filter(
+					array_map(
+						static function ( $carrier ) {
+							return is_array( $carrier ) && isset( $carrier['code'] ) ? $carrier['code'] : null;
+						},
+						$carriers
+					)
+				);
+				return array(
+					'success' => false,
+					'message' => sprintf(
+						/* translators: 1: configured carrier code, 2: list of valid carrier codes. */
+						__( 'Carrier code "%1$s" was not found in your ShipStation account. Available carrier codes: %2$s', 'fk-usps-optimizer' ),
+						$carrier_code,
+						implode( ', ', $valid_codes )
+					),
+				);
+			}
+		}
+
 		return array(
 			'success' => true,
 			'message' => __( 'Connection successful! ShipStation credentials are valid.', 'fk-usps-optimizer' ),
@@ -174,8 +225,9 @@ class ShipStation_Service {
 	 * @return array Best shipping plan or empty array.
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
-		$candidates = $this->build_candidates( $package );
-		$best_plan  = array();
+		$candidates   = $this->build_candidates( $package );
+		$service_code = $this->settings->get_service_code();
+		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
 			$response = $this->request_rate( $ship_to, $candidate, $order_id );
@@ -192,7 +244,7 @@ class ShipStation_Service {
 					'mode'           => $candidate['mode'],
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
-					'service_code'   => (string) ( $rate['serviceCode'] ?? 'usps_priority_mail' ),
+					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
 					'rate_amount'    => (float) $rate['shipmentCost'],
 					'currency'       => 'USD',
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -205,6 +257,54 @@ class ShipStation_Service {
 		}
 
 		return $best_plan;
+	}
+
+	/**
+	 * Build ALL rated plans for a packed package, sorted cheapest-first.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipStation-compatible destination address.
+	 * @param int   $package_number 1-based package sequence number.
+	 * @param int   $order_id       Order ID for log context; 0 for test runs.
+	 * @return array[] All successful plans sorted by rate_amount ascending.
+	 */
+	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
+		$candidates   = $this->build_candidates( $package );
+		$service_code = $this->settings->get_service_code();
+		$plans        = array();
+
+		foreach ( $candidates as $candidate ) {
+			$response = $this->request_rate( $ship_to, $candidate, $order_id );
+
+			if ( ! $response['success'] ) {
+				continue;
+			}
+
+			$rate    = $response['rate'];
+			$plans[] = array(
+				'package_number' => $package_number,
+				'mode'           => $candidate['mode'],
+				'package_code'   => $candidate['package_code'],
+				'package_name'   => $candidate['package_name'],
+				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
+				'rate_amount'    => (float) $rate['shipmentCost'],
+				'currency'       => 'USD',
+				'weight_oz'      => (float) $candidate['weight_oz'],
+				'dimensions'     => $candidate['dimensions'],
+				'cubic_tier'     => $candidate['cubic_tier'],
+				'packing_list'   => $this->build_packing_list( $package['items'] ),
+				'items'          => $package['items'],
+			);
+		}
+
+		usort(
+			$plans,
+			static function ( array $a, array $b ): int {
+				return (float) $a['rate_amount'] <=> (float) $b['rate_amount'];
+			}
+		);
+
+		return $plans;
 	}
 
 	// -------------------------------------------------------------------------
@@ -290,12 +390,17 @@ class ShipStation_Service {
 			return array( 'success' => false );
 		}
 
+		if ( '' === $carrier_code ) {
+			$this->log( 'ShipStation carrier code is not configured.', array( 'order_id' => $order_id ) );
+			return array( 'success' => false );
+		}
+
 		$ship_from = $this->settings->get_ship_from_address();
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => null,
-			'packageCode'    => null,
+			'serviceCode'    => $this->settings->get_service_code(),
+			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',
 			'toCountry'      => $ship_to['country_code'] ?? 'US',
@@ -322,7 +427,7 @@ class ShipStation_Service {
 		$response = wp_remote_post(
 			$endpoint,
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',

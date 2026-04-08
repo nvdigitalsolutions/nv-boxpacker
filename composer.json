@@ -1,8 +1,8 @@
 {
-  "name": "openai/fk-usps-optimizer",
+  "name": "nvdigitalsolutions/fk-usps-optimizer",
   "description": "WooCommerce and FunnelKit USPS Priority cubic and flat-rate optimizer.",
   "type": "wordpress-plugin",
-  "license": "proprietary",
+  "license": "GPL-3.0-or-later",
   "require": {
     "php": ">=8.0",
     "dvdoug/boxpacker": "^3.12"

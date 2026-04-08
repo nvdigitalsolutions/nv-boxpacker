@@ -63,6 +63,22 @@ class ShipEngine_Service {
 	}
 
 	/**
+	 * Build ALL rated shipping plans for a packed package, sorted cheapest-first.
+	 *
+	 * Unlike build_test_package_plan() which returns only the single cheapest
+	 * plan, this method returns every successfully rated candidate so the caller
+	 * can present all options to the customer.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipEngine-formatted ship-to address.
+	 * @param int   $package_number Package sequence number.
+	 * @return array[] Array of shipping plans sorted by rate_amount ascending.
+	 */
+	public function build_all_test_package_plans( array $package, array $ship_to, int $package_number ): array {
+		return $this->build_all_plans_for_address( $package, $ship_to, $package_number );
+	}
+
+	/**
 	 * Core plan-building logic shared by build_package_plan and build_test_package_plan.
 	 *
 	 * @param array $package        Packed package data.
@@ -72,8 +88,9 @@ class ShipEngine_Service {
 	 * @return array Best shipping plan found, or empty array.
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
-		$candidates = $this->build_candidates( $package );
-		$best_plan  = array();
+		$candidates   = $this->build_candidates( $package );
+		$service_code = $this->settings->get_service_code();
+		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
 			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
@@ -91,7 +108,7 @@ class ShipEngine_Service {
 					'mode'           => $candidate['mode'],
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
-					'service_code'   => 'usps_priority_mail',
+					'service_code'   => $service_code,
 					'rate_amount'    => (float) $rate['shipping_amount']['amount'],
 					'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -104,6 +121,55 @@ class ShipEngine_Service {
 		}
 
 		return $best_plan;
+	}
+
+	/**
+	 * Build ALL rated plans for a packed package, sorted cheapest-first.
+	 *
+	 * @param array $package        Packed package data.
+	 * @param array $ship_to        ShipEngine-formatted destination address.
+	 * @param int   $package_number Package sequence number.
+	 * @param int   $order_id       Order ID used for logging (0 for test runs).
+	 * @return array[] All successful plans sorted by rate_amount ascending.
+	 */
+	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
+		$candidates   = $this->build_candidates( $package );
+		$service_code = $this->settings->get_service_code();
+		$plans        = array();
+
+		foreach ( $candidates as $candidate ) {
+			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
+
+			if ( ! $response['success'] ) {
+				continue;
+			}
+
+			$rate       = $response['rate'];
+			$dimensions = $candidate['dimensions'];
+			$plans[]    = array(
+				'package_number' => $package_number,
+				'mode'           => $candidate['mode'],
+				'package_code'   => $candidate['package_code'],
+				'package_name'   => $candidate['package_name'],
+				'service_code'   => $service_code,
+				'rate_amount'    => (float) $rate['shipping_amount']['amount'],
+				'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
+				'weight_oz'      => (float) $candidate['weight_oz'],
+				'dimensions'     => $dimensions,
+				'cubic_tier'     => $candidate['cubic_tier'],
+				'packing_list'   => $this->build_packing_list( $package['items'] ),
+				'items'          => $package['items'],
+			);
+		}
+
+		usort(
+			$plans,
+			static function ( array $a, array $b ): int {
+				return (float) $a['rate_amount'] <=> (float) $b['rate_amount'];
+			}
+		);
+
+		return $plans;
 	}
 
 	/**
@@ -218,14 +284,14 @@ class ShipEngine_Service {
 						),
 					),
 				),
-				'service_code'     => 'usps_priority_mail',
+				'service_code'     => $this->settings->get_service_code(),
 			),
 		);
 
 		$response = wp_remote_post(
 			'https://api.shipengine.com/v1/rates',
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',
@@ -426,7 +492,7 @@ class ShipEngine_Service {
 		$response = wp_remote_get(
 			'https://api.shipengine.com/v1/carriers',
 			array(
-				'timeout' => 15,
+				'timeout' => 30,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',

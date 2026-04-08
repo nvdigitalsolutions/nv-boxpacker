@@ -16,6 +16,7 @@ define( 'FK_USPS_OPTIMIZER_VERSION', '1.0.0' );
 define( 'FK_USPS_OPTIMIZER_PATH', dirname( __DIR__ ) . DIRECTORY_SEPARATOR );
 define( 'FK_USPS_OPTIMIZER_URL', 'http://example.com/wp-content/plugins/fk-usps-optimizer/' );
 define( 'FK_USPS_OPTIMIZER_FILE', FK_USPS_OPTIMIZER_PATH . 'woocommerce-fk-usps-optimizer.php' );
+define( 'MINUTE_IN_SECONDS', 60 );
 
 // ---------------------------------------------------------------------------
 // Composer autoloader (provides DVDoug\BoxPacker and PHPUnit).
@@ -222,6 +223,19 @@ function esc_html_e( string $text, string $domain = 'default' ): void {
  */
 function __( string $text, string $domain = 'default' ): string {
 	return $text;
+}
+
+/**
+ * Retrieve the translation of $text (singular or plural) based on $number.
+ *
+ * @param string $single Singular text.
+ * @param string $plural Plural text.
+ * @param int    $number Number to determine singular/plural.
+ * @param string $domain Text domain.
+ * @return string Singular or plural text.
+ */
+function _n( string $single, string $plural, int $number, string $domain = 'default' ): string {
+	return 1 === $number ? $single : $plural;
 }
 
 /** Echo a translated string. */
@@ -934,6 +948,85 @@ class WC_Product {
 	public function get_weight( string $context = 'view' ): string { return ''; }
 }
 
+/**
+ * WooCommerce shipping method base class stub.
+ */
+class WC_Shipping_Method {
+
+	/** @var string */
+	public $id = '';
+
+	/** @var int */
+	public $instance_id = 0;
+
+	/** @var string */
+	public $method_title = '';
+
+	/** @var string */
+	public $method_description = '';
+
+	/** @var array */
+	public $supports = array();
+
+	/** @var string */
+	public $title = '';
+
+	/** @var string */
+	public $enabled = 'yes';
+
+	/** @var array */
+	public $instance_form_fields = array();
+
+	/** @var array */
+	protected $settings = array();
+
+	/** @var array Rates added during calculate_shipping(). */
+	public $rates = array();
+
+	/** No-op in tests. */
+	public function init_form_fields(): void {}
+
+	/** No-op in tests. */
+	public function init_settings(): void {}
+
+	/**
+	 * Get an option value.
+	 *
+	 * @param string $key     Option key.
+	 * @param mixed  $default Default value.
+	 * @return mixed Option value.
+	 */
+	public function get_option( string $key, $default = '' ) {
+		return $this->settings[ $key ] ?? $default;
+	}
+
+	/**
+	 * Return a rate ID.
+	 *
+	 * @param string $suffix Optional suffix.
+	 * @return string Rate ID.
+	 */
+	public function get_rate_id( string $suffix = '' ): string {
+		$rate_id = $this->id;
+		if ( $this->instance_id ) {
+			$rate_id .= ':' . $this->instance_id;
+		}
+		if ( '' !== $suffix ) {
+			$rate_id .= ':' . $suffix;
+		}
+		return $rate_id;
+	}
+
+	/**
+	 * Add a shipping rate (captured for testing).
+	 *
+	 * @param array $rate Rate data.
+	 */
+	public function add_rate( array $rate ): void {
+		$this->rates[] = $rate;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Load plugin classes (after all stubs are in place).
 // ---------------------------------------------------------------------------
@@ -943,5 +1036,7 @@ require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-settings.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-order-plan-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-packing-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipengine-service.php';
+require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipstation-service.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-pirateship-export.php';
 require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-admin-ui.php';
+require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipping-method.php';
