@@ -92,7 +92,7 @@ class Test_Pricing_Service {
 			'total_rate_amount' => 0.0,
 			'currency'          => 'USD',
 			'warnings'          => array(),
-			'carrier'           => $this->settings->get_carrier(),
+			'carriers'          => $this->settings->get_carriers(),
 			'sandbox'           => $this->settings->is_sandbox_mode_enabled(),
 		);
 
@@ -110,13 +110,23 @@ class Test_Pricing_Service {
 			return $result;
 		}
 
-		$carrier_service = $this->get_carrier_service();
+		$carrier_services = $this->get_carrier_services();
 
 		foreach ( $packed as $index => $package ) {
 			$package_number = $index + 1;
-			$plan           = $carrier_service->build_test_package_plan( $package, $ship_to, $package_number );
+			$best_plan      = array();
+			$best_cost      = PHP_FLOAT_MAX;
 
-			if ( empty( $plan ) ) {
+			foreach ( $carrier_services as $carrier_svc ) {
+				$candidate = $carrier_svc->build_test_package_plan( $package, $ship_to, $package_number );
+
+				if ( ! empty( $candidate ) && (float) $candidate['rate_amount'] < $best_cost ) {
+					$best_plan = $candidate;
+					$best_cost = (float) $candidate['rate_amount'];
+				}
+			}
+
+			if ( empty( $best_plan ) ) {
 				$result['warnings'][] = sprintf(
 					/* translators: %d: package number. */
 					__( 'No rate found for package %d. Check carrier credentials and box configuration.', 'fk-usps-optimizer' ),
@@ -125,9 +135,9 @@ class Test_Pricing_Service {
 				continue;
 			}
 
-			$result['packages'][]         = $plan;
-			$result['total_rate_amount'] += (float) $plan['rate_amount'];
-			$result['currency']           = $plan['currency'];
+			$result['packages'][]         = $best_plan;
+			$result['total_rate_amount'] += (float) $best_plan['rate_amount'];
+			$result['currency']           = $best_plan['currency'];
 		}
 
 		if ( ! empty( $packed ) && empty( $result['packages'] ) ) {
@@ -191,15 +201,40 @@ class Test_Pricing_Service {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Return the carrier service selected in settings.
+	 * Return all carrier services enabled in settings.
 	 *
-	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
+	 * When ShipStation is enabled and additional carrier+service pairs are
+	 * configured beyond the primary pair, extra ShipStation_Service instances
+	 * are created per additional pair.  The primary pair uses the injected
+	 * ShipStation_Service instance (so mocks work in tests).
+	 *
+	 * @return array<ShipEngine_Service|ShipStation_Service> Active carrier services.
 	 */
-	protected function get_carrier_service() {
-		if ( 'shipstation' === $this->settings->get_carrier() ) {
-			return $this->shipstation_service;
+	protected function get_carrier_services(): array {
+		$carriers = $this->settings->get_carriers();
+		$services = array();
+
+		foreach ( $carriers as $carrier ) {
+			if ( 'shipengine' === $carrier ) {
+				$services[] = $this->shipengine_service;
+			} elseif ( 'shipstation' === $carrier ) {
+				// Use the injected instance for the primary pair.
+				$services[] = $this->shipstation_service;
+
+				// Create extra instances for any additional pairs.
+				$pairs   = $this->settings->get_shipstation_service_pairs();
+				$primary = ! empty( $pairs ) ? $pairs[0] : array();
+
+				foreach ( array_slice( $pairs, 1 ) as $pair ) {
+					$services[] = new ShipStation_Service(
+						$this->settings,
+						$pair['carrier_code'],
+						$pair['service_code']
+					);
+				}
+			}
 		}
 
-		return $this->shipengine_service;
+		return ! empty( $services ) ? $services : array( $this->shipengine_service );
 	}
 }

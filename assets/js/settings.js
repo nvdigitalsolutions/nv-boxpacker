@@ -7,17 +7,27 @@
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Show or hide carrier-specific settings rows based on the current carrier
-	 * dropdown value.
+	 * Show or hide carrier-specific settings rows based on the currently
+	 * checked carrier checkboxes.
 	 */
 	function toggleCarrierFields() {
-		var select = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
-		if ( ! select ) {
+		var fieldset = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
+		if ( ! fieldset ) {
 			return;
 		}
 
-		var isSE = select.value === 'shipengine';
-		var isSS = select.value === 'shipstation';
+		var checkboxes = fieldset.querySelectorAll( 'input[type="checkbox"]' );
+		var isSE = false;
+		var isSS = false;
+
+		checkboxes.forEach( function ( cb ) {
+			if ( cb.value === 'shipengine' && cb.checked ) {
+				isSE = true;
+			}
+			if ( cb.value === 'shipstation' && cb.checked ) {
+				isSS = true;
+			}
+		} );
 
 		document.querySelectorAll( '.fk-shipengine-field' ).forEach( function ( row ) {
 			row.style.display = isSE ? '' : 'none';
@@ -60,8 +70,14 @@
 		result.style.display = '';
 		result.querySelector( 'p' ).textContent = fkUspsOptimizer.testing;
 
-		var select = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
-		var carrier = select ? select.value : '';
+		var fieldset = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
+		var carriers = [];
+		if ( fieldset ) {
+			fieldset.querySelectorAll( 'input[type="checkbox"]:checked' ).forEach( function ( cb ) {
+				carriers.push( cb.value );
+			} );
+		}
+		var carrier = carriers.length > 0 ? carriers[0] : '';
 		var optKey = fkUspsOptimizer.settingsKey;
 
 		var data = new FormData();
@@ -109,10 +125,12 @@
 	// -------------------------------------------------------------------------
 
 	document.addEventListener( 'DOMContentLoaded', function () {
-		var select = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
-		if ( select ) {
+		var fieldset = document.getElementById( 'fk_usps_optimizer_settings_carrier' );
+		if ( fieldset ) {
 			toggleCarrierFields();
-			select.addEventListener( 'change', toggleCarrierFields );
+			fieldset.querySelectorAll( 'input[type="checkbox"]' ).forEach( function ( cb ) {
+				cb.addEventListener( 'change', toggleCarrierFields );
+			} );
 		}
 
 		var btn = document.getElementById( 'fk-usps-test-btn' );

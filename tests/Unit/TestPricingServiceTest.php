@@ -223,7 +223,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_returns_warning_when_no_valid_items(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 
 		$result = $this->service->run(
@@ -240,7 +240,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_returns_warning_when_packing_produces_nothing(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array() );
 
@@ -255,7 +255,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_adds_warning_when_rate_not_found_for_package(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
 		$this->shipengine_service->method( 'build_test_package_plan' )->willReturn( array() );
@@ -271,7 +271,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_uses_shipengine_when_carrier_is_shipengine(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
 		$this->shipengine_service->method( 'build_test_package_plan' )->willReturn( $this->make_plan() );
@@ -280,7 +280,7 @@ class TestPricingServiceTest extends TestCase {
 		$result = $this->service->run( array( $this->make_raw_item() ), $this->make_ship_to() );
 
 		$this->assertCount( 1, $result['packages'] );
-		$this->assertSame( 'shipengine', $result['carrier'] );
+		$this->assertSame( array( 'shipengine' ), $result['carriers'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -288,7 +288,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_uses_shipstation_when_carrier_is_shipstation(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipstation' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipstation' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
 		$this->shipstation_service->method( 'build_test_package_plan' )->willReturn( $this->make_plan() );
@@ -297,7 +297,40 @@ class TestPricingServiceTest extends TestCase {
 		$result = $this->service->run( array( $this->make_raw_item() ), $this->make_ship_to() );
 
 		$this->assertCount( 1, $result['packages'] );
-		$this->assertSame( 'shipstation', $result['carrier'] );
+		$this->assertSame( array( 'shipstation' ), $result['carriers'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// run — multi-carrier: picks cheapest across both providers
+	// -------------------------------------------------------------------------
+
+	public function test_run_picks_cheapest_rate_across_multiple_carriers(): void {
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine', 'shipstation' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
+		// ShipEngine returns $7.99, ShipStation returns $5.50.
+		$this->shipengine_service->method( 'build_test_package_plan' )->willReturn( $this->make_plan( 1, 7.99 ) );
+		$this->shipstation_service->method( 'build_test_package_plan' )->willReturn( $this->make_plan( 1, 5.50 ) );
+
+		$result = $this->service->run( array( $this->make_raw_item() ), $this->make_ship_to() );
+
+		$this->assertCount( 1, $result['packages'] );
+		$this->assertSame( 5.50, $result['total_rate_amount'] );
+		$this->assertSame( array( 'shipengine', 'shipstation' ), $result['carriers'] );
+	}
+
+	public function test_run_multi_carrier_falls_back_when_one_fails(): void {
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine', 'shipstation' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
+		// ShipEngine fails, ShipStation returns $5.50.
+		$this->shipengine_service->method( 'build_test_package_plan' )->willReturn( array() );
+		$this->shipstation_service->method( 'build_test_package_plan' )->willReturn( $this->make_plan( 1, 5.50 ) );
+
+		$result = $this->service->run( array( $this->make_raw_item() ), $this->make_ship_to() );
+
+		$this->assertCount( 1, $result['packages'] );
+		$this->assertSame( 5.50, $result['total_rate_amount'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -305,7 +338,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_accumulates_total_rate_from_multiple_packages(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array(
 			$this->make_packed_package(),
@@ -323,7 +356,7 @@ class TestPricingServiceTest extends TestCase {
 	}
 
 	public function test_run_sets_sandbox_true_when_sandbox_mode_enabled(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
 		$this->packing_service->method( 'pack_items' )->willReturn( array() );
 
@@ -333,7 +366,7 @@ class TestPricingServiceTest extends TestCase {
 	}
 
 	public function test_run_sets_sandbox_false_when_sandbox_mode_disabled(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array() );
 
@@ -343,7 +376,7 @@ class TestPricingServiceTest extends TestCase {
 	}
 
 	public function test_run_sets_currency_from_last_successful_plan(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array( $this->make_packed_package() ) );
 
@@ -361,7 +394,7 @@ class TestPricingServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_run_assigns_sequential_package_numbers(): void {
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
 		$this->packing_service->method( 'pack_items' )->willReturn( array(
 			$this->make_packed_package(),
