@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -108,7 +108,7 @@ Navigate to **WooCommerce → Settings → Shipping**, select a zone, click **Ad
 
 = Does it support carriers other than USPS? =
 
-The plugin is optimized for USPS Priority Mail (cubic and flat-rate). When using ShipStation you can configure any carrier code (e.g. `stamps_com`, `ups_walleted`), and you can set up multiple carrier+service pairs to rate-shop across different carriers (e.g. UPS Ground + USPS Priority). Only cubic/flat-rate logic and cubic eligibility checks apply to USPS-specific features.
+The plugin is optimized for USPS Priority Mail (cubic and flat-rate). When using ShipStation you can configure any carrier code (e.g. `stamps_com`, `ups_walleted`), and you can set up multiple carrier+service pairs to rate-shop across different carriers (e.g. UPS Ground + USPS Priority). Checkout labels automatically display the correct carrier name (e.g. "UPS Ground", "USPS Priority") based on the carrier and service codes. Only cubic/flat-rate logic and cubic eligibility checks apply to USPS-specific features.
 
 = Does it buy labels? =
 
@@ -147,6 +147,14 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.2 =
+* Fixed: Checkout shipping labels now display the correct carrier name (e.g. "UPS Ground", "USPS Priority") instead of always showing "USPS Priority" when multiple carriers are configured.
+* New: `ShipStation_Service::get_service_label()` derives a human-readable label from carrier and service codes (e.g. "UPS Ground", "USPS Priority").
+* New: `ShipEngine_Service::get_service_label()` derives a human-readable label from the service code (e.g. "USPS Priority", "USPS First Class").
+* New: Plan data returned by both carrier services now includes a `service_label` field.
+* Improved: "Show All Options" labels use the carrier service label per combination instead of the static method title.
+* Improved: Single-rate (cheapest option) label uses the carrier service label when all packages share the same carrier.
 
 = 1.2.1 =
 * New: Multi-carrier support — enable both ShipEngine and ShipStation simultaneously; the plugin compares rates across all enabled carriers and uses the cheapest.

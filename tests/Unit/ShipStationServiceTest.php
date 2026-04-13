@@ -915,12 +915,12 @@ class ShipStationServiceTest extends TestCase {
 
 	public function test_get_service_label_fedex(): void {
 		$service = new ShipStation_Service( $this->settings, 'fedex', 'fedex_ground' );
-		$this->assertSame( 'FedEx Fedex Ground', $service->get_service_label() );
+		$this->assertSame( 'FedEx Ground', $service->get_service_label() );
 	}
 
 	public function test_get_service_label_unknown_carrier(): void {
-		$service = new ShipStation_Service( $this->settings, 'some_new_carrier', 'some_new_service' );
-		$this->assertSame( 'Some New Carrier Some New Service', $service->get_service_label() );
+		$service = new ShipStation_Service( $this->settings, 'some_new_carrier', 'some_new_carrier_express' );
+		$this->assertSame( 'Some New Carrier Express', $service->get_service_label() );
 	}
 
 	public function test_get_service_label_endicia_usps(): void {

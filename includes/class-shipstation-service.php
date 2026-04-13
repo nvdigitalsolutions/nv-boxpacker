@@ -123,12 +123,36 @@ class ShipStation_Service {
 			'ups_2nd_day_air'            => '2nd Day Air',
 			'ups_3_day_select'           => '3 Day Select',
 			'ups_ground_saver'           => 'Ground Saver',
+			'fedex_ground'               => 'Ground',
+			'fedex_home_delivery'        => 'Home Delivery',
+			'fedex_2day'                 => '2Day',
+			'fedex_express_saver'        => 'Express Saver',
 		);
 
 		$carrier_name = $carrier_names[ $carrier_code ]
 			?? ucwords( str_replace( '_', ' ', $carrier_code ) );
-		$service_name = $service_names[ $service_code ]
-			?? ucwords( str_replace( '_', ' ', $service_code ) );
+
+		if ( isset( $service_names[ $service_code ] ) ) {
+			$service_name = $service_names[ $service_code ];
+		} else {
+			// Strip carrier-code prefix from unknown service codes to avoid
+			// redundant labels like "FedEx Fedex Ground".
+			$stripped = $service_code;
+			foreach ( array_keys( $carrier_names ) as $prefix ) {
+				if ( 0 === strpos( $service_code, $prefix . '_' ) ) {
+					$stripped = substr( $service_code, strlen( $prefix ) + 1 );
+					break;
+				}
+			}
+			// Also strip common short prefixes (e.g. "fedex_" from "fedex_ground").
+			if ( $stripped === $service_code && '' !== $carrier_code ) {
+				$short_prefix = $carrier_code . '_';
+				if ( 0 === strpos( $service_code, $short_prefix ) ) {
+					$stripped = substr( $service_code, strlen( $short_prefix ) );
+				}
+			}
+			$service_name = ucwords( str_replace( '_', ' ', $stripped ) );
+		}
 
 		return $carrier_name . ' ' . $service_name;
 	}
