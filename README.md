@@ -581,6 +581,10 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.2.3
+
+- **Fixed:** ShipStation rate amounts now include both `shipmentCost` and `otherCost` (fuel surcharges, residential delivery fees, etc.). Previously only `shipmentCost` was stored in `rate_amount`, causing UPS and other non-USPS carrier rates to appear significantly lower than the actual cost at checkout. The sorting/comparison logic already summed both fields, but the displayed rate did not.
+
 ### 1.2.2
 
 - **Fixed:** Checkout shipping labels now display the correct carrier name (e.g. "UPS Ground", "USPS Priority") instead of always showing the method title ("USPS Priority") when multiple carriers are configured via ShipStation service pairs.
