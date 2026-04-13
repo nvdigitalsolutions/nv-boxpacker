@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/allow-multiple-providers-support',
-        'version' => 'dev-copilot/allow-multiple-providers-support',
-        'reference' => '1276b4c57a4aaf6a457d483e38d435c74d5d84ad',
+        'pretty_version' => 'dev-copilot/update-readme-and-documentation',
+        'version' => 'dev-copilot/update-readme-and-documentation',
+        'reference' => '4c0dda0247146ffcf5b0f8c1133f9fde124a1bb4',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/allow-multiple-providers-support',
-            'version' => 'dev-copilot/allow-multiple-providers-support',
-            'reference' => '1276b4c57a4aaf6a457d483e38d435c74d5d84ad',
+            'pretty_version' => 'dev-copilot/update-readme-and-documentation',
+            'version' => 'dev-copilot/update-readme-and-documentation',
+            'reference' => '4c0dda0247146ffcf5b0f8c1133f9fde124a1bb4',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
