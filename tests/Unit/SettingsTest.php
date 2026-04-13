@@ -217,6 +217,85 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// get_carriers / multi-carrier support
+	// -------------------------------------------------------------------------
+
+	public function test_get_carriers_returns_shipengine_by_default(): void {
+		$this->assertSame( array( 'shipengine' ), $this->settings->get_carriers() );
+	}
+
+	public function test_get_carriers_parses_comma_separated_carriers(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'carrier' => 'shipengine,shipstation' );
+		$this->assertSame( array( 'shipengine', 'shipstation' ), $this->settings->get_carriers() );
+	}
+
+	public function test_get_carriers_handles_single_carrier_string(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'carrier' => 'shipstation' );
+		$this->assertSame( array( 'shipstation' ), $this->settings->get_carriers() );
+	}
+
+	public function test_get_carrier_returns_first_enabled_carrier(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'carrier' => 'shipstation,shipengine' );
+		$this->assertSame( 'shipstation', $this->settings->get_carrier() );
+	}
+
+	public function test_get_carriers_filters_invalid_values(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'carrier' => 'invalid,shipengine' );
+		$this->assertSame( array( 'shipengine' ), $this->settings->get_carriers() );
+	}
+
+	public function test_sanitize_settings_carrier_accepts_array_input(): void {
+		$input            = $this->empty_settings_input();
+		$input['carrier'] = array( 'shipengine', 'shipstation' );
+		$result           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'shipengine,shipstation', $result['carrier'] );
+	}
+
+	public function test_sanitize_settings_carrier_rejects_invalid_values(): void {
+		$input            = $this->empty_settings_input();
+		$input['carrier'] = array( 'invalid', 'shipengine' );
+		$result           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'shipengine', $result['carrier'] );
+	}
+
+	public function test_sanitize_settings_carrier_defaults_when_empty(): void {
+		$input            = $this->empty_settings_input();
+		$input['carrier'] = array();
+		$result           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'shipengine', $result['carrier'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// per-carrier service codes
+	// -------------------------------------------------------------------------
+
+	public function test_get_shipengine_service_code_returns_per_carrier_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'shipengine_service_code' => 'usps_ground_advantage' );
+		$this->assertSame( 'usps_ground_advantage', $this->settings->get_shipengine_service_code() );
+	}
+
+	public function test_get_shipengine_service_code_falls_back_to_legacy(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_service_code' => '',
+			'service_code'            => 'usps_priority_mail',
+		);
+		$this->assertSame( 'usps_priority_mail', $this->settings->get_shipengine_service_code() );
+	}
+
+	public function test_get_shipstation_service_code_returns_per_carrier_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'shipstation_service_code' => 'ups_ground' );
+		$this->assertSame( 'ups_ground', $this->settings->get_shipstation_service_code() );
+	}
+
+	public function test_get_shipstation_service_code_falls_back_to_legacy(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipstation_service_code' => '',
+			'service_code'             => 'usps_priority_mail',
+		);
+		$this->assertSame( 'usps_priority_mail', $this->settings->get_shipstation_service_code() );
+	}
+
+	// -------------------------------------------------------------------------
 	// sanitize_settings
 	// -------------------------------------------------------------------------
 
@@ -411,16 +490,16 @@ class SettingsTest extends TestCase {
 		$this->assertStringContainsString( 'textarea', $output );
 	}
 
-	public function test_render_field_outputs_select_for_carrier_with_usps_note(): void {
+	public function test_render_field_outputs_checkboxes_for_carrier_with_usps_note(): void {
 		ob_start();
 		$this->settings->render_field( array( 'key' => 'carrier' ) );
 		$output = ob_get_clean();
-		$this->assertStringContainsString( 'select', $output );
+		$this->assertStringContainsString( 'checkbox', $output );
 		$this->assertStringContainsString( 'USPS', $output );
 		$this->assertStringContainsString( 'shipengine', $output );
 	}
 
-	public function test_render_field_carrier_select_has_id_attribute(): void {
+	public function test_render_field_carrier_fieldset_has_id_attribute(): void {
 		ob_start();
 		$this->settings->render_field( array( 'key' => 'carrier' ) );
 		$output = ob_get_clean();
@@ -570,13 +649,21 @@ class SettingsTest extends TestCase {
 		$this->assertStringContainsString( 'show_package_count', $output );
 	}
 
-	public function test_render_field_service_code_shows_description(): void {
+	public function test_render_field_shipengine_service_code_shows_description(): void {
 		ob_start();
-		$this->settings->render_field( array( 'key' => 'service_code' ) );
+		$this->settings->render_field( array( 'key' => 'shipengine_service_code' ) );
 		$output = ob_get_clean();
 		$this->assertStringContainsString( 'input', $output );
-		$this->assertStringContainsString( 'service_code', $output );
+		$this->assertStringContainsString( 'shipengine_service_code', $output );
 		$this->assertStringContainsString( 'flat-rate', $output );
+	}
+
+	public function test_render_field_shipstation_service_code_shows_description(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'shipstation_service_code' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'input', $output );
+		$this->assertStringContainsString( 'shipstation_service_code', $output );
 	}
 
 	public function test_sanitize_settings_includes_new_checkbox_fields(): void {
@@ -584,12 +671,12 @@ class SettingsTest extends TestCase {
 		$input['show_all_options']   = '1';
 		$input['show_package_count'] = '1';
 		$input['add_package_note']   = '1';
-		$input['service_code']       = 'usps_ground_advantage';
+		$input['shipengine_service_code'] = 'usps_ground_advantage';
 		$result = $this->settings->sanitize_settings( $input );
 		$this->assertSame( '1', $result['show_all_options'] );
 		$this->assertSame( '1', $result['show_package_count'] );
 		$this->assertSame( '1', $result['add_package_note'] );
-		$this->assertSame( 'usps_ground_advantage', $result['service_code'] );
+		$this->assertSame( 'usps_ground_advantage', $result['shipengine_service_code'] );
 	}
 
 	// -------------------------------------------------------------------------

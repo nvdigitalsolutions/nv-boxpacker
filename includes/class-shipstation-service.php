@@ -226,7 +226,7 @@ class ShipStation_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->settings->get_shipstation_service_code();
 		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -270,7 +270,7 @@ class ShipStation_Service {
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->settings->get_shipstation_service_code();
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -399,7 +399,7 @@ class ShipStation_Service {
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => $this->settings->get_service_code(),
+			'serviceCode'    => $this->settings->get_shipstation_service_code(),
 			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',

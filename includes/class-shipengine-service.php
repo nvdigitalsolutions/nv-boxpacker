@@ -89,9 +89,8 @@ class ShipEngine_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->settings->get_shipengine_service_code();
 		$best_plan    = array();
-
 		foreach ( $candidates as $candidate ) {
 			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
 
@@ -134,7 +133,7 @@ class ShipEngine_Service {
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->settings->get_shipengine_service_code();
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -284,7 +283,7 @@ class ShipEngine_Service {
 						),
 					),
 				),
-				'service_code'     => $this->settings->get_service_code(),
+				'service_code'     => $this->settings->get_shipengine_service_code(),
 			),
 		);
 

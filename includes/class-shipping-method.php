@@ -127,20 +127,30 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array with a single rate entry, or empty on failure.
 	 */
 	protected function calculate_cheapest_option( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$carrier_service = $plugin->get_carrier_service();
-		$total_cost      = 0.0;
-		$all_rated       = true;
-		$package_count   = count( $packed_packages );
+		$carrier_services = $plugin->get_carrier_services();
+		$total_cost       = 0.0;
+		$all_rated        = true;
+		$package_count    = count( $packed_packages );
 
 		foreach ( $packed_packages as $index => $packed ) {
-			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+			$best_plan = array();
+			$best_cost = PHP_FLOAT_MAX;
 
-			if ( empty( $plan ) ) {
+			foreach ( $carrier_services as $carrier_service ) {
+				$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+
+				if ( ! empty( $plan ) && (float) $plan['rate_amount'] < $best_cost ) {
+					$best_plan = $plan;
+					$best_cost = (float) $plan['rate_amount'];
+				}
+			}
+
+			if ( empty( $best_plan ) ) {
 				$all_rated = false;
 				break;
 			}
 
-			$total_cost += (float) $plan['rate_amount'];
+			$total_cost += $best_cost;
 		}
 
 		if ( ! $all_rated || $total_cost <= 0 ) {
@@ -179,11 +189,16 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array of rate entries (label + cost), or empty on failure.
 	 */
 	protected function calculate_all_options( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$carrier_service   = $plugin->get_carrier_service();
+		$carrier_services  = $plugin->get_carrier_services();
 		$per_package_plans = array();
 
 		foreach ( $packed_packages as $index => $packed ) {
-			$plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+			$plans = array();
+
+			foreach ( $carrier_services as $carrier_service ) {
+				$carrier_plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+				$plans         = array_merge( $plans, $carrier_plans );
+			}
 
 			if ( empty( $plans ) ) {
 				return array();

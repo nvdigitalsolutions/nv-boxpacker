@@ -164,7 +164,7 @@ class Plugin {
 			return;
 		}
 
-		$carrier_service = $this->get_carrier_service();
+		$carrier_services = $this->get_carrier_services();
 
 		$plan = array(
 			'created_at'          => current_time( 'mysql', true ),
@@ -186,21 +186,31 @@ class Plugin {
 			}
 
 			foreach ( $packed_packages as $index => $package ) {
-				$package_plan = $carrier_service->build_package_plan( $order, $package, $index + 1 );
+				$best_plan = array();
+				$best_cost = PHP_FLOAT_MAX;
 
-				if ( empty( $package_plan ) ) {
+				foreach ( $carrier_services as $carrier_svc ) {
+					$candidate_plan = $carrier_svc->build_package_plan( $order, $package, $index + 1 );
+
+					if ( ! empty( $candidate_plan ) && (float) $candidate_plan['rate_amount'] < $best_cost ) {
+						$best_plan = $candidate_plan;
+						$best_cost = (float) $candidate_plan['rate_amount'];
+					}
+				}
+
+				if ( empty( $best_plan ) ) {
 					$plan['warnings'][] = sprintf(
 						/* translators: %d package number. */
-						__( 'Unable to produce a USPS plan for package %d.', 'fk-usps-optimizer' ),
+						__( 'Unable to produce a shipping plan for package %d.', 'fk-usps-optimizer' ),
 						$index + 1
 					);
 					continue;
 				}
 
-				$plan['packages'][]         = $package_plan;
-				$plan['total_rate_amount'] += (float) $package_plan['rate_amount'];
-				$plan['currency']           = $package_plan['currency'];
-				$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $package_plan );
+				$plan['packages'][]         = $best_plan;
+				$plan['total_rate_amount'] += (float) $best_plan['rate_amount'];
+				$plan['currency']           = $best_plan['currency'];
+				$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $best_plan );
 			}
 
 			$plan['total_package_count'] = count( $plan['packages'] );
@@ -300,6 +310,8 @@ class Plugin {
 	/**
 	 * Return the carrier service selected in settings.
 	 *
+	 * Returns the first enabled carrier service for backward compatibility.
+	 *
 	 * @return ShipEngine_Service|ShipStation_Service Active carrier service.
 	 */
 	public function get_carrier_service() {
@@ -308,6 +320,27 @@ class Plugin {
 		}
 
 		return $this->shipengine_service;
+	}
+
+	/**
+	 * Return all carrier services enabled in settings.
+	 *
+	 * @return array<ShipEngine_Service|ShipStation_Service> Active carrier services.
+	 */
+	public function get_carrier_services(): array {
+		$carriers = $this->settings->get_carriers();
+		$services = array();
+
+		foreach ( $carriers as $carrier ) {
+			if ( 'shipengine' === $carrier ) {
+				$services[] = $this->shipengine_service;
+			} elseif ( 'shipstation' === $carrier ) {
+				$services[] = $this->shipstation_service;
+			}
+		}
+
+		// Fallback to ShipEngine if nothing enabled.
+		return ! empty( $services ) ? $services : array( $this->shipengine_service );
 	}
 
 	/**

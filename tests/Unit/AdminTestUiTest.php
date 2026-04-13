@@ -85,7 +85,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_outputs_form_on_get_request(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -99,7 +99,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_shows_sandbox_banner_when_active(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -112,7 +112,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_does_not_show_sandbox_banner_when_inactive(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -124,7 +124,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_shows_carrier_name(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipstation' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipstation' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -136,7 +136,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_shows_shipengine_carrier_name(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -148,7 +148,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_includes_add_item_button(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -160,7 +160,7 @@ class AdminTestUiTest extends TestCase {
 	public function test_render_page_includes_javascript_for_dynamic_rows(): void {
 		$_SERVER['REQUEST_METHOD'] = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		ob_start();
 		$this->admin_test_ui->render_page();
@@ -174,7 +174,7 @@ class AdminTestUiTest extends TestCase {
 		$GLOBALS['_test_current_user_can'] = false;
 		$_SERVER['REQUEST_METHOD']         = 'GET';
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 
 		$this->expectException( \RuntimeException::class );
 		$this->admin_test_ui->render_page();
@@ -204,7 +204,7 @@ class AdminTestUiTest extends TestCase {
 		);
 
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->test_pricing_service->method( 'run' )->willReturn( array(
 			'packages'          => array(
 				array(
@@ -254,7 +254,7 @@ class AdminTestUiTest extends TestCase {
 		);
 
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->test_pricing_service->method( 'run' )->willReturn( array(
 			'packages'          => array(),
 			'total_rate_amount' => 0.0,
@@ -283,7 +283,7 @@ class AdminTestUiTest extends TestCase {
 		);
 
 		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
-		$this->settings->method( 'get_carrier' )->willReturn( 'shipengine' );
+		$this->settings->method( 'get_carriers' )->willReturn( array( 'shipengine' ) );
 		$this->test_pricing_service->method( 'run' )->willReturn( array(
 			'packages'          => array(),
 			'total_rate_amount' => 0.0,
