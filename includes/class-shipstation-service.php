@@ -349,9 +349,10 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate = $response['rate'];
+			$rate       = $response['rate'];
+			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 
-			if ( empty( $best_plan ) || (float) $rate['shipmentCost'] < (float) $best_plan['rate_amount'] ) {
+			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
 				$best_plan = array(
 					'package_number' => $package_number,
 					'mode'           => $candidate['mode'],
@@ -359,7 +360,7 @@ class ShipStation_Service {
 					'package_name'   => $candidate['package_name'],
 					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
 					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => (float) $rate['shipmentCost'],
+					'rate_amount'    => $total_cost,
 					'currency'       => 'USD',
 					'weight_oz'      => (float) $candidate['weight_oz'],
 					'dimensions'     => $candidate['dimensions'],
@@ -394,15 +395,16 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate    = $response['rate'];
-			$plans[] = array(
+			$rate       = $response['rate'];
+			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+			$plans[]    = array(
 				'package_number' => $package_number,
 				'mode'           => $candidate['mode'],
 				'package_code'   => $candidate['package_code'],
 				'package_name'   => $candidate['package_name'],
 				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
 				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => (float) $rate['shipmentCost'],
+				'rate_amount'    => $total_cost,
 				'currency'       => 'USD',
 				'weight_oz'      => (float) $candidate['weight_oz'],
 				'dimensions'     => $candidate['dimensions'],
