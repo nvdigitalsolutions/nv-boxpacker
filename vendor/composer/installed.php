@@ -1,6 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
+        'pretty_version' => 'dev-copilot/fix-ups-display-issue',
+        'version' => 'dev-copilot/fix-ups-display-issue',
+        'reference' => '43a3dbef56b3e8915927d8a9341f4921a3538c78',
         'pretty_version' => 'dev-copilot/build-zip-for-testing',
         'version' => 'dev-copilot/build-zip-for-testing',
         'reference' => '78cc0643448324e3d4a6a5c215565c6f9bf41a4f',
@@ -56,6 +59,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
+            'pretty_version' => 'dev-copilot/fix-ups-display-issue',
+            'version' => 'dev-copilot/fix-ups-display-issue',
+            'reference' => '43a3dbef56b3e8915927d8a9341f4921a3538c78',
             'pretty_version' => 'dev-copilot/build-zip-for-testing',
             'version' => 'dev-copilot/build-zip-for-testing',
             'reference' => '78cc0643448324e3d4a6a5c215565c6f9bf41a4f',

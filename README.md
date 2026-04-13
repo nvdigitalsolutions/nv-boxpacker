@@ -158,8 +158,8 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. When enabled, each packed package is rated against all configured boxes; the cartesian product of those candidates produces every possible plan, each offered as a distinct rate with descriptive box-name labels (repeated box names consolidated, e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the single cheapest combined rate is shown. |
-| **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority Mail (Optimized) (2 packages)". Uses proper singular/plural forms. |
+| **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. When enabled, each packed package is rated against all configured boxes; the cartesian product of those candidates produces every possible plan, each offered as a distinct rate. Labels use the carrier-specific service name (e.g. "USPS Priority", "UPS Ground") derived from each plan's carrier and service codes. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the single cheapest combined rate is shown. |
+| **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
 
 ---
 
@@ -233,7 +233,7 @@ The plugin registers a native **WC_Shipping_Method** (`fk_usps_optimizer`) so it
 3. Packed packages are rate-shopped against all enabled carrier APIs; the cheapest rate per package wins.
 4. Rates are cached in a transient for 30 minutes. The cache key includes carrier, service code, box configuration, display settings, item dimensions, and destination — so rates update immediately when any of these change.
 
-When **Show All Options** is enabled, each rate option shows a descriptive label built from the method title and the box names in that combination, such as "USPS Priority Mail (Optimized) — 2× Small Flat Rate Box + Large Flat Rate Box". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first.
+When **Show All Options** is enabled, each rate option shows a descriptive label built from the carrier service name and the box names in that combination, such as "USPS Priority — 2× Small Flat Rate Box + Large Flat Rate Box" or "UPS Ground — 2× Bag". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first. When multiple carriers are configured, each carrier's rates are labeled with their own service name so customers can distinguish between USPS and UPS options.
 
 ---
 
@@ -580,6 +580,15 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.2
+
+- **Fixed:** Checkout shipping labels now display the correct carrier name (e.g. "UPS Ground", "USPS Priority") instead of always showing the method title ("USPS Priority") when multiple carriers are configured via ShipStation service pairs.
+- **New:** `ShipStation_Service::get_service_label()` — derives a human-readable label from the carrier code and service code (e.g. `ups_walleted` + `ups_ground` → "UPS Ground").
+- **New:** `ShipEngine_Service::get_service_label()` — derives a human-readable label from the ShipEngine service code (e.g. `usps_priority_mail` → "USPS Priority").
+- **New:** Plan data returned by both carrier services now includes a `service_label` field, enabling carrier-aware UI throughout the plugin.
+- **Improved:** "Show All Options" labels use the carrier-specific service label per combination instead of the static shipping method title.
+- **Improved:** Single-rate (cheapest option) label uses the carrier service label when all packages share the same carrier, falling back to the method title for mixed-carrier scenarios.
 
 ### 1.2.1
 

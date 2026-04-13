@@ -881,4 +881,28 @@ class ShipEngineServiceTest extends TestCase {
 			'box'          => $this->make_box(),
 		);
 	}
+
+	// -------------------------------------------------------------------------
+	// get_service_label
+	// -------------------------------------------------------------------------
+
+	public function test_get_service_label_priority(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->assertSame( 'USPS Priority', $this->service->get_service_label() );
+	}
+
+	public function test_get_service_label_priority_express(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail_express' );
+		$this->assertSame( 'USPS Priority Express', $this->service->get_service_label() );
+	}
+
+	public function test_get_service_label_first_class(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_first_class_mail' );
+		$this->assertSame( 'USPS First Class', $this->service->get_service_label() );
+	}
+
+	public function test_get_service_label_unknown_code(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'some_future_service' );
+		$this->assertSame( 'USPS Some Future Service', $this->service->get_service_label() );
+	}
 }
