@@ -343,19 +343,13 @@ class Plugin {
 			} elseif ( 'shipstation' === $carrier ) {
 				$pairs = $this->settings->get_shipstation_service_pairs();
 
-				// First pair uses the existing singleton instance.
-				if ( ! empty( $pairs ) ) {
-					$services[] = new ShipStation_Service(
-						$this->settings,
-						$pairs[0]['carrier_code'],
-						$pairs[0]['service_code']
-					);
-				} else {
+				if ( empty( $pairs ) ) {
+					// No pairs configured; use the default singleton.
 					$services[] = $this->shipstation_service;
 				}
 
-				// Additional pairs get their own instances.
-				foreach ( array_slice( $pairs, 1 ) as $pair ) {
+				// Create one instance per pair with explicit overrides.
+				foreach ( $pairs as $pair ) {
 					$services[] = new ShipStation_Service(
 						$this->settings,
 						$pair['carrier_code'],
