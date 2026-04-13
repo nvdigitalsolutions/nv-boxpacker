@@ -15,10 +15,10 @@ A WooCommerce plugin that optimizes USPS Priority Mail shipping for FunnelKit or
    - [Production](#production)
    - [Development](#development)
 4. [Configuration](#configuration)
-   - [Shipping Carrier API](#shipping-carrier-api)
+   - [Enabled Carrier APIs](#enabled-carrier-apis)
    - [ShipEngine Settings](#shipengine-settings)
    - [ShipStation Settings](#shipstation-settings)
-   - [USPS Service Code](#usps-service-code)
+   - [Service Codes](#service-codes)
    - [Display Settings](#display-settings)
    - [Test ShipEngine Connection](#test-shipengine-connection)
    - [Sandbox Mode](#sandbox-mode)
@@ -101,13 +101,13 @@ composer phpcs  # PHP CodeSniffer (WPCS)
 
 Navigate to **WooCommerce → USPS Optimizer** to manage all plugin settings.
 
-### Shipping Carrier API
+### Enabled Carrier APIs
 
 | Setting | Values | Default |
 |---|---|---|
-| **Shipping Carrier API** | `ShipEngine` or `ShipStation` | ShipEngine |
+| **Enabled Carrier APIs** | `ShipEngine`, `ShipStation` (checkboxes) | ShipEngine |
 
-Select which carrier API to use for live rate requests. Only one is active at a time; the other's credentials are saved but ignored. Switching the dropdown immediately shows or hides the relevant credential fields without saving the page.
+Enable one or more carrier APIs for live rate requests. When multiple carriers are enabled, the plugin fetches rates from all of them and uses the cheapest option. Checking or unchecking a carrier immediately shows or hides its credential fields without saving the page.
 
 ---
 
@@ -117,6 +117,7 @@ Select which carrier API to use for live rate requests. Only one is active at a 
 |---|---|
 | **ShipEngine API Key** | API key from [app.shipengine.com](https://app.shipengine.com) → API Management. |
 | **ShipEngine Carrier ID** | The carrier ID for your USPS account (e.g. `se-123456`). Found in **Carriers** on the ShipEngine dashboard. |
+| **ShipEngine Service Code** | Service code sent to ShipEngine for rate requests (e.g. `usps_priority_mail`). Default: `usps_priority_mail`. |
 
 ShipEngine uses a header-based `API-Key` authentication scheme and calls the `POST /v1/rates` endpoint.
 
@@ -128,7 +129,9 @@ ShipEngine uses a header-based `API-Key` authentication scheme and calls the `PO
 |---|---|
 | **ShipStation API Key** | API key from ShipStation → Account Settings → API Settings. |
 | **ShipStation API Secret** | API secret from the same page. |
-| **ShipStation Carrier Code** | Carrier code to rate against (e.g. `stamps_com`, `fedex`). Default: `stamps_com`. |
+| **ShipStation Carrier Code** | Primary carrier code to rate against (e.g. `stamps_com`, `ups_walleted`). Default: `stamps_com`. |
+| **ShipStation Service Code** | Service code sent to ShipStation for rate requests (e.g. `usps_priority_mail`). Default: `usps_priority_mail`. Leave empty to match any service from the carrier. |
+| **ShipStation Additional Services** | Optional JSON array of extra carrier+service pairs to rate-shop alongside the primary pair. Each entry needs `carrier_code` and `service_code`. Example: `[{"carrier_code":"ups_walleted","service_code":"ups_ground"}]`. Rates from all pairs are compared and the cheapest wins. |
 
 ShipStation uses HTTP Basic Authentication (`API Key:API Secret`) and calls the `GET /shipments/getrates` endpoint.
 
@@ -136,13 +139,16 @@ ShipStation uses HTTP Basic Authentication (`API Key:API Secret`) and calls the 
 
 ---
 
-### USPS Service Code
+### Service Codes
 
-| Setting | Description | Default |
+Each carrier now has its own service code setting. This replaces the previous shared **USPS Service Code** field.
+
+| Setting | Carrier | Default |
 |---|---|---|
-| **USPS Service Code** | The USPS service code sent to the carrier API for rate requests. Supports flat-rate and cubic pricing. | `usps_priority_mail` |
+| **ShipEngine Service Code** | ShipEngine | `usps_priority_mail` |
+| **ShipStation Service Code** | ShipStation | `usps_priority_mail` |
 
-Common service codes include `usps_priority_mail`, `usps_first_class_mail`, and `usps_ground_advantage`. The value applies to both ShipEngine and ShipStation.
+Common service codes include `usps_priority_mail`, `usps_first_class_mail`, and `usps_ground_advantage`. The legacy shared `service_code` setting is still respected as a fallback when per-carrier codes are empty (backward compatibility).
 
 ---
 
@@ -224,7 +230,7 @@ The plugin registers a native **WC_Shipping_Method** (`fk_usps_optimizer`) so it
 
 1. Cart items are extracted and converted to the item format expected by `Packing_Service::pack_items()`.
 2. Items without WooCommerce product dimensions (length, width, or height not set) are detected and packed individually via the fallback packer — one item per box. This prevents the BoxPacker default of 1×1×1 inch dimensions from producing incorrect packing results.
-3. Packed packages are rate-shopped against the active carrier API.
+3. Packed packages are rate-shopped against all enabled carrier APIs; the cheapest rate per package wins.
 4. Rates are cached in a transient for 30 minutes. The cache key includes carrier, service code, box configuration, display settings, item dimensions, and destination — so rates update immediately when any of these change.
 
 When **Show All Options** is enabled, each rate option shows a descriptive label built from the method title and the box names in that combination, such as "USPS Priority Mail (Optimized) — 2× Small Flat Rate Box + Large Flat Rate Box". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first.
@@ -237,7 +243,7 @@ On `woocommerce_checkout_order_processed` (priority 20), the plugin:
 
 1. Collects shippable items via `Packing_Service::pack_order()`.
 2. Packs them using BoxPacker (or fallback).
-3. Rate-shops every packed package with the active carrier service.
+3. Rate-shops every packed package across all enabled carrier services and picks the cheapest rate.
 4. Saves the result to the order meta key `_fk_usps_shipping_plan` as a serialized PHP array.
 5. Displays the plan on the order detail page under **USPS Shipping Plan**.
 
@@ -286,7 +292,7 @@ Navigate to **WooCommerce → USPS Test Pricing** to use the test pricing tool.
 2. Enter the destination address.
 3. Click **Run Test Pricing**.
 
-The plugin packs the items and fetches live rates from the active carrier. Results are displayed per package and include:
+The plugin packs the items and fetches live rates from all enabled carriers. Results are displayed per package and include:
 
 - Estimated rate (formatted as WooCommerce price)
 - Service code
@@ -312,13 +318,13 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 
 | Class | File | Responsibility |
 |---|---|---|
-| `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, registers the WooCommerce shipping method, and wires `woocommerce_checkout_order_processed`. |
-| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting (including `is_show_all_options_enabled()`, `is_show_package_count_enabled()`, and `get_service_code()`). Renders the settings admin page. |
-| `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live USPS rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via the active carrier, and handles "Show All Options" via cartesian product of rated box candidates per package, with rate caching. |
+| `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, registers the WooCommerce shipping method, and wires `woocommerce_checkout_order_processed`. Compares rates across all enabled carriers via `get_carrier_services()`. |
+| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting including `get_carriers()`, per-carrier service code getters (`get_shipengine_service_code()`, `get_shipstation_service_code()`), and `get_shipstation_service_pairs()`. Renders the settings admin page. |
+| `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live shipping rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via all enabled carrier services, and handles "Show All Options" via cartesian product of rated box candidates per package, with rate caching. |
 | `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. `pack_items()` accepts an optional `$boxes` parameter to override the configured box definitions. Items without dimensions are separated and packed individually via fallback. Packed package dimensions use inner box dimensions. |
 | `ShipEngine_Service` | `includes/class-shipengine-service.php` | Rate-shops packed packages against the ShipEngine v1 API (`POST /v1/rates`). Supports both order-based and address-based rate requests. |
-| `ShipStation_Service` | `includes/class-shipstation-service.php` | Rate-shops packed packages against the ShipStation API (`GET /shipments/getrates`) using HTTP Basic Auth. Mirrors the ShipEngine interface. Prepends `[SANDBOX]` to log messages when sandbox mode is active. |
-| `Test_Pricing_Service` | `includes/class-test-pricing-service.php` | Accepts raw form items, expands them by quantity, packs them, and delegates to the active carrier service. Returns a results array consumed by `Admin_Test_UI`. |
+| `ShipStation_Service` | `includes/class-shipstation-service.php` | Rate-shops packed packages against the ShipStation API (`GET /shipments/getrates`) using HTTP Basic Auth. Mirrors the ShipEngine interface. Supports carrier/service code overrides for multi-pair rate shopping. Prepends `[SANDBOX]` to log messages when sandbox mode is active. |
+| `Test_Pricing_Service` | `includes/class-test-pricing-service.php` | Accepts raw form items, expands them by quantity, packs them, and delegates to all enabled carrier services. Returns a results array consumed by `Admin_Test_UI`. |
 | `Order_Plan_Service` | `includes/class-order-plan-service.php` | Reads and writes the `_fk_usps_shipping_plan` order meta. |
 | `PirateShip_Export` | `includes/class-pirateship-export.php` | Generates PirateShip CSV rows from package plans and streams the CSV download. |
 | `Admin_UI` | `includes/class-admin-ui.php` | Renders the shipping plan on the WooCommerce order detail page. |
@@ -348,14 +354,18 @@ All filters follow the naming convention `fk_usps_optimizer_{name}`.
 
 | Filter | Default | Description |
 |---|---|---|
-| `fk_usps_optimizer_carrier` | `'shipengine'` | Override the active carrier service. Return `'shipengine'` or `'shipstation'`. |
+| `fk_usps_optimizer_carriers` | `['shipengine']` | Override the array of enabled carrier identifiers. Return an array containing `'shipengine'` and/or `'shipstation'`. |
+| `fk_usps_optimizer_carrier` | `'shipengine'` | Override the primary carrier (first enabled). Return `'shipengine'` or `'shipstation'`. Kept for backward compatibility. |
 | `fk_usps_optimizer_boxes` | _(saved JSON)_ | Modify or replace the array of box definitions at runtime before packing. |
 | `fk_usps_optimizer_ship_from_address` | _(settings value)_ | Override the ship-from address array. Useful for multi-warehouse setups. |
 | `fk_usps_optimizer_shipengine_api_key` | _(settings value)_ | Override the ShipEngine API key at runtime (e.g. from environment variable). |
 | `fk_usps_optimizer_shipengine_carrier_id` | _(settings value)_ | Override the ShipEngine carrier ID at runtime. |
+| `fk_usps_optimizer_shipengine_service_code` | `'usps_priority_mail'` | Override the ShipEngine service code at runtime. |
 | `fk_usps_optimizer_shipstation_api_key` | _(settings value)_ | Override the ShipStation API key at runtime. |
 | `fk_usps_optimizer_shipstation_api_secret` | _(settings value)_ | Override the ShipStation API secret at runtime. |
 | `fk_usps_optimizer_shipstation_carrier_code` | `'stamps_com'` | Override the ShipStation carrier code at runtime. |
+| `fk_usps_optimizer_shipstation_service_code` | `'usps_priority_mail'` | Override the ShipStation service code at runtime. |
+| `fk_usps_optimizer_shipstation_service_pairs` | _(primary + additional)_ | Override the array of ShipStation carrier+service pairs used for rate shopping. Each entry is an associative array with `carrier_code` and `service_code`. |
 | `fk_usps_optimizer_shipstation_api_url` | `'https://ssapi.shipstation.com'` | Override the ShipStation API base URL (useful for mocking in tests). |
 
 **Example — load credentials from environment variables:**
@@ -482,11 +492,12 @@ Tests live in `tests/Unit/`. A `tests/bootstrap.php` file provides WordPress and
 
 | File | Coverage |
 |---|---|
-| `tests/Unit/SettingsTest.php` | All getters, sanitization, defaults, `get_boxes()`. |
+| `tests/Unit/SettingsTest.php` | All getters, sanitization, defaults, `get_boxes()`, multi-carrier settings, per-carrier service codes, ShipStation service pairs. |
 | `tests/Unit/PackingServiceTest.php` | BoxPacker path, fallback path, `pack_items()`, unmeasured item handling, inner-dimensions packing, multi-package scenarios. |
-| `tests/Unit/ShipEngineServiceTest.php` | Plan building, rate parsing, credential guards, `build_all_test_package_plans()`. |
-| `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection, `serviceCode`/`packageCode` in requests, `build_all_test_package_plans()`. |
-| `tests/Unit/TestPricingServiceTest.php` | Item expansion, carrier routing, warning generation. |
+| `tests/Unit/ShipEngineServiceTest.php` | Plan building, rate parsing, credential guards, `build_all_test_package_plans()`, per-carrier service code. |
+| `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection, `serviceCode`/`packageCode` in requests, `build_all_test_package_plans()`, carrier/service code overrides. |
+| `tests/Unit/PluginProcessOrderTest.php` | Multi-carrier order processing, cheapest-rate selection across carriers, single-carrier fallback. |
+| `tests/Unit/TestPricingServiceTest.php` | Item expansion, multi-carrier routing, warning generation. |
 | `tests/Unit/AdminTestUiTest.php` | Page rendering, nonce flow, form repopulation, results table, sandbox badge. |
 | `tests/Unit/ShippingMethodTest.php` | Rate calculation, caching, cache key composition (carrier, boxes, display settings, service code), show-package-count labels. |
 
@@ -530,7 +541,7 @@ The PHPCS configuration lives in `phpcs.xml.dist`. The `manage_woocommerce` capa
 fk-usps-optimizer/
 ├── assets/
 │   └── js/
-│       └── settings.js             # Carrier field toggle + AJAX test connection
+│       └── settings.js             # Carrier checkbox toggle + AJAX test connection
 ├── bin/
 │   └── build.sh                    # Production build script
 ├── includes/
@@ -569,6 +580,20 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.1
+
+- **New:** Multi-carrier support — enable both ShipEngine and ShipStation simultaneously. The plugin compares rates from all enabled carriers and selects the cheapest option per package.
+- **New:** Per-carrier service codes — **ShipEngine Service Code** and **ShipStation Service Code** replace the shared USPS Service Code setting. The legacy setting is still respected as a fallback for backward compatibility.
+- **New:** **ShipStation Additional Services** — configure multiple carrier+service pairs (e.g. UPS Ground + USPS Priority) as a JSON array. All pairs are rate-shopped and the cheapest rate wins.
+- **New:** `ShipStation_Service` now accepts optional carrier/service code overrides in the constructor, enabling per-pair rate shopping without separate settings.
+- **New:** `Plugin::get_carrier_services()` and `Test_Pricing_Service::get_carrier_services()` return all enabled carrier service instances for multi-carrier rate comparison.
+- **New:** `Settings::get_carriers()` returns an array of all enabled carrier identifiers (supports comma-separated storage and legacy single-value strings).
+- **New:** `Settings::get_shipstation_service_pairs()` returns the primary ShipStation carrier+service pair plus any additional pairs from the JSON config.
+- **New:** WordPress filters: `fk_usps_optimizer_carriers`, `fk_usps_optimizer_shipengine_service_code`, `fk_usps_optimizer_shipstation_service_code`, `fk_usps_optimizer_shipstation_service_pairs`.
+- **Changed:** Carrier selection on the settings page is now a set of checkboxes instead of a dropdown, allowing multiple carriers to be enabled at once.
+- **Changed:** Settings page JS (`settings.js`) updated to toggle carrier credential fields based on checkbox state instead of dropdown value.
+- **Improved:** Order processing, shipping method, and test pricing service all compare rates across all enabled carriers and pick the cheapest per package.
 
 ### 1.2.0
 

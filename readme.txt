@@ -4,11 +4,11 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Optimize WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat-rate boxes using ShipEngine or ShipStation.
+Optimize WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat-rate boxes using ShipEngine, ShipStation, or both simultaneously.
 
 == Description ==
 
@@ -17,12 +17,12 @@ This plugin prepares USPS Priority shipping plans for WooCommerce orders by:
 * collecting shippable order items,
 * packing them with `dvdoug/boxpacker` when available (falls back to a single-item-per-box strategy otherwise),
 * comparing custom cubic boxes and USPS flat-rate boxes,
-* requesting USPS Priority rates from either **ShipEngine** or **ShipStation**,
+* requesting USPS Priority rates from **ShipEngine**, **ShipStation**, or both — comparing rates across all enabled carriers to find the cheapest option,
 * storing a package-by-package plan on the order for admin review and PirateShip export,
 * providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order, and
 * registering a native **WooCommerce Shipping Method** so it appears in shipping zones and provides live optimized rates during cart and checkout.
 
-When selecting a carrier on the settings page, only the relevant credential fields are shown — the other carrier's fields are hidden automatically. A **Test Connection** button lets you verify your ShipEngine API key and carrier ID inline, without reloading the page.
+When selecting carriers on the settings page, check one or both carrier APIs — the relevant credential fields are shown automatically. A **Test Connection** button lets you verify your ShipEngine API key and carrier ID inline, without reloading the page.
 
 = Shipping Zones =
 
@@ -34,7 +34,7 @@ The plugin registers as a WooCommerce shipping method that can be added to any s
 
 **Show Package Count** — When enabled, the package count is appended to each shipping label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural handling.
 
-**USPS Service Code** — Configure which USPS service code is sent to the carrier API (default: `usps_priority_mail`). This applies to both ShipEngine and ShipStation.
+**USPS Service Code** — Each carrier now has its own service code setting (**ShipEngine Service Code** and **ShipStation Service Code**). Configure which USPS service code is sent to each carrier API (default: `usps_priority_mail`).
 
 = Carriers =
 
@@ -42,7 +42,7 @@ The plugin registers as a WooCommerce shipping method that can be added to any s
 
 **ShipStation** — uses the `GET /shipments/getrates` endpoint with HTTP Basic Authentication (API Key : API Secret). Supports any carrier connected to your ShipStation account (e.g. `stamps_com`).
 
-You can switch between carriers any time from the settings page without losing the other carrier's credentials.
+You can enable both carriers simultaneously from the settings page. When multiple carriers are enabled, rates from all of them are compared and the cheapest option is used. Credentials for each carrier are saved independently.
 
 = Sandbox Mode =
 
@@ -108,7 +108,7 @@ Navigate to **WooCommerce → Settings → Shipping**, select a zone, click **Ad
 
 = Does it support carriers other than USPS? =
 
-The plugin is optimized for USPS Priority Mail (cubic and flat-rate). When using ShipStation you can configure any carrier code (e.g. `stamps_com`, `fedex`), but only cubic/flat-rate logic and cubic eligibility checks apply.
+The plugin is optimized for USPS Priority Mail (cubic and flat-rate). When using ShipStation you can configure any carrier code (e.g. `stamps_com`, `ups_walleted`), and you can set up multiple carrier+service pairs to rate-shop across different carriers (e.g. UPS Ground + USPS Priority). Only cubic/flat-rate logic and cubic eligibility checks apply to USPS-specific features.
 
 = Does it buy labels? =
 
@@ -147,6 +147,13 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.1 =
+* New: Multi-carrier support — enable both ShipEngine and ShipStation simultaneously; the plugin compares rates across all enabled carriers and uses the cheapest.
+* New: Per-carrier service codes — separate ShipEngine Service Code and ShipStation Service Code settings replace the shared USPS Service Code (legacy setting kept for backward compatibility).
+* New: ShipStation Additional Services — configure multiple carrier+service pairs (e.g. UPS Ground + USPS Priority) as a JSON array for cross-carrier rate shopping.
+* Changed: Carrier selection is now checkboxes instead of a dropdown, allowing multiple carriers at once.
+* Improved: Order processing, shipping zones, and test pricing all compare rates across all enabled carriers per package.
 
 = 1.2.0 =
 * New: WooCommerce Shipping Zones integration — register as a native WC_Shipping_Method for live rates during cart and checkout.
