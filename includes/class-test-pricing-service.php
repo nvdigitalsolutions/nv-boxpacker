@@ -203,6 +203,11 @@ class Test_Pricing_Service {
 	/**
 	 * Return all carrier services enabled in settings.
 	 *
+	 * When ShipStation is enabled and additional carrier+service pairs are
+	 * configured beyond the primary pair, extra ShipStation_Service instances
+	 * are created per additional pair.  The primary pair uses the injected
+	 * ShipStation_Service instance (so mocks work in tests).
+	 *
 	 * @return array<ShipEngine_Service|ShipStation_Service> Active carrier services.
 	 */
 	protected function get_carrier_services(): array {
@@ -213,7 +218,20 @@ class Test_Pricing_Service {
 			if ( 'shipengine' === $carrier ) {
 				$services[] = $this->shipengine_service;
 			} elseif ( 'shipstation' === $carrier ) {
+				// Use the injected instance for the primary pair.
 				$services[] = $this->shipstation_service;
+
+				// Create extra instances for any additional pairs.
+				$pairs   = $this->settings->get_shipstation_service_pairs();
+				$primary = ! empty( $pairs ) ? $pairs[0] : array();
+
+				foreach ( array_slice( $pairs, 1 ) as $pair ) {
+					$services[] = new ShipStation_Service(
+						$this->settings,
+						$pair['carrier_code'],
+						$pair['service_code']
+					);
+				}
 			}
 		}
 

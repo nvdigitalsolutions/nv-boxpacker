@@ -36,12 +36,56 @@ class ShipStation_Service {
 	protected $settings;
 
 	/**
+	 * Optional carrier code override.
+	 *
+	 * When non-empty, this value is used instead of the Settings getter.
+	 *
+	 * @var string
+	 */
+	protected $carrier_code_override = '';
+
+	/**
+	 * Optional service code override.
+	 *
+	 * When non-empty, this value is used instead of the Settings getter.
+	 *
+	 * @var string
+	 */
+	protected $service_code_override = '';
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings Plugin settings instance.
+	 * @param Settings $settings     Plugin settings instance.
+	 * @param string   $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
+	 * @param string   $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
 	 */
-	public function __construct( Settings $settings ) {
-		$this->settings = $settings;
+	public function __construct( Settings $settings, string $carrier_code = '', string $service_code = '' ) {
+		$this->settings              = $settings;
+		$this->carrier_code_override = $carrier_code;
+		$this->service_code_override = $service_code;
+	}
+
+	/**
+	 * Get the effective carrier code, preferring the override.
+	 *
+	 * @return string Carrier code.
+	 */
+	public function get_carrier_code(): string {
+		return '' !== $this->carrier_code_override
+			? $this->carrier_code_override
+			: $this->settings->get_shipstation_carrier_code();
+	}
+
+	/**
+	 * Get the effective service code, preferring the override.
+	 *
+	 * @return string Service code.
+	 */
+	public function get_service_code(): string {
+		return '' !== $this->service_code_override
+			? $this->service_code_override
+			: $this->settings->get_shipstation_service_code();
 	}
 
 	// -------------------------------------------------------------------------
@@ -171,7 +215,7 @@ class ShipStation_Service {
 		}
 
 		// Validate the configured carrier code against the account's carriers.
-		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$carrier_code = $this->get_carrier_code();
 		$body         = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 		$carriers     = is_array( $body ) ? $body : array();
 
@@ -226,7 +270,7 @@ class ShipStation_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_shipstation_service_code();
+		$service_code = $this->get_service_code();
 		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -270,7 +314,7 @@ class ShipStation_Service {
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_shipstation_service_code();
+		$service_code = $this->get_service_code();
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -383,7 +427,7 @@ class ShipStation_Service {
 	protected function request_rate( array $ship_to, array $candidate, int $order_id = 0 ): array {
 		$api_key      = $this->settings->get_shipstation_api_key();
 		$api_secret   = $this->settings->get_shipstation_api_secret();
-		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$carrier_code = $this->get_carrier_code();
 
 		if ( '' === $api_key || '' === $api_secret ) {
 			$this->log( 'Missing ShipStation credentials.', array( 'order_id' => $order_id ) );
@@ -399,7 +443,7 @@ class ShipStation_Service {
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => $this->settings->get_shipstation_service_code(),
+			'serviceCode'    => $this->get_service_code(),
 			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',

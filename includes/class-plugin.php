@@ -325,6 +325,12 @@ class Plugin {
 	/**
 	 * Return all carrier services enabled in settings.
 	 *
+	 * When ShipStation is enabled and multiple carrier+service pairs are
+	 * configured, one ShipStation_Service instance is created per pair so
+	 * that rates from all pairs (e.g. UPS + USPS) are compared.
+	 * The primary pair uses the singleton instance; additional pairs get
+	 * new instances with carrier/service code overrides.
+	 *
 	 * @return array<ShipEngine_Service|ShipStation_Service> Active carrier services.
 	 */
 	public function get_carrier_services(): array {
@@ -335,7 +341,27 @@ class Plugin {
 			if ( 'shipengine' === $carrier ) {
 				$services[] = $this->shipengine_service;
 			} elseif ( 'shipstation' === $carrier ) {
-				$services[] = $this->shipstation_service;
+				$pairs = $this->settings->get_shipstation_service_pairs();
+
+				// First pair uses the existing singleton instance.
+				if ( ! empty( $pairs ) ) {
+					$services[] = new ShipStation_Service(
+						$this->settings,
+						$pairs[0]['carrier_code'],
+						$pairs[0]['service_code']
+					);
+				} else {
+					$services[] = $this->shipstation_service;
+				}
+
+				// Additional pairs get their own instances.
+				foreach ( array_slice( $pairs, 1 ) as $pair ) {
+					$services[] = new ShipStation_Service(
+						$this->settings,
+						$pair['carrier_code'],
+						$pair['service_code']
+					);
+				}
 			}
 		}
 

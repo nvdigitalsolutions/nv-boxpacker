@@ -861,4 +861,36 @@ class ShipStationServiceTest extends TestCase {
 			'box'          => $this->make_box(),
 		);
 	}
+
+	// -------------------------------------------------------------------------
+	// Constructor overrides for carrier_code / service_code
+	// -------------------------------------------------------------------------
+
+	public function test_get_carrier_code_uses_override_when_provided(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', '' );
+		$this->assertSame( 'ups_walleted', $service->get_carrier_code() );
+	}
+
+	public function test_get_carrier_code_falls_back_to_settings(): void {
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$service = new ShipStation_Service( $this->settings );
+		$this->assertSame( 'stamps_com', $service->get_carrier_code() );
+	}
+
+	public function test_get_service_code_uses_override_when_provided(): void {
+		$service = new ShipStation_Service( $this->settings, '', 'ups_ground' );
+		$this->assertSame( 'ups_ground', $service->get_service_code() );
+	}
+
+	public function test_get_service_code_falls_back_to_settings(): void {
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$service = new ShipStation_Service( $this->settings );
+		$this->assertSame( 'usps_priority_mail', $service->get_service_code() );
+	}
+
+	public function test_constructor_with_both_overrides(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'ups_ground' );
+		$this->assertSame( 'ups_walleted', $service->get_carrier_code() );
+		$this->assertSame( 'ups_ground', $service->get_service_code() );
+	}
 }

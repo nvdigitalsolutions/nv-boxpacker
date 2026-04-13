@@ -707,6 +707,142 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// get_shipstation_service_pairs
+	// -------------------------------------------------------------------------
+
+	public function test_get_shipstation_service_pairs_returns_primary_pair_by_default(): void {
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		$this->assertCount( 1, $pairs );
+		$this->assertSame( 'stamps_com', $pairs[0]['carrier_code'] );
+		$this->assertSame( 'usps_priority_mail', $pairs[0]['service_code'] );
+	}
+
+	public function test_get_shipstation_service_pairs_includes_additional_services(): void {
+		$additional = wp_json_encode( array(
+			array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+		) );
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipstation_carrier_code'  => 'stamps_com',
+			'shipstation_service_code'  => 'usps_priority_mail',
+			'shipstation_services_json' => $additional,
+		);
+
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		$this->assertCount( 2, $pairs );
+		$this->assertSame( 'stamps_com', $pairs[0]['carrier_code'] );
+		$this->assertSame( 'ups_walleted', $pairs[1]['carrier_code'] );
+		$this->assertSame( 'ups_ground', $pairs[1]['service_code'] );
+	}
+
+	public function test_get_shipstation_service_pairs_deduplicates_primary(): void {
+		$additional = wp_json_encode( array(
+			array( 'carrier_code' => 'stamps_com', 'service_code' => 'usps_priority_mail' ),
+			array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+		) );
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipstation_carrier_code'  => 'stamps_com',
+			'shipstation_service_code'  => 'usps_priority_mail',
+			'shipstation_services_json' => $additional,
+		);
+
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		// The duplicate primary pair should be skipped.
+		$this->assertCount( 2, $pairs );
+		$this->assertSame( 'stamps_com', $pairs[0]['carrier_code'] );
+		$this->assertSame( 'ups_walleted', $pairs[1]['carrier_code'] );
+	}
+
+	public function test_get_shipstation_service_pairs_handles_empty_json(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipstation_carrier_code'  => 'stamps_com',
+			'shipstation_service_code'  => 'usps_priority_mail',
+			'shipstation_services_json' => '',
+		);
+
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		$this->assertCount( 1, $pairs );
+	}
+
+	public function test_get_shipstation_service_pairs_skips_entries_without_carrier_code(): void {
+		$additional = wp_json_encode( array(
+			array( 'carrier_code' => '', 'service_code' => 'ups_ground' ),
+			array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+		) );
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipstation_services_json' => $additional,
+		);
+
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		// Primary pair + 1 valid additional pair (the one without carrier_code is skipped).
+		$this->assertCount( 2, $pairs );
+		$this->assertSame( 'ups_walleted', $pairs[1]['carrier_code'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// sanitize_shipstation_services_json
+	// -------------------------------------------------------------------------
+
+	public function test_sanitize_shipstation_services_json_valid(): void {
+		$input  = $this->empty_settings_input();
+		$input['shipstation_services_json'] = wp_json_encode( array(
+			array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+		) );
+		$result = $this->settings->sanitize_settings( $input );
+
+		$decoded = json_decode( $result['shipstation_services_json'], true );
+		$this->assertIsArray( $decoded );
+		$this->assertCount( 1, $decoded );
+		$this->assertSame( 'ups_walleted', $decoded[0]['carrier_code'] );
+	}
+
+	public function test_sanitize_shipstation_services_json_empty_returns_empty_string(): void {
+		$input  = $this->empty_settings_input();
+		$input['shipstation_services_json'] = '';
+		$result = $this->settings->sanitize_settings( $input );
+
+		$this->assertSame( '', $result['shipstation_services_json'] );
+	}
+
+	public function test_sanitize_shipstation_services_json_invalid_returns_empty_string(): void {
+		$input  = $this->empty_settings_input();
+		$input['shipstation_services_json'] = 'not-valid-json';
+		$result = $this->settings->sanitize_settings( $input );
+
+		$this->assertSame( '', $result['shipstation_services_json'] );
+	}
+
+	public function test_sanitize_shipstation_services_json_skips_entries_without_carrier_code(): void {
+		$input  = $this->empty_settings_input();
+		$input['shipstation_services_json'] = wp_json_encode( array(
+			array( 'carrier_code' => '', 'service_code' => 'ups_ground' ),
+			array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+		) );
+		$result = $this->settings->sanitize_settings( $input );
+
+		$decoded = json_decode( $result['shipstation_services_json'], true );
+		$this->assertCount( 1, $decoded );
+		$this->assertSame( 'ups_walleted', $decoded[0]['carrier_code'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// render_field — shipstation_services_json
+	// -------------------------------------------------------------------------
+
+	public function test_render_field_outputs_textarea_for_shipstation_services_json(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'shipstation_services_json' ) );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( '<textarea', $output );
+		$this->assertStringContainsString( 'shipstation_services_json', $output );
+	}
+
+	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
 
