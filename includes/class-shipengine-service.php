@@ -32,6 +32,31 @@ class ShipEngine_Service {
 	}
 
 	/**
+	 * Derive a human-readable service label from the ShipEngine service code.
+	 *
+	 * ShipEngine carriers configured in this plugin are always USPS-based,
+	 * so the label is derived from the service code alone.
+	 *
+	 * @return string Human-readable label such as "USPS Priority".
+	 */
+	public function get_service_label(): string {
+		$service_code = $this->settings->get_shipengine_service_code();
+
+		$service_names = array(
+			'usps_priority_mail'         => 'Priority',
+			'usps_priority_mail_express' => 'Priority Express',
+			'usps_first_class_mail'      => 'First Class',
+			'usps_parcel_select'         => 'Parcel Select',
+			'usps_media_mail'            => 'Media Mail',
+		);
+
+		$service_name = $service_names[ $service_code ]
+			?? ucwords( str_replace( '_', ' ', $service_code ) );
+
+		return 'USPS ' . $service_name;
+	}
+
+	/**
 	 * Build the best shipping package plan for a packed package.
 	 *
 	 * @param \WC_Order $order          The order.
@@ -108,6 +133,7 @@ class ShipEngine_Service {
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
 					'service_code'   => $service_code,
+					'service_label'  => $this->get_service_label(),
 					'rate_amount'    => (float) $rate['shipping_amount']['amount'],
 					'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -151,6 +177,7 @@ class ShipEngine_Service {
 				'package_code'   => $candidate['package_code'],
 				'package_name'   => $candidate['package_name'],
 				'service_code'   => $service_code,
+				'service_label'  => $this->get_service_label(),
 				'rate_amount'    => (float) $rate['shipping_amount']['amount'],
 				'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 				'weight_oz'      => (float) $candidate['weight_oz'],

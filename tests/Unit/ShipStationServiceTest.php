@@ -893,4 +893,38 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'ups_walleted', $service->get_carrier_code() );
 		$this->assertSame( 'ups_ground', $service->get_service_code() );
 	}
+
+	// -------------------------------------------------------------------------
+	// get_service_label
+	// -------------------------------------------------------------------------
+
+	public function test_get_service_label_usps_priority(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_priority_mail' );
+		$this->assertSame( 'USPS Priority', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_ups_ground(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'ups_ground' );
+		$this->assertSame( 'UPS Ground', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_ups_next_day_air(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups', 'ups_next_day_air' );
+		$this->assertSame( 'UPS Next Day Air', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_fedex(): void {
+		$service = new ShipStation_Service( $this->settings, 'fedex', 'fedex_ground' );
+		$this->assertSame( 'FedEx Fedex Ground', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_unknown_carrier(): void {
+		$service = new ShipStation_Service( $this->settings, 'some_new_carrier', 'some_new_service' );
+		$this->assertSame( 'Some New Carrier Some New Service', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_endicia_usps(): void {
+		$service = new ShipStation_Service( $this->settings, 'endicia', 'usps_first_class_mail' );
+		$this->assertSame( 'USPS First Class', $service->get_service_label() );
+	}
 }

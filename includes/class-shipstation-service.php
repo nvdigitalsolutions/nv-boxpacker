@@ -88,6 +88,51 @@ class ShipStation_Service {
 			: $this->settings->get_shipstation_service_code();
 	}
 
+	/**
+	 * Derive a human-readable service label from the carrier and service codes.
+	 *
+	 * Maps well-known carrier codes (e.g. 'stamps_com', 'ups_walleted') and
+	 * service codes (e.g. 'usps_priority_mail', 'ups_ground') to friendly
+	 * names like "USPS Priority" or "UPS Ground".
+	 *
+	 * @return string Human-readable label such as "USPS Priority" or "UPS Ground".
+	 */
+	public function get_service_label(): string {
+		$carrier_code = $this->get_carrier_code();
+		$service_code = $this->get_service_code();
+
+		$carrier_names = array(
+			'stamps_com'   => 'USPS',
+			'usps'         => 'USPS',
+			'endicia'      => 'USPS',
+			'ups_walleted' => 'UPS',
+			'ups'          => 'UPS',
+			'fedex'        => 'FedEx',
+			'dhl_express'  => 'DHL Express',
+		);
+
+		$service_names = array(
+			'usps_priority_mail'         => 'Priority',
+			'usps_priority_mail_express' => 'Priority Express',
+			'usps_first_class_mail'      => 'First Class',
+			'usps_parcel_select'         => 'Parcel Select',
+			'usps_media_mail'            => 'Media Mail',
+			'ups_ground'                 => 'Ground',
+			'ups_next_day_air'           => 'Next Day Air',
+			'ups_next_day_air_saver'     => 'Next Day Air Saver',
+			'ups_2nd_day_air'            => '2nd Day Air',
+			'ups_3_day_select'           => '3 Day Select',
+			'ups_ground_saver'           => 'Ground Saver',
+		);
+
+		$carrier_name = $carrier_names[ $carrier_code ]
+			?? ucwords( str_replace( '_', ' ', $carrier_code ) );
+		$service_name = $service_names[ $service_code ]
+			?? ucwords( str_replace( '_', ' ', $service_code ) );
+
+		return $carrier_name . ' ' . $service_name;
+	}
+
 	// -------------------------------------------------------------------------
 	// Public entry points
 	// -------------------------------------------------------------------------
@@ -289,6 +334,7 @@ class ShipStation_Service {
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
 					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
+					'service_label'  => $this->get_service_label(),
 					'rate_amount'    => (float) $rate['shipmentCost'],
 					'currency'       => 'USD',
 					'weight_oz'      => (float) $candidate['weight_oz'],
@@ -331,6 +377,7 @@ class ShipStation_Service {
 				'package_code'   => $candidate['package_code'],
 				'package_name'   => $candidate['package_name'],
 				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
+				'service_label'  => $this->get_service_label(),
 				'rate_amount'    => (float) $rate['shipmentCost'],
 				'currency'       => 'USD',
 				'weight_oz'      => (float) $candidate['weight_oz'],
