@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/update-package-dimensions',
         'version' => 'dev-copilot/update-package-dimensions',
-        'reference' => '6225309ea49c757aa88aafe209689bfbab3b31f9',
+        'reference' => '9198a84bdfd81d46d4e0736b15672b014d1d9172',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/update-package-dimensions',
             'version' => 'dev-copilot/update-package-dimensions',
-            'reference' => '6225309ea49c757aa88aafe209689bfbab3b31f9',
+            'reference' => '9198a84bdfd81d46d4e0736b15672b014d1d9172',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
