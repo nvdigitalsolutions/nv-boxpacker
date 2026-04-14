@@ -581,7 +581,7 @@ fk-usps-optimizer/
 
 ## Changelog
 
-### 1.2.5
+### 1.2.4
 
 - **Fixed:** Box dimension and weight fields now accept decimal values (e.g. `12.25` inches, `3.5` oz). Previously the `sanitize_boxes_json()` method used `absint()` which truncated decimals to integers, so a box entered as 12.25 × 11.5 was silently stored as 12 × 11.
 
