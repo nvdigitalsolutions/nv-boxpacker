@@ -396,14 +396,14 @@ class Settings {
 				'package_code' => sanitize_text_field( (string) ( $box['package_code'] ?? 'package' ) ),
 				'package_name' => sanitize_text_field( (string) ( $box['package_name'] ?? '' ) ),
 				'box_type'     => in_array( ( $box['box_type'] ?? '' ), array( 'cubic', 'flat_rate' ), true ) ? $box['box_type'] : 'cubic',
-				'outer_width'  => absint( $box['outer_width'] ?? 0 ),
-				'outer_length' => absint( $box['outer_length'] ?? 0 ),
-				'outer_depth'  => absint( $box['outer_depth'] ?? 0 ),
-				'inner_width'  => absint( $box['inner_width'] ?? 0 ),
-				'inner_length' => absint( $box['inner_length'] ?? 0 ),
-				'inner_depth'  => absint( $box['inner_depth'] ?? 0 ),
-				'empty_weight' => absint( $box['empty_weight'] ?? 0 ),
-				'max_weight'   => absint( $box['max_weight'] ?? 0 ),
+				'outer_width'  => abs( (float) ( $box['outer_width'] ?? 0 ) ),
+				'outer_length' => abs( (float) ( $box['outer_length'] ?? 0 ) ),
+				'outer_depth'  => abs( (float) ( $box['outer_depth'] ?? 0 ) ),
+				'inner_width'  => abs( (float) ( $box['inner_width'] ?? 0 ) ),
+				'inner_length' => abs( (float) ( $box['inner_length'] ?? 0 ) ),
+				'inner_depth'  => abs( (float) ( $box['inner_depth'] ?? 0 ) ),
+				'empty_weight' => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
+				'max_weight'   => abs( (float) ( $box['max_weight'] ?? 0 ) ),
 			);
 		}
 

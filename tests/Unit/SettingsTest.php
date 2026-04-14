@@ -419,6 +419,35 @@ class SettingsTest extends TestCase {
 		$this->assertSame( 'flat_rate', $decoded[0]['box_type'] );
 	}
 
+	public function test_sanitize_boxes_json_preserves_decimal_dimensions(): void {
+		$boxes = array( array(
+			'reference'    => 'Decimal Box',
+			'package_code' => 'package',
+			'package_name' => 'Decimal Box',
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.25,
+			'outer_length' => 11.5,
+			'outer_depth'  => 6.75,
+			'inner_width'  => 12.25,
+			'inner_length' => 11.5,
+			'inner_depth'  => 6.75,
+			'empty_weight' => 3.5,
+			'max_weight'   => 17.25,
+		) );
+
+		$result  = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertSame( 12.25, $decoded[0]['outer_width'] );
+		$this->assertSame( 11.5, $decoded[0]['outer_length'] );
+		$this->assertSame( 6.75, $decoded[0]['outer_depth'] );
+		$this->assertSame( 12.25, $decoded[0]['inner_width'] );
+		$this->assertSame( 11.5, $decoded[0]['inner_length'] );
+		$this->assertSame( 6.75, $decoded[0]['inner_depth'] );
+		$this->assertSame( 3.5, $decoded[0]['empty_weight'] );
+		$this->assertSame( 17.25, $decoded[0]['max_weight'] );
+	}
+
 	// -------------------------------------------------------------------------
 	// get_default_boxes (protected)
 	// -------------------------------------------------------------------------

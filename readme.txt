@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.3
+Stable tag: 1.2.4
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -147,6 +147,9 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.4 =
+* Fixed: Box dimension and weight fields now accept decimal values (e.g. 12.25 inches). Previously `absint()` truncated decimals to integers, so a box entered as 12.25 × 11.5 was stored as 12 × 11.
 
 = 1.2.3 =
 * Fixed: ShipStation rate amounts now include both `shipmentCost` and `otherCost` (fuel surcharges, residential delivery fees, etc.). Previously only `shipmentCost` was used, causing UPS and other non-USPS carrier rates to appear lower than the actual cost at checkout.
