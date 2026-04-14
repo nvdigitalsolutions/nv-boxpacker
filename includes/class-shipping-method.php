@@ -127,32 +127,51 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array with a single rate entry, or empty on failure.
 	 */
 	protected function calculate_cheapest_option( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$carrier_service = $plugin->get_carrier_service();
-		$total_cost      = 0.0;
-		$all_rated       = true;
-		$package_count   = count( $packed_packages );
+		$carrier_services = $plugin->get_carrier_services();
+		$total_cost       = 0.0;
+		$all_rated        = true;
+		$package_count    = count( $packed_packages );
+		$service_labels   = array();
 
 		foreach ( $packed_packages as $index => $packed ) {
-			$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+			$best_plan = array();
+			$best_cost = PHP_FLOAT_MAX;
 
-			if ( empty( $plan ) ) {
+			foreach ( $carrier_services as $carrier_service ) {
+				$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+
+				if ( ! empty( $plan ) && (float) $plan['rate_amount'] < $best_cost ) {
+					$best_plan = $plan;
+					$best_cost = (float) $plan['rate_amount'];
+				}
+			}
+
+			if ( empty( $best_plan ) ) {
 				$all_rated = false;
 				break;
 			}
 
-			$total_cost += (float) $plan['rate_amount'];
+			$total_cost      += $best_cost;
+			$service_labels[] = $best_plan['service_label'] ?? '';
 		}
 
 		if ( ! $all_rated || $total_cost <= 0 ) {
 			return array();
 		}
 
-		$label = $this->title;
+		// Use the carrier service label when all packages share the same one;
+		// fall back to the method title for backward compatibility.
+		$unique_labels = array_unique( array_filter( $service_labels ) );
+		$title         = 1 === count( $unique_labels )
+			? reset( $unique_labels )
+			: $this->title;
+
+		$label = $title;
 		if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
 			$label = sprintf(
 				/* translators: 1: method title, 2: package count. */
 				_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
-				$this->title,
+				$title,
 				$package_count
 			);
 		}
@@ -179,11 +198,16 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @return array Array of rate entries (label + cost), or empty on failure.
 	 */
 	protected function calculate_all_options( Plugin $plugin, array $packed_packages, array $ship_to, Settings $settings ): array {
-		$carrier_service   = $plugin->get_carrier_service();
+		$carrier_services  = $plugin->get_carrier_services();
 		$per_package_plans = array();
 
 		foreach ( $packed_packages as $index => $packed ) {
-			$plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+			$plans = array();
+
+			foreach ( $carrier_services as $carrier_service ) {
+				$carrier_plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
+				$plans         = array_merge( $plans, $carrier_plans );
+			}
 
 			if ( empty( $plans ) ) {
 				return array();
@@ -198,12 +222,14 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$seen_labels   = array();
 
 		foreach ( $combos as $combo ) {
-			$total = 0.0;
-			$names = array();
+			$total          = 0.0;
+			$names          = array();
+			$service_labels = array();
 
 			foreach ( $combo as $plan ) {
-				$total  += (float) $plan['rate_amount'];
-				$names[] = $plan['package_name'];
+				$total           += (float) $plan['rate_amount'];
+				$names[]          = $plan['package_name'];
+				$service_labels[] = $plan['service_label'] ?? '';
 			}
 
 			if ( $total <= 0 ) {
@@ -218,7 +244,15 @@ class Shipping_Method extends \WC_Shipping_Method {
 					? sprintf( '%d× %s', $count, $name )
 					: $name;
 			}
-			$label = $this->title . ' — ' . implode( ' + ', $parts );
+
+			// Use the carrier service label when available; fall back to the
+			// method title for backward compatibility.
+			$unique_labels = array_unique( array_filter( $service_labels ) );
+			$title_prefix  = 1 === count( $unique_labels )
+				? reset( $unique_labels )
+				: $this->title;
+
+			$label = $title_prefix . ' — ' . implode( ' + ', $parts );
 
 			if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
 				$label = sprintf(

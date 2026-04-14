@@ -75,34 +75,36 @@ class Settings {
 		);
 
 		$fields = array(
-			'carrier'                  => __( 'Shipping Carrier API', 'fk-usps-optimizer' ),
-			'shipengine_api_key'       => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
-			'shipengine_carrier_id'    => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
-			'shipstation_api_key'      => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
-			'shipstation_api_secret'   => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
-			'shipstation_carrier_code' => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
-			'service_code'             => __( 'USPS Service Code', 'fk-usps-optimizer' ),
-			'sandbox_mode'             => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
-			'show_all_options'         => __( 'Show All Options', 'fk-usps-optimizer' ),
-			'show_package_count'       => __( 'Show Package Count', 'fk-usps-optimizer' ),
-			'add_package_note'         => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
-			'ship_from_name'           => __( 'Ship From Name', 'fk-usps-optimizer' ),
-			'ship_from_company'        => __( 'Ship From Company', 'fk-usps-optimizer' ),
-			'ship_from_phone'          => __( 'Ship From Phone', 'fk-usps-optimizer' ),
-			'ship_from_address1'       => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
-			'ship_from_address2'       => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
-			'ship_from_city'           => __( 'Ship From City', 'fk-usps-optimizer' ),
-			'ship_from_state'          => __( 'Ship From State', 'fk-usps-optimizer' ),
-			'ship_from_postal_code'    => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
-			'ship_from_country'        => __( 'Ship From Country', 'fk-usps-optimizer' ),
-			'debug_logging'            => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
-			'boxes_json'               => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
+			'carrier'                   => __( 'Enabled Carrier APIs', 'fk-usps-optimizer' ),
+			'shipengine_api_key'        => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
+			'shipengine_carrier_id'     => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
+			'shipengine_service_code'   => __( 'ShipEngine Service Code', 'fk-usps-optimizer' ),
+			'shipstation_api_key'       => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
+			'shipstation_api_secret'    => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
+			'shipstation_carrier_code'  => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
+			'shipstation_service_code'  => __( 'ShipStation Service Code', 'fk-usps-optimizer' ),
+			'shipstation_services_json' => __( 'ShipStation Additional Services', 'fk-usps-optimizer' ),
+			'sandbox_mode'              => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'show_all_options'          => __( 'Show All Options', 'fk-usps-optimizer' ),
+			'show_package_count'        => __( 'Show Package Count', 'fk-usps-optimizer' ),
+			'add_package_note'          => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
+			'ship_from_name'            => __( 'Ship From Name', 'fk-usps-optimizer' ),
+			'ship_from_company'         => __( 'Ship From Company', 'fk-usps-optimizer' ),
+			'ship_from_phone'           => __( 'Ship From Phone', 'fk-usps-optimizer' ),
+			'ship_from_address1'        => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
+			'ship_from_address2'        => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
+			'ship_from_city'            => __( 'Ship From City', 'fk-usps-optimizer' ),
+			'ship_from_state'           => __( 'Ship From State', 'fk-usps-optimizer' ),
+			'ship_from_postal_code'     => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
+			'ship_from_country'         => __( 'Ship From Country', 'fk-usps-optimizer' ),
+			'debug_logging'             => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
+			'boxes_json'                => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
 		);
 
 		// Fields that belong exclusively to one carrier — the settings page JS
 		// uses these CSS classes to show or hide rows when the carrier changes.
-		$shipengine_only  = array( 'shipengine_api_key', 'shipengine_carrier_id' );
-		$shipstation_only = array( 'shipstation_api_key', 'shipstation_api_secret', 'shipstation_carrier_code' );
+		$shipengine_only  = array( 'shipengine_api_key', 'shipengine_carrier_id', 'shipengine_service_code' );
+		$shipstation_only = array( 'shipstation_api_key', 'shipstation_api_secret', 'shipstation_carrier_code', 'shipstation_service_code', 'shipstation_services_json' );
 
 		foreach ( $fields as $key => $label ) {
 			$args = array( 'key' => $key );
@@ -149,17 +151,20 @@ class Settings {
 		$value    = $settings[ $key ] ?? '';
 
 		if ( 'carrier' === $key ) {
+			$enabled = $this->get_carriers();
 			printf(
-				'<select id="%1$s_%2$s" name="%1$s[%2$s]">' .
-				'<option value="shipengine"%3$s>%4$s</option>' .
-				'<option value="shipstation"%5$s>%6$s</option>' .
-				'</select>',
+				'<fieldset id="%1$s_%2$s">' .
+				'<label><input type="checkbox" name="%1$s[%2$s][]" value="shipengine" %3$s /> %4$s</label><br />' .
+				'<label><input type="checkbox" name="%1$s[%2$s][]" value="shipstation" %5$s /> %6$s</label>' .
+				'<p class="description">%7$s</p>' .
+				'</fieldset>',
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
-				selected( 'shipengine', (string) $value, false ),
-				esc_html__( 'ShipEngine (primary — USPS via stamps_com)', 'fk-usps-optimizer' ),
-				selected( 'shipstation', (string) $value, false ),
-				esc_html__( 'ShipStation', 'fk-usps-optimizer' )
+				checked( in_array( 'shipengine', $enabled, true ), true, false ),
+				esc_html__( 'ShipEngine (e.g. USPS via stamps_com)', 'fk-usps-optimizer' ),
+				checked( in_array( 'shipstation', $enabled, true ), true, false ),
+				esc_html__( 'ShipStation', 'fk-usps-optimizer' ),
+				esc_html__( 'Enable one or more carrier APIs. Rates from all enabled carriers are compared and the cheapest option is used.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -195,14 +200,47 @@ class Settings {
 			return;
 		}
 
-		if ( 'service_code' === $key ) {
+		if ( 'shipengine_service_code' === $key ) {
 			printf(
 				'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />' .
 				'<p class="description">%4$s</p>',
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_attr( $value ),
-				esc_html__( 'USPS service code sent to the carrier API (e.g. usps_priority_mail). Supports flat-rate and cubic pricing.', 'fk-usps-optimizer' )
+				esc_html__( 'ShipEngine service code (e.g. usps_priority_mail). Supports flat-rate and cubic pricing.', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
+		if ( 'shipstation_service_code' === $key ) {
+			printf(
+				'<input class="regular-text" type="text" name="%1$s[%2$s]" value="%3$s" />' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( $value ),
+				esc_html__( 'ShipStation service code (e.g. usps_priority_mail). Leave empty to match any service from the carrier.', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
+		if ( 'shipstation_services_json' === $key ) {
+			$default_services = wp_json_encode(
+				array(
+					array(
+						'carrier_code' => 'stamps_com',
+						'service_code' => 'usps_priority_mail',
+					),
+				),
+				JSON_PRETTY_PRINT
+			);
+			printf(
+				'<textarea class="large-text code" rows="8" name="%1$s[%2$s]">%3$s</textarea>' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_textarea( $value ? $value : $default_services ),
+				esc_html__( 'Optional JSON array of additional ShipStation carrier+service pairs to rate-shop. Each entry needs "carrier_code" and "service_code". Example: [{"carrier_code":"ups_walleted","service_code":"ups_ground"},{"carrier_code":"stamps_com","service_code":"usps_priority_mail"}]. Rates from all pairs plus the primary pair above are compared.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -279,10 +317,11 @@ class Settings {
 		$string_fields = array(
 			'shipengine_api_key',
 			'shipengine_carrier_id',
+			'shipengine_service_code',
 			'shipstation_api_key',
 			'shipstation_api_secret',
 			'shipstation_carrier_code',
-			'service_code',
+			'shipstation_service_code',
 			'ship_from_name',
 			'ship_from_company',
 			'ship_from_phone',
@@ -298,13 +337,35 @@ class Settings {
 			$output[ $field ] = isset( $input[ $field ] ) ? sanitize_text_field( (string) $input[ $field ] ) : '';
 		}
 
-		$output['carrier']            = in_array( ( $input['carrier'] ?? '' ), array( 'shipengine', 'shipstation' ), true ) ? $input['carrier'] : 'shipengine';
-		$output['debug_logging']      = empty( $input['debug_logging'] ) ? '0' : '1';
-		$output['sandbox_mode']       = empty( $input['sandbox_mode'] ) ? '0' : '1';
-		$output['show_all_options']   = empty( $input['show_all_options'] ) ? '0' : '1';
-		$output['show_package_count'] = empty( $input['show_package_count'] ) ? '0' : '1';
-		$output['add_package_note']   = empty( $input['add_package_note'] ) ? '0' : '1';
-		$output['boxes_json']         = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
+		// Carrier now supports multiple values as an array of checkboxes.
+		$valid_carriers    = array( 'shipengine', 'shipstation' );
+		$raw_carrier       = $input['carrier'] ?? array();
+		$selected_carriers = array();
+
+		if ( is_array( $raw_carrier ) ) {
+			foreach ( $raw_carrier as $c ) {
+				if ( in_array( (string) $c, $valid_carriers, true ) ) {
+					$selected_carriers[] = (string) $c;
+				}
+			}
+		} elseif ( is_string( $raw_carrier ) ) {
+			// Backward compat: accept a single string value or comma-separated.
+			foreach ( explode( ',', $raw_carrier ) as $c ) {
+				$c = trim( $c );
+				if ( in_array( $c, $valid_carriers, true ) ) {
+					$selected_carriers[] = $c;
+				}
+			}
+		}
+
+		$output['carrier']                   = ! empty( $selected_carriers ) ? implode( ',', array_unique( $selected_carriers ) ) : 'shipengine';
+		$output['debug_logging']             = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']              = empty( $input['sandbox_mode'] ) ? '0' : '1';
+		$output['show_all_options']          = empty( $input['show_all_options'] ) ? '0' : '1';
+		$output['show_package_count']        = empty( $input['show_package_count'] ) ? '0' : '1';
+		$output['add_package_note']          = empty( $input['add_package_note'] ) ? '0' : '1';
+		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
+		$output['boxes_json']                = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
 		return $output;
 	}
@@ -350,6 +411,52 @@ class Settings {
 	}
 
 	/**
+	 * Sanitize the ShipStation additional services JSON string.
+	 *
+	 * Accepts a JSON array of objects with 'carrier_code' and 'service_code'.
+	 * Returns an empty string when the input is empty or only whitespace.
+	 *
+	 * @param string $raw_json Raw JSON string.
+	 * @return string Sanitized JSON string or empty string.
+	 */
+	protected function sanitize_shipstation_services_json( string $raw_json ): string {
+		$raw_json = trim( wp_unslash( $raw_json ) );
+
+		if ( '' === $raw_json ) {
+			return '';
+		}
+
+		$decoded = json_decode( $raw_json, true );
+
+		if ( ! is_array( $decoded ) ) {
+			add_settings_error( self::OPTION_KEY, 'invalid_shipstation_services_json', __( 'ShipStation additional services JSON is invalid. The field was cleared.', 'fk-usps-optimizer' ) );
+			return '';
+		}
+
+		$services = array();
+
+		foreach ( $decoded as $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+
+			$carrier_code = sanitize_text_field( (string) ( $entry['carrier_code'] ?? '' ) );
+			$service_code = sanitize_text_field( (string) ( $entry['service_code'] ?? '' ) );
+
+			if ( '' === $carrier_code ) {
+				continue;
+			}
+
+			$services[] = array(
+				'carrier_code' => $carrier_code,
+				'service_code' => $service_code,
+			);
+		}
+
+		return ! empty( $services ) ? wp_json_encode( $services ) : '';
+	}
+
+	/**
 	 * Get plugin settings merged with defaults.
 	 *
 	 * @return array Plugin settings merged with defaults.
@@ -360,28 +467,31 @@ class Settings {
 		return wp_parse_args(
 			$saved,
 			array(
-				'carrier'                  => 'shipengine',
-				'shipengine_api_key'       => '',
-				'shipengine_carrier_id'    => '',
-				'shipstation_api_key'      => '',
-				'shipstation_api_secret'   => '',
-				'shipstation_carrier_code' => 'stamps_com',
-				'service_code'             => 'usps_priority_mail',
-				'sandbox_mode'             => '0',
-				'show_all_options'         => '0',
-				'show_package_count'       => '0',
-				'add_package_note'         => '0',
-				'ship_from_name'           => '',
-				'ship_from_company'        => '',
-				'ship_from_phone'          => '',
-				'ship_from_address1'       => '',
-				'ship_from_address2'       => '',
-				'ship_from_city'           => '',
-				'ship_from_state'          => '',
-				'ship_from_postal_code'    => '',
-				'ship_from_country'        => 'US',
-				'debug_logging'            => '0',
-				'boxes_json'               => wp_json_encode( $this->get_default_boxes() ),
+				'carrier'                   => 'shipengine',
+				'shipengine_api_key'        => '',
+				'shipengine_carrier_id'     => '',
+				'shipengine_service_code'   => 'usps_priority_mail',
+				'shipstation_api_key'       => '',
+				'shipstation_api_secret'    => '',
+				'shipstation_carrier_code'  => 'stamps_com',
+				'shipstation_service_code'  => 'usps_priority_mail',
+				'shipstation_services_json' => '',
+				'service_code'              => 'usps_priority_mail',
+				'sandbox_mode'              => '0',
+				'show_all_options'          => '0',
+				'show_package_count'        => '0',
+				'add_package_note'          => '0',
+				'ship_from_name'            => '',
+				'ship_from_company'         => '',
+				'ship_from_phone'           => '',
+				'ship_from_address1'        => '',
+				'ship_from_address2'        => '',
+				'ship_from_city'            => '',
+				'ship_from_state'           => '',
+				'ship_from_postal_code'     => '',
+				'ship_from_country'         => 'US',
+				'debug_logging'             => '0',
+				'boxes_json'                => wp_json_encode( $this->get_default_boxes() ),
 			)
 		);
 	}
@@ -456,11 +566,39 @@ class Settings {
 	/**
 	 * Get the configured shipping carrier API.
 	 *
+	 * Returns the first enabled carrier for backward compatibility.
+	 *
 	 * @return string 'shipengine' or 'shipstation'.
 	 */
 	public function get_carrier(): string {
-		$settings = $this->get_settings();
-		return (string) apply_filters( 'fk_usps_optimizer_carrier', $settings['carrier'] );
+		$carriers = $this->get_carriers();
+		return ! empty( $carriers ) ? $carriers[0] : 'shipengine';
+	}
+
+	/**
+	 * Get all enabled carrier APIs.
+	 *
+	 * The carrier setting is stored as a comma-separated string.
+	 * Legacy single-value strings (e.g. 'shipengine') are also supported.
+	 *
+	 * @return string[] Array of enabled carrier identifiers.
+	 */
+	public function get_carriers(): array {
+		$settings       = $this->get_settings();
+		$raw            = (string) $settings['carrier'];
+		$valid_carriers = array( 'shipengine', 'shipstation' );
+		$carriers       = array();
+
+		foreach ( explode( ',', $raw ) as $c ) {
+			$c = trim( $c );
+			if ( in_array( $c, $valid_carriers, true ) ) {
+				$carriers[] = $c;
+			}
+		}
+
+		$carriers = array_unique( $carriers );
+
+		return (array) apply_filters( 'fk_usps_optimizer_carriers', ! empty( $carriers ) ? $carriers : array( 'shipengine' ) );
 	}
 
 	/**
@@ -552,12 +690,102 @@ class Settings {
 	 * This value is sent to the carrier API as the service_code parameter and
 	 * supports all USPS services including flat-rate and cubic pricing.
 	 *
+	 * Kept for backward compatibility — prefer the per-carrier methods
+	 * get_shipengine_service_code() and get_shipstation_service_code().
+	 *
 	 * @return string USPS service code (e.g. 'usps_priority_mail').
 	 */
 	public function get_service_code(): string {
 		$settings     = $this->get_settings();
 		$service_code = (string) $settings['service_code'];
 		return '' !== $service_code ? $service_code : 'usps_priority_mail';
+	}
+
+	/**
+	 * Get the ShipEngine-specific service code.
+	 *
+	 * Falls back to the legacy shared service_code for backward compatibility.
+	 *
+	 * @return string Service code (e.g. 'usps_priority_mail').
+	 */
+	public function get_shipengine_service_code(): string {
+		$settings     = $this->get_settings();
+		$service_code = (string) ( $settings['shipengine_service_code'] ?? '' );
+
+		if ( '' === $service_code ) {
+			// Backward compat: use the legacy shared service_code.
+			return $this->get_service_code();
+		}
+
+		return (string) apply_filters( 'fk_usps_optimizer_shipengine_service_code', $service_code );
+	}
+
+	/**
+	 * Get the ShipStation-specific service code.
+	 *
+	 * Falls back to the legacy shared service_code for backward compatibility.
+	 *
+	 * @return string Service code (e.g. 'usps_priority_mail').
+	 */
+	public function get_shipstation_service_code(): string {
+		$settings     = $this->get_settings();
+		$service_code = (string) ( $settings['shipstation_service_code'] ?? '' );
+
+		if ( '' === $service_code ) {
+			// Backward compat: use the legacy shared service_code.
+			return $this->get_service_code();
+		}
+
+		return (string) apply_filters( 'fk_usps_optimizer_shipstation_service_code', $service_code );
+	}
+
+	/**
+	 * Get all ShipStation carrier+service pairs to rate-shop.
+	 *
+	 * The primary pair (from the single carrier_code + service_code fields) is
+	 * always included as the first entry.  Additional pairs from the
+	 * shipstation_services_json field are appended and de-duplicated.
+	 *
+	 * Each pair is an associative array with 'carrier_code' and 'service_code'.
+	 *
+	 * @return array[] Array of carrier+service pairs.
+	 */
+	public function get_shipstation_service_pairs(): array {
+		$primary = array(
+			'carrier_code' => $this->get_shipstation_carrier_code(),
+			'service_code' => $this->get_shipstation_service_code(),
+		);
+
+		$pairs = array( $primary );
+
+		$settings = $this->get_settings();
+		$json     = (string) ( $settings['shipstation_services_json'] ?? '' );
+
+		if ( '' !== $json ) {
+			$decoded = json_decode( $json, true );
+
+			if ( is_array( $decoded ) ) {
+				foreach ( $decoded as $entry ) {
+					if ( ! is_array( $entry ) || empty( $entry['carrier_code'] ) ) {
+						continue;
+					}
+
+					$pair = array(
+						'carrier_code' => (string) $entry['carrier_code'],
+						'service_code' => (string) ( $entry['service_code'] ?? '' ),
+					);
+
+					// Avoid duplicating the primary pair.
+					if ( $pair['carrier_code'] === $primary['carrier_code'] && $pair['service_code'] === $primary['service_code'] ) {
+						continue;
+					}
+
+					$pairs[] = $pair;
+				}
+			}
+		}
+
+		return (array) apply_filters( 'fk_usps_optimizer_shipstation_service_pairs', $pairs );
 	}
 
 	/**

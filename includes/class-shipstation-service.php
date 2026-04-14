@@ -36,12 +36,125 @@ class ShipStation_Service {
 	protected $settings;
 
 	/**
+	 * Optional carrier code override.
+	 *
+	 * When non-empty, this value is used instead of the Settings getter.
+	 *
+	 * @var string
+	 */
+	protected $carrier_code_override = '';
+
+	/**
+	 * Optional service code override.
+	 *
+	 * When non-empty, this value is used instead of the Settings getter.
+	 *
+	 * @var string
+	 */
+	protected $service_code_override = '';
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings Plugin settings instance.
+	 * @param Settings $settings     Plugin settings instance.
+	 * @param string   $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
+	 * @param string   $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
 	 */
-	public function __construct( Settings $settings ) {
-		$this->settings = $settings;
+	public function __construct( Settings $settings, string $carrier_code = '', string $service_code = '' ) {
+		$this->settings              = $settings;
+		$this->carrier_code_override = $carrier_code;
+		$this->service_code_override = $service_code;
+	}
+
+	/**
+	 * Get the effective carrier code, preferring the override.
+	 *
+	 * @return string Carrier code.
+	 */
+	public function get_carrier_code(): string {
+		return '' !== $this->carrier_code_override
+			? $this->carrier_code_override
+			: $this->settings->get_shipstation_carrier_code();
+	}
+
+	/**
+	 * Get the effective service code, preferring the override.
+	 *
+	 * @return string Service code.
+	 */
+	public function get_service_code(): string {
+		return '' !== $this->service_code_override
+			? $this->service_code_override
+			: $this->settings->get_shipstation_service_code();
+	}
+
+	/**
+	 * Derive a human-readable service label from the carrier and service codes.
+	 *
+	 * Maps well-known carrier codes (e.g. 'stamps_com', 'ups_walleted') and
+	 * service codes (e.g. 'usps_priority_mail', 'ups_ground') to friendly
+	 * names like "USPS Priority" or "UPS Ground".
+	 *
+	 * @return string Human-readable label such as "USPS Priority" or "UPS Ground".
+	 */
+	public function get_service_label(): string {
+		$carrier_code = $this->get_carrier_code();
+		$service_code = $this->get_service_code();
+
+		$carrier_names = array(
+			'stamps_com'   => 'USPS',
+			'usps'         => 'USPS',
+			'endicia'      => 'USPS',
+			'ups_walleted' => 'UPS',
+			'ups'          => 'UPS',
+			'fedex'        => 'FedEx',
+			'dhl_express'  => 'DHL Express',
+		);
+
+		$service_names = array(
+			'usps_priority_mail'         => 'Priority',
+			'usps_priority_mail_express' => 'Priority Express',
+			'usps_first_class_mail'      => 'First Class',
+			'usps_parcel_select'         => 'Parcel Select',
+			'usps_media_mail'            => 'Media Mail',
+			'ups_ground'                 => 'Ground',
+			'ups_next_day_air'           => 'Next Day Air',
+			'ups_next_day_air_saver'     => 'Next Day Air Saver',
+			'ups_2nd_day_air'            => '2nd Day Air',
+			'ups_3_day_select'           => '3 Day Select',
+			'ups_ground_saver'           => 'Ground Saver',
+			'fedex_ground'               => 'Ground',
+			'fedex_home_delivery'        => 'Home Delivery',
+			'fedex_2day'                 => '2Day',
+			'fedex_express_saver'        => 'Express Saver',
+		);
+
+		$carrier_name = $carrier_names[ $carrier_code ]
+			?? ucwords( str_replace( '_', ' ', $carrier_code ) );
+
+		if ( isset( $service_names[ $service_code ] ) ) {
+			$service_name = $service_names[ $service_code ];
+		} else {
+			// Strip carrier-code prefix from unknown service codes to avoid
+			// redundant labels like "FedEx Fedex Ground".
+			$stripped = $service_code;
+			foreach ( array_keys( $carrier_names ) as $prefix ) {
+				if ( 0 === strpos( $service_code, $prefix . '_' ) ) {
+					$stripped = substr( $service_code, strlen( $prefix ) + 1 );
+					break;
+				}
+			}
+			// Also strip common short prefixes (e.g. "fedex_" from "fedex_ground").
+			if ( $stripped === $service_code && '' !== $carrier_code ) {
+				$short_prefix = $carrier_code . '_';
+				if ( 0 === strpos( $service_code, $short_prefix ) ) {
+					$stripped = substr( $service_code, strlen( $short_prefix ) );
+				}
+			}
+			$service_name = ucwords( str_replace( '_', ' ', $stripped ) );
+		}
+
+		return $carrier_name . ' ' . $service_name;
 	}
 
 	// -------------------------------------------------------------------------
@@ -171,7 +284,7 @@ class ShipStation_Service {
 		}
 
 		// Validate the configured carrier code against the account's carriers.
-		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$carrier_code = $this->get_carrier_code();
 		$body         = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 		$carriers     = is_array( $body ) ? $body : array();
 
@@ -226,7 +339,7 @@ class ShipStation_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->get_service_code();
 		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -236,16 +349,18 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate = $response['rate'];
+			$rate       = $response['rate'];
+			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 
-			if ( empty( $best_plan ) || (float) $rate['shipmentCost'] < (float) $best_plan['rate_amount'] ) {
+			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
 				$best_plan = array(
 					'package_number' => $package_number,
 					'mode'           => $candidate['mode'],
 					'package_code'   => $candidate['package_code'],
 					'package_name'   => $candidate['package_name'],
 					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'rate_amount'    => (float) $rate['shipmentCost'],
+					'service_label'  => $this->get_service_label(),
+					'rate_amount'    => $total_cost,
 					'currency'       => 'USD',
 					'weight_oz'      => (float) $candidate['weight_oz'],
 					'dimensions'     => $candidate['dimensions'],
@@ -270,7 +385,7 @@ class ShipStation_Service {
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_service_code();
+		$service_code = $this->get_service_code();
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -280,14 +395,16 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate    = $response['rate'];
-			$plans[] = array(
+			$rate       = $response['rate'];
+			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+			$plans[]    = array(
 				'package_number' => $package_number,
 				'mode'           => $candidate['mode'],
 				'package_code'   => $candidate['package_code'],
 				'package_name'   => $candidate['package_name'],
 				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'rate_amount'    => (float) $rate['shipmentCost'],
+				'service_label'  => $this->get_service_label(),
+				'rate_amount'    => $total_cost,
 				'currency'       => 'USD',
 				'weight_oz'      => (float) $candidate['weight_oz'],
 				'dimensions'     => $candidate['dimensions'],
@@ -383,7 +500,7 @@ class ShipStation_Service {
 	protected function request_rate( array $ship_to, array $candidate, int $order_id = 0 ): array {
 		$api_key      = $this->settings->get_shipstation_api_key();
 		$api_secret   = $this->settings->get_shipstation_api_secret();
-		$carrier_code = $this->settings->get_shipstation_carrier_code();
+		$carrier_code = $this->get_carrier_code();
 
 		if ( '' === $api_key || '' === $api_secret ) {
 			$this->log( 'Missing ShipStation credentials.', array( 'order_id' => $order_id ) );
@@ -399,7 +516,7 @@ class ShipStation_Service {
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => $this->settings->get_service_code(),
+			'serviceCode'    => $this->get_service_code(),
 			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',

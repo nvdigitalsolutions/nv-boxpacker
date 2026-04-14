@@ -102,8 +102,13 @@ class Admin_Test_UI {
 			}
 		}
 
-		$is_sandbox = $this->settings->is_sandbox_mode_enabled();
-		$carrier    = $this->settings->get_carrier();
+		$is_sandbox    = $this->settings->is_sandbox_mode_enabled();
+		$carriers      = $this->settings->get_carriers();
+		$carrier_names = array();
+		foreach ( $carriers as $c ) {
+			$carrier_names[] = 'shipstation' === $c ? 'ShipStation' : 'ShipEngine';
+		}
+		$carrier_label = implode( ' + ', $carrier_names );
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'USPS Priority Test Pricing', 'fk-usps-optimizer' ); ?></h1>
@@ -125,9 +130,9 @@ class Admin_Test_UI {
 			<p class="description">
 				<?php
 				printf(
-					/* translators: %s: carrier name. */
-					esc_html__( 'Enter items and a destination address to preview USPS Priority box packing and rates via %s.', 'fk-usps-optimizer' ),
-					'<strong>' . esc_html( 'shipstation' === $carrier ? 'ShipStation' : 'ShipEngine' ) . '</strong>'
+					/* translators: %s: carrier name(s). */
+					esc_html__( 'Enter items and a destination address to preview box packing and rates via %s.', 'fk-usps-optimizer' ),
+					'<strong>' . esc_html( $carrier_label ) . '</strong>'
 				);
 				?>
 			</p>
