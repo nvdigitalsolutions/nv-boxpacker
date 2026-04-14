@@ -414,14 +414,14 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `package_code` | string | Carrier package code sent to the API (e.g. `package`, `small_flat_rate_box`). |
 | `package_name` | string | Display name shown in the shipping plan. |
 | `box_type` | string | `"cubic"` for custom cubic boxes; `"flat_rate"` for USPS flat-rate boxes. |
-| `outer_width` | integer | Outer width in **inches**. |
-| `outer_length` | integer | Outer length in **inches**. |
-| `outer_depth` | integer | Outer depth (height) in **inches**. |
-| `inner_width` | integer | Inner usable width in **inches**. |
-| `inner_length` | integer | Inner usable length in **inches**. |
-| `inner_depth` | integer | Inner usable depth in **inches**. |
-| `empty_weight` | integer | Empty box weight in **ounces**. Added to item weight when calculating shipment weight. |
-| `max_weight` | integer | Maximum payload weight in **pounds**. |
+| `outer_width` | number | Outer width in **inches** (decimals supported, e.g. `12.25`). |
+| `outer_length` | number | Outer length in **inches** (decimals supported). |
+| `outer_depth` | number | Outer depth (height) in **inches** (decimals supported). |
+| `inner_width` | number | Inner usable width in **inches** (decimals supported). |
+| `inner_length` | number | Inner usable length in **inches** (decimals supported). |
+| `inner_depth` | number | Inner usable depth in **inches** (decimals supported). |
+| `empty_weight` | number | Empty box weight in **ounces** (decimals supported). Added to item weight when calculating shipment weight. |
+| `max_weight` | number | Maximum payload weight in **pounds** (decimals supported). |
 
 **USPS Cubic Eligibility Rules (enforced automatically):**
 
@@ -580,6 +580,10 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.5
+
+- **Fixed:** Box dimension and weight fields now accept decimal values (e.g. `12.25` inches, `3.5` oz). Previously the `sanitize_boxes_json()` method used `absint()` which truncated decimals to integers, so a box entered as 12.25 × 11.5 was silently stored as 12 × 11.
 
 ### 1.2.3
 

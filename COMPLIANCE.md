@@ -1,6 +1,6 @@
 # WordPress Plugin Compliance Review
 
-**Plugin:** FunnelKit USPS Priority Shipping Optimizer v1.2.3
+**Plugin:** FunnelKit USPS Priority Shipping Optimizer v1.2.5
 **Namespace:** `FK_USPS_Optimizer`
 **Author:** NV Digital Solutions
 **License:** GPLv3-or-later
