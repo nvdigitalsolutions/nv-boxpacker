@@ -92,8 +92,9 @@ class ShippingMethodTest extends TestCase {
 	}
 
 	public function test_format_estimated_delivery_returns_empty_for_invalid_date(): void {
+		// PHP 8.3+ throws DateMalformedStringException for truly unparseable strings.
+		// Our catch(\Throwable) block returns '' in that case.
 		$result = $this->call_protected( 'format_estimated_delivery', array( 'not-a-date' ) );
-		// PHP's DateTime is lenient with relative strings, so we just assert no exception is thrown.
-		$this->assertIsString( $result );
+		$this->assertSame( '', $result );
 	}
 }
