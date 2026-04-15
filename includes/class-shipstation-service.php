@@ -738,11 +738,14 @@ class ShipStation_Service {
 			}
 		}
 
-		// 3. Fallback: estimate from the service code's typical transit days.
-		$service_code = (string) ( $rate['serviceCode'] ?? '' );
-		$default_days = $this->get_default_transit_days( $service_code );
-		if ( $default_days > 0 ) {
-			return $this->compute_delivery_date( $default_days );
+		// 3. Fallback: estimate from the service code's typical transit days
+		// (only when the admin has enabled the setting).
+		if ( $this->settings->is_use_default_transit_days_enabled() ) {
+			$service_code = (string) ( $rate['serviceCode'] ?? '' );
+			$default_days = $this->get_default_transit_days( $service_code );
+			if ( $default_days > 0 ) {
+				return $this->compute_delivery_date( $default_days );
+			}
 		}
 
 		return '';

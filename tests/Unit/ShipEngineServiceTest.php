@@ -1106,6 +1106,7 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	public function test_extract_delivery_date_falls_back_to_service_code_default(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
 		// No delivery date fields, but service_code is a known USPS service.
 		$rate   = array( 'service_code' => 'usps_priority_mail', 'shipping_amount' => array( 'amount' => 7.99 ) );
 		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
@@ -1114,7 +1115,16 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	public function test_extract_delivery_date_returns_empty_for_unknown_service_code(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
 		$rate   = array( 'service_code' => 'some_unknown_service' );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_extract_delivery_date_skips_fallback_when_setting_disabled(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+		// Known service code but setting is off — should return empty.
+		$rate   = array( 'service_code' => 'usps_priority_mail' );
 		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
 		$this->assertSame( '', $result );
 	}
