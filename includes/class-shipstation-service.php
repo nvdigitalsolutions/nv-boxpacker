@@ -738,7 +738,52 @@ class ShipStation_Service {
 			}
 		}
 
+		// 3. Fallback: estimate from the service code's typical transit days.
+		$service_code = (string) ( $rate['serviceCode'] ?? '' );
+		$default_days = $this->get_default_transit_days( $service_code );
+		if ( $default_days > 0 ) {
+			return $this->compute_delivery_date( $default_days );
+		}
+
 		return '';
+	}
+
+	/**
+	 * Get default transit days for a carrier service code.
+	 *
+	 * The ShipStation getrates endpoint does not always return delivery-day
+	 * or estimated-delivery-date information.  When those fields are absent
+	 * this method provides a reasonable worst-case estimate based on
+	 * carrier-published transit times so that the checkout still displays
+	 * an estimated delivery date.
+	 *
+	 * @param string $service_code ShipStation service code.
+	 * @return int Estimated transit days, or 0 when unknown.
+	 */
+	protected function get_default_transit_days( string $service_code ): int {
+		$map = array(
+			// USPS services.
+			'usps_priority_mail'         => 3,
+			'usps_priority_mail_express' => 2,
+			'usps_first_class_mail'      => 5,
+			'usps_ground_advantage'      => 5,
+			'usps_parcel_select'         => 8,
+			'usps_media_mail'            => 8,
+			// UPS services.
+			'ups_ground'                 => 5,
+			'ups_ground_saver'           => 5,
+			'ups_3_day_select'           => 3,
+			'ups_2nd_day_air'            => 2,
+			'ups_next_day_air_saver'     => 1,
+			'ups_next_day_air'           => 1,
+			// FedEx services.
+			'fedex_ground'               => 5,
+			'fedex_home_delivery'        => 5,
+			'fedex_express_saver'        => 3,
+			'fedex_2day'                 => 2,
+		);
+
+		return $map[ $service_code ] ?? 0;
 	}
 
 	/**

@@ -1090,4 +1090,32 @@ class ShipEngineServiceTest extends TestCase {
 		// current_time() stub returns '2024-01-01 00:00:00', so 2 days → '2024-01-03'.
 		$this->assertSame( '2024-01-03', $result['estimated_delivery_date'] );
 	}
+
+	// -------------------------------------------------------------------------
+	// get_default_transit_days (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_get_default_transit_days_returns_days_for_usps_priority(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'usps_priority_mail' ) );
+		$this->assertSame( 3, $result );
+	}
+
+	public function test_get_default_transit_days_returns_zero_for_unknown_code(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'unknown_service' ) );
+		$this->assertSame( 0, $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_service_code_default(): void {
+		// No delivery date fields, but service_code is a known USPS service.
+		$rate   = array( 'service_code' => 'usps_priority_mail', 'shipping_amount' => array( 'amount' => 7.99 ) );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		// current_time() stub returns '2024-01-01 00:00:00'; priority_mail defaults to 3 days.
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_for_unknown_service_code(): void {
+		$rate   = array( 'service_code' => 'some_unknown_service' );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
 }

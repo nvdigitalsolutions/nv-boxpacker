@@ -457,7 +457,38 @@ class ShipEngine_Service {
 			return $this->compute_delivery_date( $days );
 		}
 
+		// 3. Fallback: estimate from the service code's typical transit days.
+		$service_code = (string) ( $rate['service_code'] ?? '' );
+		$default_days = $this->get_default_transit_days( $service_code );
+		if ( $default_days > 0 ) {
+			return $this->compute_delivery_date( $default_days );
+		}
+
 		return '';
+	}
+
+	/**
+	 * Get default transit days for a carrier service code.
+	 *
+	 * ShipEngine rate responses may omit both estimated_delivery_date and
+	 * delivery_days for certain carrier / service combinations.  When those
+	 * fields are absent this method provides a reasonable worst-case
+	 * estimate based on carrier-published transit times.
+	 *
+	 * @param string $service_code ShipEngine service code.
+	 * @return int Estimated transit days, or 0 when unknown.
+	 */
+	protected function get_default_transit_days( string $service_code ): int {
+		$map = array(
+			'usps_priority_mail'         => 3,
+			'usps_priority_mail_express' => 2,
+			'usps_first_class_mail'      => 5,
+			'usps_ground_advantage'      => 5,
+			'usps_parcel_select'         => 8,
+			'usps_media_mail'            => 8,
+		);
+
+		return $map[ $service_code ] ?? 0;
 	}
 
 	/**
