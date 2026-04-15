@@ -367,7 +367,7 @@ class ShipStation_Service {
 					'cubic_tier'              => $candidate['cubic_tier'],
 					'packing_list'            => $this->build_packing_list( $package['items'] ),
 					'items'                   => $package['items'],
-					'estimated_delivery_date' => isset( $rate['transitDays'] ) ? $this->compute_delivery_date( (int) $rate['transitDays'] ) : '',
+					'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 				);
 			}
 		}
@@ -412,7 +412,7 @@ class ShipStation_Service {
 				'cubic_tier'              => $candidate['cubic_tier'],
 				'packing_list'            => $this->build_packing_list( $package['items'] ),
 				'items'                   => $package['items'],
-				'estimated_delivery_date' => isset( $rate['transitDays'] ) ? $this->compute_delivery_date( (int) $rate['transitDays'] ) : '',
+				'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 			);
 		}
 
@@ -703,6 +703,42 @@ class ShipStation_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Extract an estimated delivery date from a ShipStation rate response.
+	 *
+	 * The ShipStation getrates API may return delivery information under
+	 * several field names depending on the carrier and API version:
+	 *   - 'estimatedDeliveryDate' — ISO 8601 datetime string (preferred).
+	 *   - 'deliveryDays'          — integer transit-day count.
+	 *   - 'transitDays'           — legacy field name for transit-day count.
+	 *
+	 * The method checks each field in order and returns the first usable
+	 * value as a YYYY-MM-DD date string, or '' when no data is available.
+	 *
+	 * @param array $rate Rate entry from ShipStation response.
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function extract_delivery_date( array $rate ): string {
+		// 1. Direct ISO datetime string from the API.
+		$iso = (string) ( $rate['estimatedDeliveryDate'] ?? '' );
+		if ( '' !== $iso ) {
+			try {
+				$date = new \DateTime( $iso );
+				return $date->format( 'Y-m-d' );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Intentional: invalid date falls through to day-count fallbacks.
+			}
+		}
+
+		// 2. Day-count fields — try both names the API may use.
+		foreach ( array( 'deliveryDays', 'transitDays' ) as $key ) {
+			if ( isset( $rate[ $key ] ) && (int) $rate[ $key ] > 0 ) {
+				return $this->compute_delivery_date( (int) $rate[ $key ] );
+			}
+		}
+
+		return '';
 	}
 
 	/**

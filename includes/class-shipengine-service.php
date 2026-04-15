@@ -141,7 +141,7 @@ class ShipEngine_Service {
 					'cubic_tier'              => $candidate['cubic_tier'],
 					'packing_list'            => $this->build_packing_list( $package['items'] ),
 					'items'                   => $package['items'],
-					'estimated_delivery_date' => (string) ( $rate['estimated_delivery_date'] ?? '' ),
+					'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 				);
 			}
 		}
@@ -186,7 +186,7 @@ class ShipEngine_Service {
 				'cubic_tier'              => $candidate['cubic_tier'],
 				'packing_list'            => $this->build_packing_list( $package['items'] ),
 				'items'                   => $package['items'],
-				'estimated_delivery_date' => (string) ( $rate['estimated_delivery_date'] ?? '' ),
+				'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 			);
 		}
 
@@ -430,6 +430,57 @@ class ShipEngine_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Extract an estimated delivery date from a ShipEngine rate response.
+	 *
+	 * ShipEngine rate objects include both 'estimated_delivery_date' (an
+	 * ISO 8601 datetime string that may be null) and 'delivery_days' (an
+	 * integer day count that may also be null).  This method uses the
+	 * explicit date when available and falls back to computing a date from
+	 * the day count.
+	 *
+	 * @param array $rate Rate entry from ShipEngine response.
+	 * @return string ISO 8601 date or datetime string, or ''.
+	 */
+	protected function extract_delivery_date( array $rate ): string {
+		// 1. Direct ISO datetime string from the API (preferred).
+		$iso = (string) ( $rate['estimated_delivery_date'] ?? '' );
+		if ( '' !== $iso ) {
+			return $iso;
+		}
+
+		// 2. Compute from delivery_days when the explicit date is null.
+		$days = isset( $rate['delivery_days'] ) ? (int) $rate['delivery_days'] : 0;
+		if ( $days > 0 ) {
+			return $this->compute_delivery_date( $days );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Compute an estimated delivery date string from a day count.
+	 *
+	 * Uses the current WordPress site time as the start date and adds the
+	 * given number of days to produce an ISO 8601 date string (YYYY-MM-DD).
+	 *
+	 * @param int $days Number of delivery days.
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function compute_delivery_date( int $days ): string {
+		if ( $days <= 0 ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( current_time( 'mysql' ) );
+			$date->modify( '+' . $days . ' days' );
+			return $date->format( 'Y-m-d' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 
 	/**
