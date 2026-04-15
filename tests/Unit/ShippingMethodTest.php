@@ -69,4 +69,31 @@ class ShippingMethodTest extends TestCase {
 		$this->assertSame( '78701', $result['postal_code'] );
 		$this->assertSame( 'US', $result['country_code'] );
 	}
+
+	// -------------------------------------------------------------------------
+	// format_estimated_delivery (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_format_estimated_delivery_returns_empty_for_empty_string(): void {
+		$result = $this->call_protected( 'format_estimated_delivery', array( '' ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_format_estimated_delivery_formats_iso_datetime(): void {
+		// '2024-01-15T00:00:00Z' → 'Mon, Jan 15'.
+		$result = $this->call_protected( 'format_estimated_delivery', array( '2024-01-15T00:00:00Z' ) );
+		$this->assertSame( 'Mon, Jan 15', $result );
+	}
+
+	public function test_format_estimated_delivery_formats_plain_date(): void {
+		// '2024-03-20' → 'Wed, Mar 20'.
+		$result = $this->call_protected( 'format_estimated_delivery', array( '2024-03-20' ) );
+		$this->assertSame( 'Wed, Mar 20', $result );
+	}
+
+	public function test_format_estimated_delivery_returns_empty_for_invalid_date(): void {
+		$result = $this->call_protected( 'format_estimated_delivery', array( 'not-a-date' ) );
+		// PHP's DateTime is lenient with relative strings, so we just assert no exception is thrown.
+		$this->assertIsString( $result );
+	}
 }

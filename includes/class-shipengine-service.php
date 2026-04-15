@@ -128,19 +128,20 @@ class ShipEngine_Service {
 			if ( empty( $best_plan ) || (float) $rate['shipping_amount']['amount'] < (float) $best_plan['rate_amount'] ) {
 				$dimensions = $candidate['dimensions'];
 				$best_plan  = array(
-					'package_number' => $package_number,
-					'mode'           => $candidate['mode'],
-					'package_code'   => $candidate['package_code'],
-					'package_name'   => $candidate['package_name'],
-					'service_code'   => $service_code,
-					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => (float) $rate['shipping_amount']['amount'],
-					'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
-					'weight_oz'      => (float) $candidate['weight_oz'],
-					'dimensions'     => $dimensions,
-					'cubic_tier'     => $candidate['cubic_tier'],
-					'packing_list'   => $this->build_packing_list( $package['items'] ),
-					'items'          => $package['items'],
+					'package_number'          => $package_number,
+					'mode'                    => $candidate['mode'],
+					'package_code'            => $candidate['package_code'],
+					'package_name'            => $candidate['package_name'],
+					'service_code'            => $service_code,
+					'service_label'           => $this->get_service_label(),
+					'rate_amount'             => (float) $rate['shipping_amount']['amount'],
+					'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
+					'weight_oz'               => (float) $candidate['weight_oz'],
+					'dimensions'              => $dimensions,
+					'cubic_tier'              => $candidate['cubic_tier'],
+					'packing_list'            => $this->build_packing_list( $package['items'] ),
+					'items'                   => $package['items'],
+					'estimated_delivery_date' => (string) ( $rate['estimated_delivery_date'] ?? '' ),
 				);
 			}
 		}
@@ -172,19 +173,20 @@ class ShipEngine_Service {
 			$rate       = $response['rate'];
 			$dimensions = $candidate['dimensions'];
 			$plans[]    = array(
-				'package_number' => $package_number,
-				'mode'           => $candidate['mode'],
-				'package_code'   => $candidate['package_code'],
-				'package_name'   => $candidate['package_name'],
-				'service_code'   => $service_code,
-				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => (float) $rate['shipping_amount']['amount'],
-				'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
-				'weight_oz'      => (float) $candidate['weight_oz'],
-				'dimensions'     => $dimensions,
-				'cubic_tier'     => $candidate['cubic_tier'],
-				'packing_list'   => $this->build_packing_list( $package['items'] ),
-				'items'          => $package['items'],
+				'package_number'          => $package_number,
+				'mode'                    => $candidate['mode'],
+				'package_code'            => $candidate['package_code'],
+				'package_name'            => $candidate['package_name'],
+				'service_code'            => $service_code,
+				'service_label'           => $this->get_service_label(),
+				'rate_amount'             => (float) $rate['shipping_amount']['amount'],
+				'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
+				'weight_oz'               => (float) $candidate['weight_oz'],
+				'dimensions'              => $dimensions,
+				'cubic_tier'              => $candidate['cubic_tier'],
+				'packing_list'            => $this->build_packing_list( $package['items'] ),
+				'items'                   => $package['items'],
+				'estimated_delivery_date' => (string) ( $rate['estimated_delivery_date'] ?? '' ),
 			);
 		}
 

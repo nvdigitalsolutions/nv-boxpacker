@@ -927,4 +927,89 @@ class ShipStationServiceTest extends TestCase {
 		$service = new ShipStation_Service( $this->settings, 'endicia', 'usps_first_class_mail' );
 		$this->assertSame( 'USPS First Class', $service->get_service_label() );
 	}
+
+	// -------------------------------------------------------------------------
+	// compute_delivery_date (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_compute_delivery_date_returns_empty_for_zero_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( 0 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_returns_empty_for_negative_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( -1 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_adds_transit_days_from_current_time(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$result = $this->call_protected( 'compute_delivery_date', array( 2 ) );
+		$this->assertSame( '2024-01-03', $result );
+	}
+
+	public function test_compute_delivery_date_returns_iso_date_string(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( 5 ) );
+		$this->assertMatchesRegularExpression( '/^\d{4}-\d{2}-\d{2}$/', $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// estimated_delivery_date in build_test_package_plan
+	// -------------------------------------------------------------------------
+
+	public function test_build_test_package_plan_includes_estimated_delivery_date_when_transit_days_present(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'  => 'usps_priority_mail',
+					'shipmentCost' => 7.99,
+					'otherCost'    => 0.00,
+					'transitDays'  => 2,
+				),
+			) ),
+		);
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		// current_time() stub returns '2024-01-01 00:00:00', so 2 days → '2024-01-03'.
+		$this->assertSame( '2024-01-03', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_test_package_plan_estimated_delivery_date_empty_when_no_transit_days(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+		$this->mock_rate_response( 7.99 ); // No transitDays field.
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		$this->assertSame( '', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'  => 'usps_priority_mail',
+					'shipmentCost' => 7.99,
+					'otherCost'    => 0.00,
+					'transitDays'  => 3,
+				),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( '2024-01-04', $plans[0]['estimated_delivery_date'] );
+	}
 }

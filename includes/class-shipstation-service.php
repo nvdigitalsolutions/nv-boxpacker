@@ -354,19 +354,20 @@ class ShipStation_Service {
 
 			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
 				$best_plan = array(
-					'package_number' => $package_number,
-					'mode'           => $candidate['mode'],
-					'package_code'   => $candidate['package_code'],
-					'package_name'   => $candidate['package_name'],
-					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => $total_cost,
-					'currency'       => 'USD',
-					'weight_oz'      => (float) $candidate['weight_oz'],
-					'dimensions'     => $candidate['dimensions'],
-					'cubic_tier'     => $candidate['cubic_tier'],
-					'packing_list'   => $this->build_packing_list( $package['items'] ),
-					'items'          => $package['items'],
+					'package_number'          => $package_number,
+					'mode'                    => $candidate['mode'],
+					'package_code'            => $candidate['package_code'],
+					'package_name'            => $candidate['package_name'],
+					'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
+					'service_label'           => $this->get_service_label(),
+					'rate_amount'             => $total_cost,
+					'currency'                => 'USD',
+					'weight_oz'               => (float) $candidate['weight_oz'],
+					'dimensions'              => $candidate['dimensions'],
+					'cubic_tier'              => $candidate['cubic_tier'],
+					'packing_list'            => $this->build_packing_list( $package['items'] ),
+					'items'                   => $package['items'],
+					'estimated_delivery_date' => isset( $rate['transitDays'] ) ? $this->compute_delivery_date( (int) $rate['transitDays'] ) : '',
 				);
 			}
 		}
@@ -398,19 +399,20 @@ class ShipStation_Service {
 			$rate       = $response['rate'];
 			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 			$plans[]    = array(
-				'package_number' => $package_number,
-				'mode'           => $candidate['mode'],
-				'package_code'   => $candidate['package_code'],
-				'package_name'   => $candidate['package_name'],
-				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => $total_cost,
-				'currency'       => 'USD',
-				'weight_oz'      => (float) $candidate['weight_oz'],
-				'dimensions'     => $candidate['dimensions'],
-				'cubic_tier'     => $candidate['cubic_tier'],
-				'packing_list'   => $this->build_packing_list( $package['items'] ),
-				'items'          => $package['items'],
+				'package_number'          => $package_number,
+				'mode'                    => $candidate['mode'],
+				'package_code'            => $candidate['package_code'],
+				'package_name'            => $candidate['package_name'],
+				'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
+				'service_label'           => $this->get_service_label(),
+				'rate_amount'             => $total_cost,
+				'currency'                => 'USD',
+				'weight_oz'               => (float) $candidate['weight_oz'],
+				'dimensions'              => $candidate['dimensions'],
+				'cubic_tier'              => $candidate['cubic_tier'],
+				'packing_list'            => $this->build_packing_list( $package['items'] ),
+				'items'                   => $package['items'],
+				'estimated_delivery_date' => isset( $rate['transitDays'] ) ? $this->compute_delivery_date( (int) $rate['transitDays'] ) : '',
 			);
 		}
 
@@ -701,6 +703,31 @@ class ShipStation_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Compute an estimated delivery date string from a transit-day count.
+	 *
+	 * Uses the current WordPress site time as the start date and adds the
+	 * given number of transit days to produce an ISO 8601 date string
+	 * (YYYY-MM-DD).  Returns an empty string when $transit_days is zero or
+	 * negative, or when the transit-day value is absent from the rate.
+	 *
+	 * @param int $transit_days Number of transit days returned by ShipStation.
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function compute_delivery_date( int $transit_days ): string {
+		if ( $transit_days <= 0 ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( current_time( 'mysql' ) );
+			$date->modify( '+' . $transit_days . ' days' );
+			return $date->format( 'Y-m-d' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 
 	// -------------------------------------------------------------------------

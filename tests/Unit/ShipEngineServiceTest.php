@@ -905,4 +905,104 @@ class ShipEngineServiceTest extends TestCase {
 		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'some_future_service' );
 		$this->assertSame( 'USPS Some Future Service', $this->service->get_service_label() );
 	}
+
+	// -------------------------------------------------------------------------
+	// estimated_delivery_date in build_package_plan
+	// -------------------------------------------------------------------------
+
+	public function test_build_package_plan_includes_estimated_delivery_date_when_present(): void {
+		$boxes = array( $this->make_box() );
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array(
+							'shipping_amount'         => array( 'amount' => 7.99, 'currency' => 'USD' ),
+							'estimated_delivery_date' => '2024-01-15T00:00:00Z',
+						),
+					),
+				),
+			) ),
+		);
+
+		$order   = $this->make_order();
+		$package = $this->make_package();
+		$result  = $this->service->build_package_plan( $order, $package, 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		$this->assertSame( '2024-01-15T00:00:00Z', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_package_plan_estimated_delivery_date_defaults_to_empty_string(): void {
+		$boxes = array( $this->make_box() );
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array( 'shipping_amount' => array( 'amount' => 7.99, 'currency' => 'USD' ) ),
+					),
+				),
+			) ),
+		);
+
+		$order   = $this->make_order();
+		$package = $this->make_package();
+		$result  = $this->service->build_package_plan( $order, $package, 1 );
+
+		$this->assertSame( '', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array(
+							'shipping_amount'         => array( 'amount' => 7.99, 'currency' => 'USD' ),
+							'estimated_delivery_date' => '2024-01-20T00:00:00Z',
+						),
+					),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( '2024-01-20T00:00:00Z', $plans[0]['estimated_delivery_date'] );
+	}
 }

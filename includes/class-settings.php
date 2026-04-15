@@ -88,6 +88,7 @@ class Settings {
 			'show_all_options'          => __( 'Show All Options', 'fk-usps-optimizer' ),
 			'show_package_count'        => __( 'Show Package Count', 'fk-usps-optimizer' ),
 			'add_package_note'          => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
+			'show_estimated_delivery'   => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
 			'ship_from_name'            => __( 'Ship From Name', 'fk-usps-optimizer' ),
 			'ship_from_company'         => __( 'Ship From Company', 'fk-usps-optimizer' ),
 			'ship_from_phone'           => __( 'Ship From Phone', 'fk-usps-optimizer' ),
@@ -170,11 +171,12 @@ class Settings {
 		}
 
 		$checkbox_fields = array(
-			'debug_logging'      => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
-			'sandbox_mode'       => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
-			'show_all_options'   => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
-			'show_package_count' => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
-			'add_package_note'   => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
+			'debug_logging'           => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
+			'sandbox_mode'            => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
+			'show_all_options'        => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
+			'show_package_count'      => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
+			'add_package_note'        => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
+			'show_estimated_delivery' => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
 		);
 
 		if ( isset( $checkbox_fields[ $key ] ) ) {
@@ -364,6 +366,7 @@ class Settings {
 		$output['show_all_options']          = empty( $input['show_all_options'] ) ? '0' : '1';
 		$output['show_package_count']        = empty( $input['show_package_count'] ) ? '0' : '1';
 		$output['add_package_note']          = empty( $input['add_package_note'] ) ? '0' : '1';
+		$output['show_estimated_delivery']   = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
 		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
 		$output['boxes_json']                = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
@@ -481,6 +484,7 @@ class Settings {
 				'show_all_options'          => '0',
 				'show_package_count'        => '0',
 				'add_package_note'          => '0',
+				'show_estimated_delivery'   => '0',
 				'ship_from_name'            => '',
 				'ship_from_company'         => '',
 				'ship_from_phone'           => '',
@@ -682,6 +686,20 @@ class Settings {
 	public function is_add_package_note_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) $settings['add_package_note'];
+	}
+
+	/**
+	 * Check whether "Show Estimated Delivery Date" is enabled.
+	 *
+	 * When active, the carrier-provided estimated delivery date is appended
+	 * to each shipping option label displayed during cart and checkout,
+	 * including FunnelKit Checkout pages.
+	 *
+	 * @return bool Whether "Show Estimated Delivery Date" is enabled.
+	 */
+	public function is_show_estimated_delivery_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) $settings['show_estimated_delivery'];
 	}
 
 	/**

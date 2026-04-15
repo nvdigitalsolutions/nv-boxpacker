@@ -736,6 +736,45 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// show_estimated_delivery
+	// -------------------------------------------------------------------------
+
+	public function test_show_estimated_delivery_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '1' );
+		$this->assertTrue( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_not_enabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '0' );
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_show_estimated_delivery(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'show_estimated_delivery' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'show_estimated_delivery', $output );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['show_estimated_delivery'] );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_accepts_one(): void {
+		$input                          = $this->empty_settings_input();
+		$input['show_estimated_delivery'] = '1';
+		$result                         = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_estimated_delivery'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// get_shipstation_service_pairs
 	// -------------------------------------------------------------------------
 
