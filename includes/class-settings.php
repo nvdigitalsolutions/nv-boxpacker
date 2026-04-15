@@ -488,7 +488,7 @@ class Settings {
 				'show_package_count'        => '0',
 				'add_package_note'          => '0',
 				'show_estimated_delivery'   => '0',
-				'use_default_transit_days'  => '1',
+				'use_default_transit_days'  => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
 				'ship_from_name'            => '',
 				'ship_from_company'         => '',
 				'ship_from_phone'           => '',

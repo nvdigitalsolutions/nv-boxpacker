@@ -775,6 +775,45 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// use_default_transit_days
+	// -------------------------------------------------------------------------
+
+	public function test_use_default_transit_days_enabled_by_default(): void {
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '1' );
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_disabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '0' );
+		$this->assertFalse( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_use_default_transit_days(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'use_default_transit_days' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'use_default_transit_days', $output );
+		$this->assertStringContainsString( 'type="checkbox"', $output );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['use_default_transit_days'] );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_accepts_one(): void {
+		$input                            = $this->empty_settings_input();
+		$input['use_default_transit_days'] = '1';
+		$result                           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['use_default_transit_days'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// get_shipstation_service_pairs
 	// -------------------------------------------------------------------------
 
