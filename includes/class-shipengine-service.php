@@ -37,15 +37,20 @@ class ShipEngine_Service {
 	 * ShipEngine carriers configured in this plugin are always USPS-based,
 	 * so the label is derived from the service code alone.
 	 *
+	 * When $override_service_code is provided (e.g. the serviceCode returned
+	 * by the ShipEngine API), it is used instead of the settings value.
+	 *
+	 * @param string $override_service_code Optional service code from the API response.
 	 * @return string Human-readable label such as "USPS Priority".
 	 */
-	public function get_service_label(): string {
-		$service_code = $this->settings->get_shipengine_service_code();
+	public function get_service_label( string $override_service_code = '' ): string {
+		$service_code = '' !== $override_service_code ? $override_service_code : $this->settings->get_shipengine_service_code();
 
 		$service_names = array(
 			'usps_priority_mail'         => 'Priority',
 			'usps_priority_mail_express' => 'Priority Express',
 			'usps_first_class_mail'      => 'First Class',
+			'usps_ground_advantage'      => 'Ground Advantage',
 			'usps_parcel_select'         => 'Parcel Select',
 			'usps_media_mail'            => 'Media Mail',
 		);

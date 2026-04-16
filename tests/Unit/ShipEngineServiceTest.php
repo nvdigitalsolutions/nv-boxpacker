@@ -906,6 +906,21 @@ class ShipEngineServiceTest extends TestCase {
 		$this->assertSame( 'USPS Some Future Service', $this->service->get_service_label() );
 	}
 
+	public function test_get_service_label_ground_advantage(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_ground_advantage' );
+		$this->assertSame( 'USPS Ground Advantage', $this->service->get_service_label() );
+	}
+
+	public function test_get_service_label_override_service_code(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->assertSame( 'USPS Ground Advantage', $this->service->get_service_label( 'usps_ground_advantage' ) );
+	}
+
+	public function test_get_service_label_override_empty_falls_back_to_settings(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_first_class_mail' );
+		$this->assertSame( 'USPS First Class', $this->service->get_service_label( '' ) );
+	}
+
 	// -------------------------------------------------------------------------
 	// estimated_delivery_date in build_package_plan
 	// -------------------------------------------------------------------------
