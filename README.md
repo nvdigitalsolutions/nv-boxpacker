@@ -216,7 +216,9 @@ When **Enable Debug Logging** is checked, all API requests, responses, and packi
 
 ### Box Definitions
 
-Box definitions are stored as a JSON array in the **Box Definitions JSON** textarea. Each object in the array represents one physical box.
+Box definitions are managed via a visual table in the **Box Definitions** section of the settings page. Each row represents one physical box and can be added, edited, or removed directly in the UI.
+
+Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`).
 
 See [Box Definition JSON Schema](#box-definition-json-schema) for the full field reference and a worked example.
 
@@ -321,7 +323,7 @@ From the order detail page, click **Export to PirateShip** to download a CSV pre
 | Class | File | Responsibility |
 |---|---|---|
 | `Plugin` | `includes/class-plugin.php` | Singleton bootstrap. Instantiates all services, registers the `plugins_loaded` init hook, registers the WooCommerce shipping method, and wires `woocommerce_checkout_order_processed`. Compares rates across all enabled carriers via `get_carrier_services()`. |
-| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting including `get_carriers()`, per-carrier service code getters (`get_shipengine_service_code()`, `get_shipstation_service_code()`), and `get_shipstation_service_pairs()`. Renders the settings admin page. |
+| `Settings` | `includes/class-settings.php` | Reads/writes all plugin options via `get_option`/`register_setting`. Provides typed getters for every setting including `get_carriers()`, per-carrier service code getters (`get_shipengine_service_code()`, `get_shipstation_service_code()`), `get_shipstation_service_pairs()`, and `get_boxes_for_carrier()` for carrier-filtered box retrieval. Renders the settings admin page with a visual box management table. |
 | `Shipping_Method` | `includes/class-shipping-method.php` | Extends `WC_Shipping_Method`. Provides live shipping rates in WooCommerce shipping zones. Extracts cart items, packs them, rate-shops via all enabled carrier services, and handles "Show All Options" via cartesian product of rated box candidates per package, with rate caching. |
 | `Packing_Service` | `includes/class-packing-service.php` | Collects shippable items from a `WC_Order`, packs them with `dvdoug/boxpacker` (or a simple fallback), and returns normalized package arrays. `pack_items()` accepts an optional `$boxes` parameter to override the configured box definitions. Items without dimensions are separated and packed individually via fallback. Packed package dimensions use inner box dimensions. |
 | `ShipEngine_Service` | `includes/class-shipengine-service.php` | Rate-shops packed packages against the ShipEngine v1 API (`POST /v1/rates`). Supports both order-based and address-based rate requests. |
@@ -387,18 +389,19 @@ add_filter( 'fk_usps_optimizer_shipstation_api_key', function () {
 ```php
 add_filter( 'fk_usps_optimizer_boxes', function ( array $boxes ): array {
     $boxes[] = [
-        'reference'    => 'My Custom Box',
-        'package_code' => 'package',
-        'package_name' => 'My Custom Box',
-        'box_type'     => 'cubic',
-        'outer_width'  => 10,
-        'outer_length' => 10,
-        'outer_depth'  => 10,
-        'inner_width'  => 10,
-        'inner_length' => 10,
-        'inner_depth'  => 10,
-        'empty_weight' => 4,
-        'max_weight'   => 20,
+        'reference'           => 'My Custom Box',
+        'package_code'        => 'package',
+        'package_name'        => 'My Custom Box',
+        'box_type'            => 'cubic',
+        'outer_width'         => 10,
+        'outer_length'        => 10,
+        'outer_depth'         => 10,
+        'inner_width'         => 10,
+        'inner_length'        => 10,
+        'inner_depth'         => 10,
+        'empty_weight'        => 4,
+        'max_weight'          => 20,
+        'carrier_restriction' => '',
     ];
     return $boxes;
 } );
@@ -424,6 +427,7 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `inner_depth` | number | Inner usable depth in **inches** (decimals supported). |
 | `empty_weight` | number | Empty box weight in **ounces** (decimals supported). Added to item weight when calculating shipment weight. |
 | `max_weight` | number | Maximum payload weight in **pounds** (decimals supported). |
+| `carrier_restriction` | string | Restrict this box to a specific carrier: `"usps"`, `"ups"`, `"fedex"`, or `""` (empty = available to all carriers). |
 
 **USPS Cubic Eligibility Rules (enforced automatically):**
 
@@ -438,32 +442,34 @@ Boxes that do not meet these criteria are silently excluded from cubic candidate
 ```json
 [
   {
-    "reference":    "Cubic Small",
-    "package_code": "package",
-    "package_name": "Custom Cubic Small",
-    "box_type":     "cubic",
-    "outer_width":  8,
-    "outer_length": 8,
-    "outer_depth":  6,
-    "inner_width":  8,
-    "inner_length": 8,
-    "inner_depth":  6,
-    "empty_weight": 3,
-    "max_weight":   20
+    "reference":           "1 Bag",
+    "package_code":        "package",
+    "package_name":        "1 Bag",
+    "box_type":            "cubic",
+    "outer_width":         8,
+    "outer_length":        6,
+    "outer_depth":         6,
+    "inner_width":         8,
+    "inner_length":        6,
+    "inner_depth":         6,
+    "empty_weight":        3,
+    "max_weight":          5,
+    "carrier_restriction": ""
   },
   {
-    "reference":    "USPS Small Flat Rate",
-    "package_code": "small_flat_rate_box",
-    "package_name": "USPS Small Flat Rate Box",
-    "box_type":     "flat_rate",
-    "outer_width":  9,
-    "outer_length": 6,
-    "outer_depth":  2,
-    "inner_width":  9,
-    "inner_length": 6,
-    "inner_depth":  2,
-    "empty_weight": 4,
-    "max_weight":   70
+    "reference":           "USPS Medium Flat Rate",
+    "package_code":        "medium_flat_rate_box",
+    "package_name":        "Medium Flat Rate Box",
+    "box_type":            "flat_rate",
+    "outer_width":         14,
+    "outer_length":        12,
+    "outer_depth":         3,
+    "inner_width":         14,
+    "inner_length":        12,
+    "inner_depth":         3,
+    "empty_weight":        6,
+    "max_weight":          70,
+    "carrier_restriction": "usps"
   }
 ]
 ```
@@ -494,7 +500,7 @@ Tests live in `tests/Unit/`. A `tests/bootstrap.php` file provides WordPress and
 
 | File | Coverage |
 |---|---|
-| `tests/Unit/SettingsTest.php` | All getters, sanitization, defaults, `get_boxes()`, multi-carrier settings, per-carrier service codes, ShipStation service pairs. |
+| `tests/Unit/SettingsTest.php` | All getters, sanitization, defaults, `get_boxes()`, `get_boxes_for_carrier()`, `sanitize_boxes_array()`, multi-carrier settings, per-carrier service codes, ShipStation service pairs, box table UI rendering. |
 | `tests/Unit/PackingServiceTest.php` | BoxPacker path, fallback path, `pack_items()`, unmeasured item handling, inner-dimensions packing, multi-package scenarios. |
 | `tests/Unit/ShipEngineServiceTest.php` | Plan building, rate parsing, credential guards, `build_all_test_package_plans()`, per-carrier service code. |
 | `tests/Unit/ShipStationServiceTest.php` | Plan building, Basic-Auth, sandbox logging, cheapest-rate selection, `serviceCode`/`packageCode` in requests, `build_all_test_package_plans()`, carrier/service code overrides. |
@@ -582,6 +588,16 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.8
+
+- **New:** **Box Management Table UI** — box definitions are now managed via a visual table in the settings page instead of a raw JSON textarea. Each box can be added, edited, or removed individually with dedicated input fields for all dimensions, weights, and settings.
+- **New:** **Carrier Restriction** — each box definition now includes a `carrier_restriction` field. Boxes can be assigned to a specific carrier (`usps`, `ups`, `fedex`) or left empty for all carriers. This prevents carrier-specific boxes (e.g. USPS Flat Rate) from being considered for incompatible carriers (e.g. UPS).
+- **New:** `Settings::get_boxes_for_carrier( string $carrier )` — returns only boxes whose `carrier_restriction` is empty (available to all) or matches the given carrier keyword (case-insensitive).
+- **New:** `Settings::sanitize_boxes_array()` — sanitizes box definitions submitted from the table-based UI. Rows with a blank reference are treated as deleted.
+- **Changed:** Default box set updated: replaces Cubic Small, Cubic Medium, and 3 USPS Flat Rate boxes with 1 Bag, 2 Bag, 3 Bag, 4 Bag (cubic, any carrier), USPS Medium Flat Rate (flat rate, USPS-only), and USPS Large Flat Rate (flat rate, USPS-only).
+- **Improved:** JavaScript (`settings.js`) updated with dynamic row add/remove handlers and automatic index re-sequencing for the box management table.
+- **Improved:** Legacy `boxes_json` textarea is retained internally for backward compatibility with programmatic/filter-based box configuration.
 
 ### 1.2.6
 

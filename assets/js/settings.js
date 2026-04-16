@@ -121,6 +121,85 @@
 	}
 
 	// -------------------------------------------------------------------------
+	// Box table management
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Re-index all box row input names so they use sequential indices.
+	 * This keeps the POST data clean after rows are added or removed.
+	 */
+	function reindexBoxRows() {
+		var table = document.getElementById( 'fk-boxes-table' );
+		if ( ! table ) {
+			return;
+		}
+		var rows = table.querySelectorAll( 'tbody tr' );
+		var optKey = fkUspsOptimizer.settingsKey;
+
+		rows.forEach( function ( row, idx ) {
+			row.querySelectorAll( 'input, select' ).forEach( function ( el ) {
+				var name = el.getAttribute( 'name' );
+				if ( name ) {
+					el.setAttribute(
+						'name',
+						name.replace( /\[boxes\]\[\d+\]/, '[boxes][' + idx + ']' )
+					);
+				}
+			} );
+		} );
+	}
+
+	/**
+	 * Add a new empty box row to the table.
+	 */
+	function handleAddBox() {
+		var table = document.getElementById( 'fk-boxes-table' );
+		if ( ! table ) {
+			return;
+		}
+		var tbody = table.querySelector( 'tbody' );
+		var idx   = tbody.querySelectorAll( 'tr' ).length;
+		var optKey = fkUspsOptimizer.settingsKey;
+		var prefix = optKey + '[boxes][' + idx + ']';
+
+		var tr = document.createElement( 'tr' );
+		tr.innerHTML =
+			'<td><input type="text" name="' + prefix + '[reference]" value="" class="regular-text" /></td>' +
+			'<td><input type="text" name="' + prefix + '[package_code]" value="package" class="small-text" /></td>' +
+			'<td><input type="text" name="' + prefix + '[package_name]" value="" class="regular-text" /></td>' +
+			'<td><select name="' + prefix + '[box_type]"><option value="cubic">Cubic</option><option value="flat_rate">Flat Rate</option></select></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_length]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_width]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_depth]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_length]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_width]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_depth]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[empty_weight]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[max_weight]" value="0" class="small-text" /></td>' +
+			'<td><select name="' + prefix + '[carrier_restriction]"><option value="">Any</option><option value="usps">USPS</option><option value="ups">UPS</option><option value="fedex">FedEx</option></select></td>' +
+			'<td><button type="button" class="button fk-remove-box">&times;</button></td>';
+
+		tbody.appendChild( tr );
+	}
+
+	/**
+	 * Remove the box row that contains the clicked remove button.
+	 *
+	 * @param {Event} event The click event.
+	 */
+	function handleRemoveBox( event ) {
+		var btn = event.target;
+		if ( ! btn.classList.contains( 'fk-remove-box' ) ) {
+			return;
+		}
+		var row = btn.closest( 'tr' );
+		if ( row ) {
+			row.remove();
+			reindexBoxRows();
+		}
+	}
+
+	// -------------------------------------------------------------------------
 	// Initialise on DOMContentLoaded
 	// -------------------------------------------------------------------------
 
@@ -136,6 +215,16 @@
 		var btn = document.getElementById( 'fk-usps-test-btn' );
 		if ( btn ) {
 			btn.addEventListener( 'click', handleTestConnection );
+		}
+
+		var addBoxBtn = document.getElementById( 'fk-add-box' );
+		if ( addBoxBtn ) {
+			addBoxBtn.addEventListener( 'click', handleAddBox );
+		}
+
+		var boxTable = document.getElementById( 'fk-boxes-table' );
+		if ( boxTable ) {
+			boxTable.addEventListener( 'click', handleRemoveBox );
 		}
 	} );
 }() );
