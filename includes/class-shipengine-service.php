@@ -508,6 +508,8 @@ class ShipEngine_Service {
 			return '';
 		}
 
+		$days += $this->settings->get_transit_days_buffer();
+
 		try {
 			$date = new \DateTime( current_time( 'mysql' ) );
 			$date->modify( '+' . $days . ' days' );

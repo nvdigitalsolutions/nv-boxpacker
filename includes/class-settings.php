@@ -90,6 +90,7 @@ class Settings {
 			'add_package_note'          => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
 			'show_estimated_delivery'   => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
 			'use_default_transit_days'  => __( 'Use Default Transit Day Estimates', 'fk-usps-optimizer' ),
+			'transit_days_buffer'       => __( 'Additional Business Days', 'fk-usps-optimizer' ),
 			'ship_from_name'            => __( 'Ship From Name', 'fk-usps-optimizer' ),
 			'ship_from_company'         => __( 'Ship From Company', 'fk-usps-optimizer' ),
 			'ship_from_phone'           => __( 'Ship From Phone', 'fk-usps-optimizer' ),
@@ -188,6 +189,18 @@ class Settings {
 				esc_attr( $key ),
 				checked( '1', (string) $value, false ),
 				$checkbox_fields[ $key ] // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- already sanitized by esc_html__() above.
+			);
+			return;
+		}
+
+		if ( 'transit_days_buffer' === $key ) {
+			printf(
+				'<input type="number" min="0" max="30" step="1" name="%1$s[%2$s]" value="%3$s" class="small-text" />' .
+				'<p class="description">%4$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( $value ),
+				esc_html__( 'Extra business days added to every estimated delivery date (e.g. for order processing / handling time). Applies to both carrier-returned and default transit-day estimates.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -370,6 +383,7 @@ class Settings {
 		$output['add_package_note']          = empty( $input['add_package_note'] ) ? '0' : '1';
 		$output['show_estimated_delivery']   = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
 		$output['use_default_transit_days']  = empty( $input['use_default_transit_days'] ) ? '0' : '1';
+		$output['transit_days_buffer']       = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
 		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
 		$output['boxes_json']                = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
 
@@ -489,6 +503,7 @@ class Settings {
 				'add_package_note'          => '0',
 				'show_estimated_delivery'   => '0',
 				'use_default_transit_days'  => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
+				'transit_days_buffer'       => 0,
 				'ship_from_name'            => '',
 				'ship_from_company'         => '',
 				'ship_from_phone'           => '',
@@ -719,6 +734,20 @@ class Settings {
 	public function is_use_default_transit_days_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) ( $settings['use_default_transit_days'] ?? '1' );
+	}
+
+	/**
+	 * Get the extra business-day buffer added to delivery estimates.
+	 *
+	 * This value accounts for order processing / handling time and is added
+	 * to every computed delivery date (both carrier-returned day counts and
+	 * built-in default transit-day estimates).
+	 *
+	 * @return int Non-negative number of extra business days (0–30).
+	 */
+	public function get_transit_days_buffer(): int {
+		$settings = $this->get_settings();
+		return max( 0, (int) ( $settings['transit_days_buffer'] ?? 0 ) );
 	}
 
 	/**

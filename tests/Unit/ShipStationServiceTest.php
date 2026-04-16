@@ -1146,4 +1146,11 @@ class ShipStationServiceTest extends TestCase {
 		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
 		$this->assertSame( '', $result );
 	}
+
+	public function test_compute_delivery_date_adds_buffer_days(): void {
+		$this->settings->method( 'get_transit_days_buffer' )->willReturn( 2 );
+		// current_time() stub returns '2024-01-01 00:00:00'; 3 transit + 2 buffer = 5 days.
+		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
+		$this->assertSame( '2024-01-06', $result );
+	}
 }

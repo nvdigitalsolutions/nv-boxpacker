@@ -805,6 +805,8 @@ class ShipStation_Service {
 			return '';
 		}
 
+		$transit_days += $this->settings->get_transit_days_buffer();
+
 		try {
 			$date = new \DateTime( current_time( 'mysql' ) );
 			$date->modify( '+' . $transit_days . ' days' );
