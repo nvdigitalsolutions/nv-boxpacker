@@ -101,7 +101,7 @@ class Settings {
 			'ship_from_postal_code'     => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
 			'ship_from_country'         => __( 'Ship From Country', 'fk-usps-optimizer' ),
 			'debug_logging'             => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
-			'boxes_json'                => __( 'Box Definitions JSON', 'fk-usps-optimizer' ),
+			'boxes_table'               => __( 'Box Definitions', 'fk-usps-optimizer' ),
 		);
 
 		// Fields that belong exclusively to one carrier — the settings page JS
@@ -262,6 +262,79 @@ class Settings {
 			return;
 		}
 
+		if ( 'boxes_table' === $key ) {
+			// The UI key is 'boxes_table' but data is stored as 'boxes_json'.
+			$json  = $settings['boxes_json'] ?? '';
+			$boxes = $json ? json_decode( $json, true ) : null;
+			if ( ! is_array( $boxes ) ) {
+				$boxes = $this->get_default_boxes();
+			}
+			$opt_key = self::OPTION_KEY;
+			?>
+			<table class="widefat fk-boxes-table" id="fk-boxes-table">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Reference', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Package Code', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Name', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Type', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'L', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'W', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'H', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Inner L', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Inner W', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Inner H', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Tare (oz)', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Max Wt (lbs)', 'fk-usps-optimizer' ); ?></th>
+						<th><?php esc_html_e( 'Carrier', 'fk-usps-optimizer' ); ?></th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+			<?php foreach ( $boxes as $i => $box ) : ?>
+					<tr>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][reference]" value="<?php echo esc_attr( $box['reference'] ?? '' ); ?>" class="regular-text" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_code]" value="<?php echo esc_attr( $box['package_code'] ?? 'package' ); ?>" class="small-text" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_name]" value="<?php echo esc_attr( $box['package_name'] ?? '' ); ?>" class="regular-text" /></td>
+						<td>
+							<select name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][box_type]">
+								<option value="cubic" <?php selected( $box['box_type'] ?? 'cubic', 'cubic' ); ?>><?php esc_html_e( 'Cubic', 'fk-usps-optimizer' ); ?></option>
+								<option value="flat_rate" <?php selected( $box['box_type'] ?? '', 'flat_rate' ); ?>><?php esc_html_e( 'Flat Rate', 'fk-usps-optimizer' ); ?></option>
+							</select>
+						</td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_length]" value="<?php echo esc_attr( $box['outer_length'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_width]" value="<?php echo esc_attr( $box['outer_width'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_depth]" value="<?php echo esc_attr( $box['outer_depth'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_length]" value="<?php echo esc_attr( $box['inner_length'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_width]" value="<?php echo esc_attr( $box['inner_width'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_depth]" value="<?php echo esc_attr( $box['inner_depth'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][empty_weight]" value="<?php echo esc_attr( $box['empty_weight'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][max_weight]" value="<?php echo esc_attr( $box['max_weight'] ?? 0 ); ?>" class="small-text" /></td>
+						<td>
+							<select name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][carrier_restriction]">
+								<option value="" <?php selected( $box['carrier_restriction'] ?? '', '' ); ?>><?php esc_html_e( 'Any', 'fk-usps-optimizer' ); ?></option>
+								<option value="usps" <?php selected( $box['carrier_restriction'] ?? '', 'usps' ); ?>>USPS</option>
+								<option value="ups" <?php selected( $box['carrier_restriction'] ?? '', 'ups' ); ?>>UPS</option>
+								<option value="fedex" <?php selected( $box['carrier_restriction'] ?? '', 'fedex' ); ?>>FedEx</option>
+							</select>
+						</td>
+						<td><button type="button" class="button fk-remove-box">&times;</button></td>
+					</tr>
+			<?php endforeach; ?>
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="14">
+							<button type="button" class="button button-secondary" id="fk-add-box"><?php esc_html_e( 'Add Box', 'fk-usps-optimizer' ); ?></button>
+						</td>
+					</tr>
+				</tfoot>
+			</table>
+			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes).', 'fk-usps-optimizer' ); ?></p>
+			<?php
+			return;
+		}
+
 		if ( 'boxes_json' === $key ) {
 			printf(
 				'<textarea class="large-text code" rows="16" name="%1$s[%2$s]">%3$s</textarea><p class="description">%4$s</p>',
@@ -385,7 +458,14 @@ class Settings {
 		$output['use_default_transit_days']  = empty( $input['use_default_transit_days'] ) ? '0' : '1';
 		$output['transit_days_buffer']       = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
 		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
-		$output['boxes_json']                = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
+
+		// Accept boxes from the new table UI (array of rows) or fall back to
+		// the legacy JSON textarea value for backward compatibility.
+		if ( ! empty( $input['boxes'] ) && is_array( $input['boxes'] ) ) {
+			$output['boxes_json'] = $this->sanitize_boxes_array( $input['boxes'] );
+		} else {
+			$output['boxes_json'] = $this->sanitize_boxes_json( $input['boxes_json'] ?? '' );
+		}
 
 		return $output;
 	}
@@ -412,19 +492,67 @@ class Settings {
 			}
 
 			$boxes[] = array(
-				'reference'    => sanitize_text_field( (string) ( $box['reference'] ?? '' ) ),
-				'package_code' => sanitize_text_field( (string) ( $box['package_code'] ?? 'package' ) ),
-				'package_name' => sanitize_text_field( (string) ( $box['package_name'] ?? '' ) ),
-				'box_type'     => in_array( ( $box['box_type'] ?? '' ), array( 'cubic', 'flat_rate' ), true ) ? $box['box_type'] : 'cubic',
-				'outer_width'  => abs( (float) ( $box['outer_width'] ?? 0 ) ),
-				'outer_length' => abs( (float) ( $box['outer_length'] ?? 0 ) ),
-				'outer_depth'  => abs( (float) ( $box['outer_depth'] ?? 0 ) ),
-				'inner_width'  => abs( (float) ( $box['inner_width'] ?? 0 ) ),
-				'inner_length' => abs( (float) ( $box['inner_length'] ?? 0 ) ),
-				'inner_depth'  => abs( (float) ( $box['inner_depth'] ?? 0 ) ),
-				'empty_weight' => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
-				'max_weight'   => abs( (float) ( $box['max_weight'] ?? 0 ) ),
+				'reference'           => sanitize_text_field( (string) ( $box['reference'] ?? '' ) ),
+				'package_code'        => sanitize_text_field( (string) ( $box['package_code'] ?? 'package' ) ),
+				'package_name'        => sanitize_text_field( (string) ( $box['package_name'] ?? '' ) ),
+				'box_type'            => in_array( ( $box['box_type'] ?? '' ), array( 'cubic', 'flat_rate' ), true ) ? $box['box_type'] : 'cubic',
+				'outer_width'         => abs( (float) ( $box['outer_width'] ?? 0 ) ),
+				'outer_length'        => abs( (float) ( $box['outer_length'] ?? 0 ) ),
+				'outer_depth'         => abs( (float) ( $box['outer_depth'] ?? 0 ) ),
+				'inner_width'         => abs( (float) ( $box['inner_width'] ?? 0 ) ),
+				'inner_length'        => abs( (float) ( $box['inner_length'] ?? 0 ) ),
+				'inner_depth'         => abs( (float) ( $box['inner_depth'] ?? 0 ) ),
+				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
+				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
+				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
 			);
+		}
+
+		return wp_json_encode( $boxes );
+	}
+
+	/**
+	 * Sanitize boxes submitted from the table-based UI.
+	 *
+	 * Each element in the array corresponds to a row from the HTML table.
+	 * The format is identical to the JSON schema but arrives pre-decoded.
+	 *
+	 * @param array $rows Array of box row arrays from form POST data.
+	 * @return string Sanitized JSON string.
+	 */
+	protected function sanitize_boxes_array( array $rows ): string {
+		$boxes = array();
+
+		foreach ( $rows as $box ) {
+			if ( ! is_array( $box ) ) {
+				continue;
+			}
+
+			// Skip rows where the user blanked out the reference (treated as deleted).
+			$reference = sanitize_text_field( (string) ( $box['reference'] ?? '' ) );
+			if ( '' === $reference ) {
+				continue;
+			}
+
+			$boxes[] = array(
+				'reference'           => $reference,
+				'package_code'        => sanitize_text_field( (string) ( $box['package_code'] ?? 'package' ) ),
+				'package_name'        => sanitize_text_field( (string) ( $box['package_name'] ?? '' ) ),
+				'box_type'            => in_array( ( $box['box_type'] ?? '' ), array( 'cubic', 'flat_rate' ), true ) ? $box['box_type'] : 'cubic',
+				'outer_width'         => abs( (float) ( $box['outer_width'] ?? 0 ) ),
+				'outer_length'        => abs( (float) ( $box['outer_length'] ?? 0 ) ),
+				'outer_depth'         => abs( (float) ( $box['outer_depth'] ?? 0 ) ),
+				'inner_width'         => abs( (float) ( $box['inner_width'] ?? 0 ) ),
+				'inner_length'        => abs( (float) ( $box['inner_length'] ?? 0 ) ),
+				'inner_depth'         => abs( (float) ( $box['inner_depth'] ?? 0 ) ),
+				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
+				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
+				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
+			);
+		}
+
+		if ( empty( $boxes ) ) {
+			return wp_json_encode( $this->get_default_boxes() );
 		}
 
 		return wp_json_encode( $boxes );
@@ -529,6 +657,37 @@ class Settings {
 		$boxes    = json_decode( $settings['boxes_json'], true );
 
 		return is_array( $boxes ) ? apply_filters( 'fk_usps_optimizer_boxes', $boxes ) : $this->get_default_boxes();
+	}
+
+	/**
+	 * Get box definitions filtered for a specific carrier.
+	 *
+	 * Returns only boxes whose carrier_restriction is empty (available to all)
+	 * or matches the given carrier keyword.  The carrier keyword is matched
+	 * case-insensitively against the stored restriction.
+	 *
+	 * @param string $carrier Carrier keyword (e.g. 'usps', 'ups', 'fedex').
+	 * @return array Filtered array of box definitions.
+	 */
+	public function get_boxes_for_carrier( string $carrier ): array {
+		$boxes   = $this->get_boxes();
+		$carrier = strtolower( trim( $carrier ) );
+
+		if ( '' === $carrier ) {
+			return $boxes;
+		}
+
+		$filtered = array();
+
+		foreach ( $boxes as $box ) {
+			$restriction = strtolower( trim( (string) ( $box['carrier_restriction'] ?? '' ) ) );
+
+			if ( '' === $restriction || $restriction === $carrier ) {
+				$filtered[] = $box;
+			}
+		}
+
+		return $filtered;
 	}
 
 	/**
@@ -862,74 +1021,94 @@ class Settings {
 	protected function get_default_boxes(): array {
 		return array(
 			array(
-				'reference'    => 'Cubic Small',
-				'package_code' => 'package',
-				'package_name' => 'Custom Cubic Small',
-				'box_type'     => 'cubic',
-				'outer_width'  => 8,
-				'outer_length' => 8,
-				'outer_depth'  => 6,
-				'inner_width'  => 8,
-				'inner_length' => 8,
-				'inner_depth'  => 6,
-				'empty_weight' => 3,
-				'max_weight'   => 20,
+				'reference'           => '1 Bag',
+				'package_code'        => 'package',
+				'package_name'        => '1 Bag',
+				'box_type'            => 'cubic',
+				'outer_width'         => 8,
+				'outer_length'        => 6,
+				'outer_depth'         => 6,
+				'inner_width'         => 8,
+				'inner_length'        => 6,
+				'inner_depth'         => 6,
+				'empty_weight'        => 3,
+				'max_weight'          => 5,
+				'carrier_restriction' => '',
 			),
 			array(
-				'reference'    => 'Cubic Medium',
-				'package_code' => 'package',
-				'package_name' => 'Custom Cubic Medium',
-				'box_type'     => 'cubic',
-				'outer_width'  => 12,
-				'outer_length' => 10,
-				'outer_depth'  => 8,
-				'inner_width'  => 12,
-				'inner_length' => 10,
-				'inner_depth'  => 8,
-				'empty_weight' => 5,
-				'max_weight'   => 20,
+				'reference'           => '2 Bag',
+				'package_code'        => 'package',
+				'package_name'        => '2 Bag',
+				'box_type'            => 'cubic',
+				'outer_width'         => 11,
+				'outer_length'        => 8,
+				'outer_depth'         => 7,
+				'inner_width'         => 11,
+				'inner_length'        => 8,
+				'inner_depth'         => 7,
+				'empty_weight'        => 5,
+				'max_weight'          => 9,
+				'carrier_restriction' => '',
 			),
 			array(
-				'reference'    => 'USPS Small Flat Rate',
-				'package_code' => 'small_flat_rate_box',
-				'package_name' => 'USPS Small Flat Rate Box',
-				'box_type'     => 'flat_rate',
-				'outer_width'  => 9,
-				'outer_length' => 6,
-				'outer_depth'  => 2,
-				'inner_width'  => 9,
-				'inner_length' => 6,
-				'inner_depth'  => 2,
-				'empty_weight' => 4,
-				'max_weight'   => 70,
+				'reference'           => '3 Bag',
+				'package_code'        => 'package',
+				'package_name'        => '3 Bag',
+				'box_type'            => 'cubic',
+				'outer_width'         => 12,
+				'outer_length'        => 11,
+				'outer_depth'         => 6,
+				'inner_width'         => 12,
+				'inner_length'        => 11,
+				'inner_depth'         => 6,
+				'empty_weight'        => 7,
+				'max_weight'          => 13,
+				'carrier_restriction' => '',
 			),
 			array(
-				'reference'    => 'USPS Medium Flat Rate',
-				'package_code' => 'medium_flat_rate_box',
-				'package_name' => 'USPS Medium Flat Rate Box',
-				'box_type'     => 'flat_rate',
-				'outer_width'  => 14,
-				'outer_length' => 12,
-				'outer_depth'  => 3,
-				'inner_width'  => 14,
-				'inner_length' => 12,
-				'inner_depth'  => 3,
-				'empty_weight' => 6,
-				'max_weight'   => 70,
+				'reference'           => '4 Bag',
+				'package_code'        => 'package',
+				'package_name'        => '4 Bag',
+				'box_type'            => 'cubic',
+				'outer_width'         => 12,
+				'outer_length'        => 12,
+				'outer_depth'         => 7,
+				'inner_width'         => 12,
+				'inner_length'        => 12,
+				'inner_depth'         => 7,
+				'empty_weight'        => 5,
+				'max_weight'          => 17,
+				'carrier_restriction' => '',
 			),
 			array(
-				'reference'    => 'USPS Large Flat Rate',
-				'package_code' => 'large_flat_rate_box',
-				'package_name' => 'USPS Large Flat Rate Box',
-				'box_type'     => 'flat_rate',
-				'outer_width'  => 12,
-				'outer_length' => 12,
-				'outer_depth'  => 6,
-				'inner_width'  => 12,
-				'inner_length' => 12,
-				'inner_depth'  => 6,
-				'empty_weight' => 8,
-				'max_weight'   => 70,
+				'reference'           => 'USPS Medium Flat Rate',
+				'package_code'        => 'medium_flat_rate_box',
+				'package_name'        => 'Medium Flat Rate Box',
+				'box_type'            => 'flat_rate',
+				'outer_width'         => 14,
+				'outer_length'        => 12,
+				'outer_depth'         => 3,
+				'inner_width'         => 14,
+				'inner_length'        => 12,
+				'inner_depth'         => 3,
+				'empty_weight'        => 6,
+				'max_weight'          => 70,
+				'carrier_restriction' => 'usps',
+			),
+			array(
+				'reference'           => 'USPS Large Flat Rate',
+				'package_code'        => 'large_flat_rate_box',
+				'package_name'        => 'Large Flat Rate Box',
+				'box_type'            => 'flat_rate',
+				'outer_width'         => 12,
+				'outer_length'        => 12,
+				'outer_depth'         => 6,
+				'inner_width'         => 12,
+				'inner_length'        => 12,
+				'inner_depth'         => 6,
+				'empty_weight'        => 8,
+				'max_weight'          => 70,
+				'carrier_restriction' => 'usps',
 			),
 		);
 	}
