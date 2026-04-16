@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/add-estimated-delivery-date-setting',
-        'version' => 'dev-copilot/add-estimated-delivery-date-setting',
-        'reference' => '1a484feefc575d4d6021d6c9951d01f7d5b91579',
+        'pretty_version' => 'dev-copilot/update-settings-handle-multiple-services',
+        'version' => 'dev-copilot/update-settings-handle-multiple-services',
+        'reference' => 'cea52ea65f89032bbecad6c7f4805bdf4f36745f',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/add-estimated-delivery-date-setting',
-            'version' => 'dev-copilot/add-estimated-delivery-date-setting',
-            'reference' => '1a484feefc575d4d6021d6c9951d01f7d5b91579',
+            'pretty_version' => 'dev-copilot/update-settings-handle-multiple-services',
+            'version' => 'dev-copilot/update-settings-handle-multiple-services',
+            'reference' => 'cea52ea65f89032bbecad6c7f4805bdf4f36745f',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
