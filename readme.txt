@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.6
+Stable tag: 1.2.8
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -68,7 +68,7 @@ Boxes that do not meet these criteria are silently excluded from cubic candidate
 
 = Box Configuration =
 
-Boxes are stored as a JSON array in the plugin settings. Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), and a type (`cubic` or `flat_rate`). See the `README.md` for the full JSON schema and examples.
+Boxes are managed via a visual table on the settings page. Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional carrier restriction (`Any`, `USPS`, `UPS`, `FedEx`). Carrier-restricted boxes are only considered for shipments with the matching carrier. See the `README.md` for the full JSON schema and examples.
 
 = PirateShip Export =
 
@@ -124,7 +124,7 @@ Yes. Open **WooCommerce → USPS Test Pricing**, enter item dimensions and a des
 
 = How do I add custom boxes? =
 
-Edit the **Box Definitions JSON** field in **WooCommerce → USPS Optimizer**. You can also add boxes at runtime using the `fk_usps_optimizer_boxes` filter. See `README.md` for the full schema.
+Use the **Box Definitions** table in **WooCommerce → USPS Optimizer** to add, edit, or remove boxes. Each row has fields for dimensions, weight, type, and carrier restriction. You can also add boxes at runtime using the `fk_usps_optimizer_boxes` filter. See `README.md` for the full schema.
 
 = How do I load API credentials from environment variables? =
 
@@ -151,6 +151,13 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.8 =
+* New: **Box Management Table UI** — box definitions are now managed via a visual table instead of raw JSON. Each box can be added, edited, or removed individually with dedicated fields for all dimensions, weights, and settings.
+* New: **Carrier Restriction per box** — each box can be assigned to a specific carrier (USPS, UPS, FedEx) or left as "Any" for all carriers. USPS Flat Rate boxes can now be restricted so they are only considered for USPS shipments.
+* New: `get_boxes_for_carrier()` method — returns only boxes available to the given carrier (unrestricted + carrier-matched).
+* Changed: Default box set updated to 1 Bag, 2 Bag, 3 Bag, 4 Bag (cubic, any carrier), USPS Medium Flat Rate, and USPS Large Flat Rate (flat rate, USPS-only).
+* Improved: JavaScript for dynamic add/remove of box rows with automatic index re-sequencing.
 
 = 1.2.6 =
 * New: **Additional Business Days** setting — adds a configurable buffer (0–30 business days) to every estimated delivery date. The buffer skips weekends (Saturday and Sunday), so a 2-business-day buffer applied on a Thursday moves the estimate to the following Monday. Useful for accounting for order processing and handling time.
