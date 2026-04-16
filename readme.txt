@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.4
+Stable tag: 1.2.6
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -33,6 +33,10 @@ The plugin registers as a WooCommerce shipping method that can be added to any s
 **Show All Options** — When enabled, every combination of rated box candidates (cartesian product) is offered as a separate shipping option in the cart and checkout. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box").
 
 **Show Package Count** — When enabled, the package count is appended to each shipping label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural handling.
+
+**Show Estimated Delivery Date** — When enabled, the carrier-provided estimated delivery date is appended to each shipping option label (e.g. "USPS Priority — Est. delivery: Mon, Jan 15"). Works with both ShipEngine and ShipStation. Also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it.
+
+**Additional Business Days** — Adds a configurable buffer (0–30 business days, Monday–Friday) to every estimated delivery date. Useful for order processing or handling time. Weekends are automatically skipped.
 
 **USPS Service Code** — Each carrier now has its own service code setting (**ShipEngine Service Code** and **ShipStation Service Code**). Configure which USPS service code is sent to each carrier API (default: `usps_priority_mail`).
 
@@ -147,6 +151,13 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.2.6 =
+* New: **Additional Business Days** setting — adds a configurable buffer (0–30 business days) to every estimated delivery date. The buffer skips weekends (Saturday and Sunday), so a 2-business-day buffer applied on a Thursday moves the estimate to the following Monday. Useful for accounting for order processing and handling time.
+* Fixed: Transit-days buffer now correctly adds business days (Monday–Friday) instead of calendar days, matching the "Additional Business Days" setting label.
+
+= 1.2.5 =
+* New: **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is appended to each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") also appears as WooCommerce rate metadata for themes that render it.
 
 = 1.2.4 =
 * Fixed: Box dimension and weight fields now accept decimal values (e.g. 12.25 inches). Previously `absint()` truncated decimals to integers, so a box entered as 12.25 × 11.5 was stored as 12 × 11.

@@ -104,13 +104,17 @@ class Shipping_Method extends \WC_Shipping_Method {
 		}
 
 		foreach ( $rates as $idx => $rate ) {
-			$this->add_rate(
-				array(
-					'id'    => $this->get_rate_id() . ( $idx > 0 ? ':' . $idx : '' ),
-					'label' => $rate['label'],
-					'cost'  => (float) $rate['cost'],
-				)
+			$rate_args = array(
+				'id'    => $this->get_rate_id() . ( $idx > 0 ? ':' . $idx : '' ),
+				'label' => $rate['label'],
+				'cost'  => (float) $rate['cost'],
 			);
+
+			if ( ! empty( $rate['meta_data'] ) ) {
+				$rate_args['meta_data'] = $rate['meta_data'];
+			}
+
+			$this->add_rate( $rate_args );
 		}
 	}
 
@@ -132,6 +136,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$all_rated        = true;
 		$package_count    = count( $packed_packages );
 		$service_labels   = array();
+		$delivery_dates   = array();
 
 		foreach ( $packed_packages as $index => $packed ) {
 			$best_plan = array();
@@ -153,6 +158,11 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 			$total_cost      += $best_cost;
 			$service_labels[] = $best_plan['service_label'] ?? '';
+
+			$date = (string) ( $best_plan['estimated_delivery_date'] ?? '' );
+			if ( '' !== $date ) {
+				$delivery_dates[] = $date;
+			}
 		}
 
 		if ( ! $all_rated || $total_cost <= 0 ) {
@@ -176,10 +186,29 @@ class Shipping_Method extends \WC_Shipping_Method {
 			);
 		}
 
+		$meta_data = array();
+		if ( $settings->is_show_estimated_delivery_enabled() ) {
+			if ( ! empty( $delivery_dates ) ) {
+				sort( $delivery_dates );
+				$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
+				if ( '' !== $formatted ) {
+					/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
+					$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+					$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
+				}
+			} else {
+				$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
+				/* translators: %s: "(No Estimate)" placeholder. */
+				$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+				$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
+			}
+		}
+
 		return array(
 			array(
-				'label' => $label,
-				'cost'  => $total_cost,
+				'label'     => $label,
+				'cost'      => $total_cost,
+				'meta_data' => $meta_data,
 			),
 		);
 	}
@@ -225,11 +254,17 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$total          = 0.0;
 			$names          = array();
 			$service_labels = array();
+			$delivery_dates = array();
 
 			foreach ( $combo as $plan ) {
 				$total           += (float) $plan['rate_amount'];
 				$names[]          = $plan['package_name'];
 				$service_labels[] = $plan['service_label'] ?? '';
+
+				$date = (string) ( $plan['estimated_delivery_date'] ?? '' );
+				if ( '' !== $date ) {
+					$delivery_dates[] = $date;
+				}
 			}
 
 			if ( $total <= 0 ) {
@@ -263,6 +298,24 @@ class Shipping_Method extends \WC_Shipping_Method {
 				);
 			}
 
+			$meta_data = array();
+			if ( $settings->is_show_estimated_delivery_enabled() ) {
+				if ( ! empty( $delivery_dates ) ) {
+					sort( $delivery_dates );
+					$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
+					if ( '' !== $formatted ) {
+						/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
+						$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
+					}
+				} else {
+					$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
+					/* translators: %s: "(No Estimate)" placeholder. */
+					$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+					$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
+				}
+			}
+
 			// Deduplicate equivalent combos (permutations of the same set of box types).
 			if ( isset( $seen_labels[ $label ] ) ) {
 				continue;
@@ -270,8 +323,9 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$seen_labels[ $label ] = true;
 
 			$rates[] = array(
-				'label' => $label,
-				'cost'  => $total,
+				'label'     => $label,
+				'cost'      => $total,
+				'meta_data' => $meta_data,
 			);
 		}
 
@@ -382,5 +436,30 @@ class Shipping_Method extends \WC_Shipping_Method {
 			'country_code'                  => $destination['country'] ?? 'US',
 			'address_residential_indicator' => 'unknown',
 		);
+	}
+
+	/**
+	 * Format a raw estimated-delivery date string for display.
+	 *
+	 * Accepts either an ISO 8601 datetime string (as returned by ShipEngine,
+	 * e.g. "2024-01-15T00:00:00Z") or a plain YYYY-MM-DD date string (as
+	 * computed from ShipStation transit days) and returns a short label such
+	 * as "Mon, Jan 15".  Returns an empty string when the input is empty or
+	 * cannot be parsed.
+	 *
+	 * @param string $iso_date ISO 8601 datetime or YYYY-MM-DD date string.
+	 * @return string Formatted date string (e.g. "Mon, Jan 15"), or ''.
+	 */
+	protected function format_estimated_delivery( string $iso_date ): string {
+		if ( '' === $iso_date ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( $iso_date );
+			return $date->format( 'D, M j' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 }

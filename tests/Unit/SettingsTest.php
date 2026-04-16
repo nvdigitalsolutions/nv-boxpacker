@@ -736,6 +736,137 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// show_estimated_delivery
+	// -------------------------------------------------------------------------
+
+	public function test_show_estimated_delivery_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '1' );
+		$this->assertTrue( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_not_enabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '0' );
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_show_estimated_delivery(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'show_estimated_delivery' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'show_estimated_delivery', $output );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['show_estimated_delivery'] );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_accepts_one(): void {
+		$input                          = $this->empty_settings_input();
+		$input['show_estimated_delivery'] = '1';
+		$result                         = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_estimated_delivery'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// use_default_transit_days
+	// -------------------------------------------------------------------------
+
+	public function test_use_default_transit_days_enabled_by_default(): void {
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '1' );
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_disabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '0' );
+		$this->assertFalse( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_use_default_transit_days(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'use_default_transit_days' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'use_default_transit_days', $output );
+		$this->assertStringContainsString( 'type="checkbox"', $output );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['use_default_transit_days'] );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_accepts_one(): void {
+		$input                            = $this->empty_settings_input();
+		$input['use_default_transit_days'] = '1';
+		$result                           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['use_default_transit_days'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// transit_days_buffer
+	// -------------------------------------------------------------------------
+
+	public function test_transit_days_buffer_defaults_to_zero(): void {
+		$this->assertSame( 0, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_transit_days_buffer_returns_stored_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'transit_days_buffer' => 2 );
+		$this->assertSame( 2, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_transit_days_buffer_clamps_negative_to_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'transit_days_buffer' => -5 );
+		$this->assertSame( 0, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_render_field_outputs_number_input_for_transit_days_buffer(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'transit_days_buffer' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'transit_days_buffer', $output );
+		$this->assertStringContainsString( 'type="number"', $output );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 0, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_accepts_positive_int(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '3';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 3, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_clamps_to_30(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '99';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 30, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_clamps_negative_to_zero(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '-5';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 0, $result['transit_days_buffer'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// get_shipstation_service_pairs
 	// -------------------------------------------------------------------------
 

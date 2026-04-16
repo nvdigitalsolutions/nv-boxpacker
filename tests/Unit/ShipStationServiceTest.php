@@ -927,4 +927,231 @@ class ShipStationServiceTest extends TestCase {
 		$service = new ShipStation_Service( $this->settings, 'endicia', 'usps_first_class_mail' );
 		$this->assertSame( 'USPS First Class', $service->get_service_label() );
 	}
+
+	// -------------------------------------------------------------------------
+	// compute_delivery_date (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_compute_delivery_date_returns_empty_for_zero_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( 0 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_returns_empty_for_negative_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( -1 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_adds_transit_days_from_current_time(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$result = $this->call_protected( 'compute_delivery_date', array( 2 ) );
+		$this->assertSame( '2024-01-03', $result );
+	}
+
+	public function test_compute_delivery_date_returns_iso_date_string(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( 5 ) );
+		$this->assertMatchesRegularExpression( '/^\d{4}-\d{2}-\d{2}$/', $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// estimated_delivery_date in build_test_package_plan
+	// -------------------------------------------------------------------------
+
+	public function test_build_test_package_plan_includes_estimated_delivery_date_when_transit_days_present(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'  => 'usps_priority_mail',
+					'shipmentCost' => 7.99,
+					'otherCost'    => 0.00,
+					'transitDays'  => 2,
+				),
+			) ),
+		);
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		// current_time() stub returns '2024-01-01 00:00:00', so 2 days → '2024-01-03'.
+		$this->assertSame( '2024-01-03', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_test_package_plan_estimated_delivery_date_uses_fallback_when_no_transit_days(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
+		$this->configure_credentials();
+		$this->mock_rate_response( 7.99 ); // No transitDays field, but serviceCode is usps_priority_mail.
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		// current_time() stub returns '2024-01-01 00:00:00'; usps_priority_mail defaults to 3 days.
+		$this->assertSame( '2024-01-04', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'  => 'usps_priority_mail',
+					'shipmentCost' => 7.99,
+					'otherCost'    => 0.00,
+					'transitDays'  => 3,
+				),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( '2024-01-04', $plans[0]['estimated_delivery_date'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// extract_delivery_date (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_extract_delivery_date_prefers_estimated_delivery_date_field(): void {
+		$rate   = array(
+			'estimatedDeliveryDate' => '2024-02-10T00:00:00Z',
+			'deliveryDays'          => 5,
+			'transitDays'           => 3,
+		);
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-02-10', $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_delivery_days(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$rate   = array( 'deliveryDays' => 4 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-01-05', $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_transit_days(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$rate   = array( 'transitDays' => 2 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-01-03', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_when_no_fields(): void {
+		$rate   = array( 'shipmentCost' => 7.99 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_extract_delivery_date_skips_invalid_estimated_delivery_date(): void {
+		// Invalid ISO string should fall through to deliveryDays.
+		$rate   = array(
+			'estimatedDeliveryDate' => 'not-a-date',
+			'deliveryDays'          => 3,
+		);
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_build_test_package_plan_uses_estimated_delivery_date_field(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'             => 'usps_priority_mail',
+					'shipmentCost'            => 7.99,
+					'otherCost'               => 0.00,
+					'estimatedDeliveryDate'   => '2024-03-15T00:00:00Z',
+				),
+			) ),
+		);
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		$this->assertSame( '2024-03-15', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_test_package_plan_uses_delivery_days_field(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array(
+					'serviceCode'  => 'usps_priority_mail',
+					'shipmentCost' => 7.99,
+					'otherCost'    => 0.00,
+					'deliveryDays' => 3,
+				),
+			) ),
+		);
+
+		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		// current_time() stub returns '2024-01-01 00:00:00', so 3 days → '2024-01-04'.
+		$this->assertSame( '2024-01-04', $result['estimated_delivery_date'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_default_transit_days (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_get_default_transit_days_returns_days_for_usps_priority(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'usps_priority_mail' ) );
+		$this->assertSame( 3, $result );
+	}
+
+	public function test_get_default_transit_days_returns_days_for_ups_ground(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'ups_ground' ) );
+		$this->assertSame( 5, $result );
+	}
+
+	public function test_get_default_transit_days_returns_zero_for_unknown_code(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'unknown_service' ) );
+		$this->assertSame( 0, $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_service_code_default(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
+		// No delivery date fields, but serviceCode is a known USPS service.
+		$rate   = array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		// current_time() stub returns '2024-01-01 00:00:00'; priority_mail defaults to 3 days.
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_for_unknown_service_code(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
+		$rate   = array( 'serviceCode' => 'some_unknown_service', 'shipmentCost' => 7.99 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_extract_delivery_date_skips_fallback_when_setting_disabled(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+		// Known service code but setting is off — should return empty.
+		$rate   = array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_adds_buffer_days(): void {
+		$this->settings->method( 'get_transit_days_buffer' )->willReturn( 2 );
+		// current_time() stub returns '2024-01-01 00:00:00' (Monday).
+		// 3 transit calendar days → Thu Jan 4; + 2 business days (Fri, Mon) → 2024-01-08.
+		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
+		$this->assertSame( '2024-01-08', $result );
+	}
 }

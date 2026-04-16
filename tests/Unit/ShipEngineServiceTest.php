@@ -905,4 +905,235 @@ class ShipEngineServiceTest extends TestCase {
 		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'some_future_service' );
 		$this->assertSame( 'USPS Some Future Service', $this->service->get_service_label() );
 	}
+
+	// -------------------------------------------------------------------------
+	// estimated_delivery_date in build_package_plan
+	// -------------------------------------------------------------------------
+
+	public function test_build_package_plan_includes_estimated_delivery_date_when_present(): void {
+		$boxes = array( $this->make_box() );
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array(
+							'shipping_amount'         => array( 'amount' => 7.99, 'currency' => 'USD' ),
+							'estimated_delivery_date' => '2024-01-15T00:00:00Z',
+						),
+					),
+				),
+			) ),
+		);
+
+		$order   = $this->make_order();
+		$package = $this->make_package();
+		$result  = $this->service->build_package_plan( $order, $package, 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		$this->assertSame( '2024-01-15T00:00:00Z', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_package_plan_estimated_delivery_date_defaults_to_empty_string(): void {
+		$boxes = array( $this->make_box() );
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array( 'shipping_amount' => array( 'amount' => 7.99, 'currency' => 'USD' ) ),
+					),
+				),
+			) ),
+		);
+
+		$order   = $this->make_order();
+		$package = $this->make_package();
+		$result  = $this->service->build_package_plan( $order, $package, 1 );
+
+		$this->assertSame( '', $result['estimated_delivery_date'] );
+	}
+
+	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
+		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array(
+							'shipping_amount'         => array( 'amount' => 7.99, 'currency' => 'USD' ),
+							'estimated_delivery_date' => '2024-01-20T00:00:00Z',
+						),
+					),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( '2024-01-20T00:00:00Z', $plans[0]['estimated_delivery_date'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// extract_delivery_date (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_extract_delivery_date_returns_iso_string_when_present(): void {
+		$rate   = array( 'estimated_delivery_date' => '2024-02-10T00:00:00Z' );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-02-10T00:00:00Z', $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_delivery_days(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$rate   = array( 'estimated_delivery_date' => null, 'delivery_days' => 3 );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_when_no_fields(): void {
+		$rate   = array( 'shipping_amount' => array( 'amount' => 7.99 ) );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_when_both_null(): void {
+		$rate   = array( 'estimated_delivery_date' => null, 'delivery_days' => null );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// compute_delivery_date (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_compute_delivery_date_returns_empty_for_zero_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( 0 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_returns_empty_for_negative_days(): void {
+		$result = $this->call_protected( 'compute_delivery_date', array( -1 ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_adds_days_from_current_time(): void {
+		// current_time() stub returns '2024-01-01 00:00:00'.
+		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_build_package_plan_uses_delivery_days_fallback(): void {
+		$boxes = array( $this->make_box() );
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array(
+			'address_line1' => '1 From St', 'city_locality' => 'City',
+			'state_province' => 'CA', 'postal_code' => '90210', 'country_code' => 'US',
+		) );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array(
+							'shipping_amount'         => array( 'amount' => 7.99, 'currency' => 'USD' ),
+							'estimated_delivery_date' => null,
+							'delivery_days'           => 2,
+						),
+					),
+				),
+			) ),
+		);
+
+		$order   = $this->make_order();
+		$package = $this->make_package();
+		$result  = $this->service->build_package_plan( $order, $package, 1 );
+
+		$this->assertArrayHasKey( 'estimated_delivery_date', $result );
+		// current_time() stub returns '2024-01-01 00:00:00', so 2 days → '2024-01-03'.
+		$this->assertSame( '2024-01-03', $result['estimated_delivery_date'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_default_transit_days (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_get_default_transit_days_returns_days_for_usps_priority(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'usps_priority_mail' ) );
+		$this->assertSame( 3, $result );
+	}
+
+	public function test_get_default_transit_days_returns_zero_for_unknown_code(): void {
+		$result = $this->call_protected( 'get_default_transit_days', array( 'unknown_service' ) );
+		$this->assertSame( 0, $result );
+	}
+
+	public function test_extract_delivery_date_falls_back_to_service_code_default(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
+		// No delivery date fields, but service_code is a known USPS service.
+		$rate   = array( 'service_code' => 'usps_priority_mail', 'shipping_amount' => array( 'amount' => 7.99 ) );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		// current_time() stub returns '2024-01-01 00:00:00'; priority_mail defaults to 3 days.
+		$this->assertSame( '2024-01-04', $result );
+	}
+
+	public function test_extract_delivery_date_returns_empty_for_unknown_service_code(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
+		$rate   = array( 'service_code' => 'some_unknown_service' );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_extract_delivery_date_skips_fallback_when_setting_disabled(): void {
+		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+		// Known service code but setting is off — should return empty.
+		$rate   = array( 'service_code' => 'usps_priority_mail' );
+		$result = $this->call_protected( 'extract_delivery_date', array( $rate ) );
+		$this->assertSame( '', $result );
+	}
+
+	public function test_compute_delivery_date_adds_buffer_days(): void {
+		$this->settings->method( 'get_transit_days_buffer' )->willReturn( 2 );
+		// current_time() stub returns '2024-01-01 00:00:00' (Monday).
+		// 3 transit calendar days → Thu Jan 4; + 2 business days (Fri, Mon) → 2024-01-08.
+		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
+		$this->assertSame( '2024-01-08', $result );
+	}
 }

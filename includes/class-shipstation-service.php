@@ -354,19 +354,20 @@ class ShipStation_Service {
 
 			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
 				$best_plan = array(
-					'package_number' => $package_number,
-					'mode'           => $candidate['mode'],
-					'package_code'   => $candidate['package_code'],
-					'package_name'   => $candidate['package_name'],
-					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => $total_cost,
-					'currency'       => 'USD',
-					'weight_oz'      => (float) $candidate['weight_oz'],
-					'dimensions'     => $candidate['dimensions'],
-					'cubic_tier'     => $candidate['cubic_tier'],
-					'packing_list'   => $this->build_packing_list( $package['items'] ),
-					'items'          => $package['items'],
+					'package_number'          => $package_number,
+					'mode'                    => $candidate['mode'],
+					'package_code'            => $candidate['package_code'],
+					'package_name'            => $candidate['package_name'],
+					'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
+					'service_label'           => $this->get_service_label(),
+					'rate_amount'             => $total_cost,
+					'currency'                => 'USD',
+					'weight_oz'               => (float) $candidate['weight_oz'],
+					'dimensions'              => $candidate['dimensions'],
+					'cubic_tier'              => $candidate['cubic_tier'],
+					'packing_list'            => $this->build_packing_list( $package['items'] ),
+					'items'                   => $package['items'],
+					'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 				);
 			}
 		}
@@ -398,19 +399,20 @@ class ShipStation_Service {
 			$rate       = $response['rate'];
 			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 			$plans[]    = array(
-				'package_number' => $package_number,
-				'mode'           => $candidate['mode'],
-				'package_code'   => $candidate['package_code'],
-				'package_name'   => $candidate['package_name'],
-				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => $total_cost,
-				'currency'       => 'USD',
-				'weight_oz'      => (float) $candidate['weight_oz'],
-				'dimensions'     => $candidate['dimensions'],
-				'cubic_tier'     => $candidate['cubic_tier'],
-				'packing_list'   => $this->build_packing_list( $package['items'] ),
-				'items'          => $package['items'],
+				'package_number'          => $package_number,
+				'mode'                    => $candidate['mode'],
+				'package_code'            => $candidate['package_code'],
+				'package_name'            => $candidate['package_name'],
+				'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
+				'service_label'           => $this->get_service_label(),
+				'rate_amount'             => $total_cost,
+				'currency'                => 'USD',
+				'weight_oz'               => (float) $candidate['weight_oz'],
+				'dimensions'              => $candidate['dimensions'],
+				'cubic_tier'              => $candidate['cubic_tier'],
+				'packing_list'            => $this->build_packing_list( $package['items'] ),
+				'items'                   => $package['items'],
+				'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 			);
 		}
 
@@ -701,6 +703,126 @@ class ShipStation_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Extract an estimated delivery date from a ShipStation rate response.
+	 *
+	 * The ShipStation getrates API may return delivery information under
+	 * several field names depending on the carrier and API version:
+	 *   - 'estimatedDeliveryDate' — ISO 8601 datetime string (preferred).
+	 *   - 'deliveryDays'          — integer transit-day count.
+	 *   - 'transitDays'           — legacy field name for transit-day count.
+	 *
+	 * The method checks each field in order and returns the first usable
+	 * value as a YYYY-MM-DD date string, or '' when no data is available.
+	 *
+	 * @param array $rate Rate entry from ShipStation response.
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function extract_delivery_date( array $rate ): string {
+		// 1. Direct ISO datetime string from the API.
+		$iso = (string) ( $rate['estimatedDeliveryDate'] ?? '' );
+		if ( '' !== $iso ) {
+			try {
+				$date = new \DateTime( $iso );
+				return $date->format( 'Y-m-d' );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Intentional: invalid date falls through to day-count fallbacks.
+			}
+		}
+
+		// 2. Day-count fields — try both names the API may use.
+		foreach ( array( 'deliveryDays', 'transitDays' ) as $key ) {
+			if ( isset( $rate[ $key ] ) && (int) $rate[ $key ] > 0 ) {
+				return $this->compute_delivery_date( (int) $rate[ $key ] );
+			}
+		}
+
+		// 3. Fallback: estimate from the service code's typical transit days
+		// (only when the admin has enabled the setting).
+		if ( $this->settings->is_use_default_transit_days_enabled() ) {
+			$service_code = (string) ( $rate['serviceCode'] ?? '' );
+			$default_days = $this->get_default_transit_days( $service_code );
+			if ( $default_days > 0 ) {
+				return $this->compute_delivery_date( $default_days );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get default transit days for a carrier service code.
+	 *
+	 * The ShipStation getrates endpoint does not always return delivery-day
+	 * or estimated-delivery-date information.  When those fields are absent
+	 * this method provides a reasonable worst-case estimate based on
+	 * carrier-published transit times so that the checkout still displays
+	 * an estimated delivery date.
+	 *
+	 * @param string $service_code ShipStation service code.
+	 * @return int Estimated transit days, or 0 when unknown.
+	 */
+	protected function get_default_transit_days( string $service_code ): int {
+		$map = array(
+			// USPS services.
+			'usps_priority_mail'         => 3,
+			'usps_priority_mail_express' => 2,
+			'usps_first_class_mail'      => 5,
+			'usps_ground_advantage'      => 5,
+			'usps_parcel_select'         => 8,
+			'usps_media_mail'            => 8,
+			// UPS services.
+			'ups_ground'                 => 5,
+			'ups_ground_saver'           => 5,
+			'ups_3_day_select'           => 3,
+			'ups_2nd_day_air'            => 2,
+			'ups_next_day_air_saver'     => 1,
+			'ups_next_day_air'           => 1,
+			// FedEx services.
+			'fedex_ground'               => 5,
+			'fedex_home_delivery'        => 5,
+			'fedex_express_saver'        => 3,
+			'fedex_2day'                 => 2,
+		);
+
+		return $map[ $service_code ] ?? 0;
+	}
+
+	/**
+	 * Compute an estimated delivery date string from a transit-day count.
+	 *
+	 * Uses the current WordPress site time as the start date, adds the
+	 * given number of calendar transit days, then adds the configured
+	 * buffer as **business days** (Monday–Friday only).  Returns an empty
+	 * string when $transit_days is zero or negative.
+	 *
+	 * @param int $transit_days Number of transit days (calendar).
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function compute_delivery_date( int $transit_days ): string {
+		if ( $transit_days <= 0 ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( current_time( 'mysql' ) );
+			$date->modify( '+' . $transit_days . ' days' );
+
+			$buffer = $this->settings->get_transit_days_buffer();
+			$added  = 0;
+			while ( $added < $buffer ) {
+				$date->modify( '+1 day' );
+				$dow = (int) $date->format( 'N' ); // 1=Mon … 7=Sun.
+				if ( $dow <= 5 ) {
+					++$added;
+				}
+			}
+
+			return $date->format( 'Y-m-d' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 
 	// -------------------------------------------------------------------------

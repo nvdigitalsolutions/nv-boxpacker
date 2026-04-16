@@ -16,7 +16,7 @@ set -euo pipefail
 
 PLUGIN_SLUG="woocommerce-fk-usps-optimizer"
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${PLUGIN_DIR}/build"
+BUILD_DIR="${PLUGIN_DIR}/dist"
 VERSION="${1:-$(grep "Version:" "${PLUGIN_DIR}/woocommerce-fk-usps-optimizer.php" | awk '{print $NF}')}"
 ZIP_NAME="${PLUGIN_SLUG}-${VERSION}.zip"
 
@@ -49,9 +49,13 @@ cd "${BUILD_DIR}"
 zip -r "${ZIP_NAME}" "${PLUGIN_SLUG}/"
 cd "${PLUGIN_DIR}"
 
-echo "==> Build complete: build/${ZIP_NAME}"
+echo "==> Build complete: dist/${ZIP_NAME}"
 
-# ---- 5. Restore dev dependencies for local development ----------------------
+# ---- 5. Clean up staging directory -------------------------------------------
+echo "==> Cleaning up staging directory..."
+rm -rf "${BUILD_DIR}/${PLUGIN_SLUG}"
+
+# ---- 6. Restore dev dependencies for local development ----------------------
 echo "==> Restoring dev dependencies..."
 composer install \
   --working-dir="${PLUGIN_DIR}" \
