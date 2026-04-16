@@ -161,6 +161,7 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 | **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. When enabled, each packed package is rated against all configured boxes; the cartesian product of those candidates produces every possible plan, each offered as a distinct rate. Labels use the carrier-specific service name (e.g. "USPS Priority", "UPS Ground") derived from each plan's carrier and service codes. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the single cheapest combined rate is shown. |
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
 | **Show Estimated Delivery Date** | Checkbox | Off | Append the carrier-provided estimated delivery date to each shipping option label. Example: "USPS Priority — Est. delivery: Mon, Jan 15". For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
+| **Additional Business Days** | Number (0–30) | 0 | Extra business days (Monday–Friday) added to every estimated delivery date. Use this to account for order processing or handling time. Weekends are skipped, so a 2-business-day buffer applied on a Thursday pushes the estimate to the following Monday. Applies to both carrier-returned and default transit-day estimates. |
 
 ---
 
@@ -581,6 +582,11 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.2.6
+
+- **New:** **Additional Business Days** setting — adds a configurable buffer (0–30 business days) to every estimated delivery date. The buffer skips weekends (Saturday and Sunday), so a 2-business-day buffer applied on a Thursday moves the estimate to the following Monday. Useful for accounting for order processing and handling time.
+- **Fixed:** Transit-days buffer now correctly adds business days (Monday–Friday) instead of calendar days, matching the "Additional Business Days" setting label.
 
 ### 1.2.5
 
