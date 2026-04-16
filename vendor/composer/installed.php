@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/add-estimated-delivery-date-setting',
         'version' => 'dev-copilot/add-estimated-delivery-date-setting',
-        'reference' => '6d2d2ff7c32683b370c72a6fada6b391e5a9dd4a',
+        'reference' => '62c6919e3ede6d1835be8048cb3625f84034cea4',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/add-estimated-delivery-date-setting',
             'version' => 'dev-copilot/add-estimated-delivery-date-setting',
-            'reference' => '6d2d2ff7c32683b370c72a6fada6b391e5a9dd4a',
+            'reference' => '62c6919e3ede6d1835be8048cb3625f84034cea4',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -792,12 +792,12 @@ class ShipStation_Service {
 	/**
 	 * Compute an estimated delivery date string from a transit-day count.
 	 *
-	 * Uses the current WordPress site time as the start date and adds the
-	 * given number of transit days to produce an ISO 8601 date string
-	 * (YYYY-MM-DD).  Returns an empty string when $transit_days is zero or
-	 * negative, or when the transit-day value is absent from the rate.
+	 * Uses the current WordPress site time as the start date, adds the
+	 * given number of calendar transit days, then adds the configured
+	 * buffer as **business days** (Monday–Friday only).  Returns an empty
+	 * string when $transit_days is zero or negative.
 	 *
-	 * @param int $transit_days Number of transit days returned by ShipStation.
+	 * @param int $transit_days Number of transit days (calendar).
 	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
 	 */
 	protected function compute_delivery_date( int $transit_days ): string {
@@ -805,11 +805,20 @@ class ShipStation_Service {
 			return '';
 		}
 
-		$transit_days += $this->settings->get_transit_days_buffer();
-
 		try {
 			$date = new \DateTime( current_time( 'mysql' ) );
 			$date->modify( '+' . $transit_days . ' days' );
+
+			$buffer = $this->settings->get_transit_days_buffer();
+			$added  = 0;
+			while ( $added < $buffer ) {
+				$date->modify( '+1 day' );
+				$dow = (int) $date->format( 'N' ); // 1=Mon … 7=Sun.
+				if ( $dow <= 5 ) {
+					++$added;
+				}
+			}
+
 			return $date->format( 'Y-m-d' );
 		} catch ( \Throwable $e ) {
 			return '';

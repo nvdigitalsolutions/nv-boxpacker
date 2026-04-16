@@ -497,10 +497,11 @@ class ShipEngine_Service {
 	/**
 	 * Compute an estimated delivery date string from a day count.
 	 *
-	 * Uses the current WordPress site time as the start date and adds the
-	 * given number of days to produce an ISO 8601 date string (YYYY-MM-DD).
+	 * Uses the current WordPress site time as the start date, adds the
+	 * given number of calendar transit days, then adds the configured
+	 * buffer as **business days** (Monday–Friday only).
 	 *
-	 * @param int $days Number of delivery days.
+	 * @param int $days Number of delivery days (calendar).
 	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
 	 */
 	protected function compute_delivery_date( int $days ): string {
@@ -508,11 +509,20 @@ class ShipEngine_Service {
 			return '';
 		}
 
-		$days += $this->settings->get_transit_days_buffer();
-
 		try {
 			$date = new \DateTime( current_time( 'mysql' ) );
 			$date->modify( '+' . $days . ' days' );
+
+			$buffer = $this->settings->get_transit_days_buffer();
+			$added  = 0;
+			while ( $added < $buffer ) {
+				$date->modify( '+1 day' );
+				$dow = (int) $date->format( 'N' ); // 1=Mon … 7=Sun.
+				if ( $dow <= 5 ) {
+					++$added;
+				}
+			}
+
 			return $date->format( 'Y-m-d' );
 		} catch ( \Throwable $e ) {
 			return '';
