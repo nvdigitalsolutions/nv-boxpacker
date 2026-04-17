@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.9
+Stable tag: 1.3.0
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -58,13 +58,15 @@ When **Enable Sandbox Mode** is checked:
 
 = USPS Cubic Pricing =
 
-The plugin enforces all USPS Priority Mail Cubic eligibility rules:
+The plugin enforces all USPS Priority Mail Cubic eligibility rules **for USPS carriers only**:
 
 * Volume ≤ 0.5 cubic feet (five tiers: 0.1, 0.2, 0.3, 0.4, 0.5 ft³).
 * Longest side ≤ 18 inches.
 * Total package weight ≤ 20 lbs.
 
-Boxes that do not meet these criteria are silently excluded from cubic candidates but may still be evaluated as flat-rate options if configured with `box_type: "flat_rate"`.
+These rules are only enforced when the carrier is USPS (e.g. `stamps_com`, `usps`, `endicia`). Non-USPS carriers such as UPS and FedEx treat `cubic`-type boxes as regular packages — USPS cubic limits do not apply and the boxes are not excluded based on volume, longest side, or weight thresholds.
+
+Boxes that do not meet these criteria when used with a USPS carrier are silently excluded from cubic candidates but may still be evaluated as flat-rate options if configured with `box_type: "flat_rate"`.
 
 = Box Configuration =
 
@@ -151,6 +153,11 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.0 =
+* Fixed: Boxes with `box_type: "cubic"` and a non-USPS carrier restriction (e.g. UPS) were incorrectly excluded by the USPS cubic eligibility rules (≤0.5 ft³, ≤320 oz, longest side ≤18″). USPS cubic pricing rules now only apply when the carrier is USPS. Non-USPS carriers (UPS, FedEx, etc.) treat cubic-type boxes as regular packages.
+* Changed: Non-USPS cubic boxes now produce candidates with `mode: "package"` (instead of `"cubic"`) and an empty `cubic_tier`, since USPS cubic tiers are not applicable to other carriers.
+* Improved: Documentation updated to clarify that USPS cubic eligibility rules are carrier-specific and do not affect non-USPS carriers.
 
 = 1.2.9 =
 * Fixed: Carrier-restricted boxes (e.g. USPS-only flat rate boxes) are now properly filtered when building rate candidates. Previously `build_candidates()` used the unfiltered `get_boxes()` method, allowing USPS-only boxes to appear in UPS or FedEx rate results.
