@@ -51,7 +51,7 @@ When a customer completes checkout, this plugin:
 
 1. Collects all shippable items from the WooCommerce order.
 2. Packs them using the [dvdoug/boxpacker](https://github.com/dvdoug/BoxPacker) library (falls back to a single-item-per-box strategy when the library is unavailable).
-3. For each packed box, evaluates all configured boxes and picks the cheapest USPS Priority rate from either **ShipEngine** or **ShipStation**.
+3. For each configured carrier/service pair, evaluates all packed boxes and picks the cheapest rate from **ShipEngine**, **ShipStation**, or both. Each service is offered as a separate shipping option at checkout (e.g. "USPS Priority $7.25" and "UPS Ground $8.50").
 4. Stores a complete, package-level shipping plan on the order for admin review.
 5. Generates PirateShip-compatible CSV rows for bulk label purchase.
 
@@ -158,9 +158,9 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. When enabled, each packed package is rated against all configured boxes; the cartesian product of those candidates produces every possible plan, each offered as a distinct rate. Labels use the carrier-specific service name (e.g. "USPS Priority", "UPS Ground") derived from each plan's carrier and service codes. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the single cheapest combined rate is shown. |
+| **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. Candidates are grouped **per carrier service** — the cartesian product runs within each service, not across services, preventing nonsensical cross-service combinations. Labels use the carrier-specific service name (e.g. "USPS Priority", "UPS Ground") derived from each plan's actual API-returned service code. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the cheapest combined rate per service is shown. |
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
-| **Show Estimated Delivery Date** | Checkbox | Off | Append the carrier-provided estimated delivery date to each shipping option label. Example: "USPS Priority — Est. delivery: Mon, Jan 15". For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
+| **Show Estimated Delivery Date** | Checkbox | Off | Show the carrier-provided estimated delivery date on a **separate line** below each shipping option label. Example: "USPS Priority (1 package)" on the first line, "Est. delivery: Mon, Jan 15" on the second. For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
 | **Additional Business Days** | Number (0–30) | 0 | Extra business days (Monday–Friday) added to every estimated delivery date. Use this to account for order processing or handling time. Weekends are skipped, so a 2-business-day buffer applied on a Thursday pushes the estimate to the following Monday. Applies to both carrier-returned and default transit-day estimates. |
 
 ---
@@ -216,7 +216,7 @@ When **Enable Debug Logging** is checked, all API requests, responses, and packi
 
 ### Box Definitions
 
-Box definitions are managed via a visual table in the **Box Definitions** section of the settings page. Each row represents one physical box and can be added, edited, or removed directly in the UI.
+Box definitions are managed via a compact visual table in the **Box Definitions** section of the settings page. Each row represents one physical box and can be added, edited, or removed directly in the UI. The table uses grouped column headers — "Outer (in)" and "Inner (in)" — with fixed-width columns and a horizontally scrollable wrapper so it fits within the standard WordPress admin layout without forcing the page wider.
 
 Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`).
 
@@ -234,10 +234,10 @@ The plugin registers a native **WC_Shipping_Method** (`fk_usps_optimizer`) so it
 
 1. Cart items are extracted and converted to the item format expected by `Packing_Service::pack_items()`.
 2. Items without WooCommerce product dimensions (length, width, or height not set) are detected and packed individually via the fallback packer — one item per box. This prevents the BoxPacker default of 1×1×1 inch dimensions from producing incorrect packing results.
-3. Packed packages are rate-shopped against all enabled carrier APIs; the cheapest rate per package wins.
+3. Each configured carrier/service pair rates all packed packages independently. The cheapest rate per service is offered as a separate checkout option — customers see one shipping rate per service (e.g. "USPS Priority $7.25" and "UPS Ground $8.50" as distinct choices). Service labels are derived from the actual API-returned `serviceCode`, not the configured setting, ensuring accuracy even when the carrier returns a different service than requested.
 4. Rates are cached in a transient for 30 minutes. The cache key includes carrier, service code, box configuration, display settings, item dimensions, and destination — so rates update immediately when any of these change.
 
-When **Show All Options** is enabled, each rate option shows a descriptive label built from the carrier service name and the box names in that combination, such as "USPS Priority — 2× Small Flat Rate Box + Large Flat Rate Box" or "UPS Ground — 2× Bag". Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first. When multiple carriers are configured, each carrier's rates are labeled with their own service name so customers can distinguish between USPS and UPS options.
+When **Show All Options** is enabled, each rate option shows a descriptive label built from the carrier service name and the box names in that combination, such as "USPS Priority — 2× Small Flat Rate Box + Large Flat Rate Box" or "UPS Ground — 2× Bag". The cartesian product is grouped **per carrier service** — candidates from different services are never mixed. Repeated box names are consolidated (e.g. "2× Small" instead of "Small + Small"). Duplicate combinations are removed and results are sorted cheapest-first.
 
 ---
 
@@ -548,8 +548,10 @@ The PHPCS configuration lives in `phpcs.xml.dist`. The `manage_woocommerce` capa
 ```
 fk-usps-optimizer/
 ├── assets/
+│   ├── css/
+│   │   └── settings.css             # Settings page styles (box table layout)
 │   └── js/
-│       └── settings.js             # Carrier checkbox toggle + AJAX test connection
+│       └── settings.js             # Carrier checkbox toggle + AJAX test connection + box table management
 ├── bin/
 │   └── build.sh                    # Production build script
 ├── includes/
@@ -589,13 +591,24 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.2.9
+
+- **Fixed:** Carrier-restricted boxes (e.g. USPS-only flat rate boxes) are now properly filtered when building rate candidates. Previously `build_candidates()` in both `ShipEngine_Service` and `ShipStation_Service` called the unfiltered `get_boxes()` method, allowing USPS-only boxes to appear in UPS or FedEx rate results at checkout.
+- **New:** `ShipStation_Service::get_carrier_keyword()` — maps ShipStation carrier codes (e.g. `stamps_com` → `usps`, `ups_walleted` → `ups`, `fedex` → `fedex`) to the box restriction keywords used by `Settings::get_boxes_for_carrier()`.
+- **Changed:** Estimated delivery date now displays on a **separate line** below the shipping option label instead of being appended with an em-dash on the same line. Uses a `<br>` tag for cleaner two-line presentation at checkout (e.g. "USPS Priority (1 package)" on line 1, "Est. delivery: Mon, Jan 15" on line 2).
+
 ### 1.2.8
 
 - **New:** **Box Management Table UI** — box definitions are now managed via a visual table in the settings page instead of a raw JSON textarea. Each box can be added, edited, or removed individually with dedicated input fields for all dimensions, weights, and settings.
 - **New:** **Carrier Restriction** — each box definition now includes a `carrier_restriction` field. Boxes can be assigned to a specific carrier (`usps`, `ups`, `fedex`) or left empty for all carriers. This prevents carrier-specific boxes (e.g. USPS Flat Rate) from being considered for incompatible carriers (e.g. UPS).
 - **New:** `Settings::get_boxes_for_carrier( string $carrier )` — returns only boxes whose `carrier_restriction` is empty (available to all) or matches the given carrier keyword (case-insensitive).
 - **New:** `Settings::sanitize_boxes_array()` — sanitizes box definitions submitted from the table-based UI. Rows with a blank reference are treated as deleted.
+- **New:** Added `usps_ground_advantage` ("USPS Ground Advantage") to service label maps in both ShipEngine and ShipStation services and to the default transit-day estimates (5 days).
+- **Fixed:** Checkout shipping options now display the correct service label for each configured carrier (e.g. "UPS Ground", "UPS 2nd Day Air", "USPS Ground Advantage") instead of always showing the same label. Service labels are derived from the actual API-returned `serviceCode`, not the instance's configured code. `get_service_label()` on both carrier services now accepts an optional `$override_service_code` parameter.
+- **Changed:** Each configured carrier/service pair is now offered as a **separate shipping option** at checkout. Previously, rates from all services were mixed across packages into a single cheapest option; now customers see one rate per service (e.g. "USPS Priority $7.25" and "UPS Ground $8.50" as distinct choices).
+- **Changed:** "Show All Options" cartesian product is now grouped **per carrier service** instead of mixing candidates across services, preventing nonsensical cross-service combinations.
 - **Changed:** Default box set updated: replaces Cubic Small, Cubic Medium, and 3 USPS Flat Rate boxes with 1 Bag, 2 Bag, 3 Bag, 4 Bag (cubic, any carrier), USPS Medium Flat Rate (flat rate, USPS-only), and USPS Large Flat Rate (flat rate, USPS-only).
+- **Improved:** Box table UI now uses a **compact layout** with a dedicated `assets/css/settings.css` stylesheet. Columns have fixed widths, outer/inner dimensions are visually grouped under "Outer (in)" and "Inner (in)" header rows, and the table wraps in a horizontally scrollable container so it fits within the standard WordPress admin layout.
 - **Improved:** JavaScript (`settings.js`) updated with dynamic row add/remove handlers and automatic index re-sequencing for the box management table.
 - **Improved:** Legacy `boxes_json` textarea is retained internally for backward compatibility with programmatic/filter-based box configuration.
 
@@ -606,7 +619,7 @@ fk-usps-optimizer/
 
 ### 1.2.5
 
-- **New:** **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is appended to each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") is also passed as WooCommerce rate metadata for themes that render it.
+- **New:** **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is shown on a separate line below each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") is also passed as WooCommerce rate metadata for themes that render it.
 - **New:** `ShipStation_Service::compute_delivery_date()` — converts a transit-day count into an ISO 8601 date string by adding the given number of days to the current WordPress site time.
 - **New:** `Shipping_Method::format_estimated_delivery()` — formats an ISO 8601 datetime or YYYY-MM-DD date string into a short display label (e.g. "Mon, Jan 15").
 - **New:** Plan data returned by both carrier services now includes an `estimated_delivery_date` field.

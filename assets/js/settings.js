@@ -164,18 +164,18 @@
 
 		var tr = document.createElement( 'tr' );
 		tr.innerHTML =
-			'<td><input type="text" name="' + prefix + '[reference]" value="" class="regular-text" /></td>' +
-			'<td><input type="text" name="' + prefix + '[package_code]" value="package" class="small-text" /></td>' +
-			'<td><input type="text" name="' + prefix + '[package_name]" value="" class="regular-text" /></td>' +
+			'<td><input type="text" name="' + prefix + '[reference]" value="" /></td>' +
+			'<td><input type="text" name="' + prefix + '[package_code]" value="package" /></td>' +
+			'<td><input type="text" name="' + prefix + '[package_name]" value="" /></td>' +
 			'<td><select name="' + prefix + '[box_type]"><option value="cubic">Cubic</option><option value="flat_rate">Flat Rate</option></select></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_length]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_width]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_depth]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_length]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_width]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_depth]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[empty_weight]" value="0" class="small-text" /></td>' +
-			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[max_weight]" value="0" class="small-text" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_length]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_width]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[outer_depth]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_length]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_width]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[inner_depth]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[empty_weight]" value="0" /></td>' +
+			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[max_weight]" value="0" /></td>' +
 			'<td><select name="' + prefix + '[carrier_restriction]"><option value="">Any</option><option value="usps">USPS</option><option value="ups">UPS</option><option value="fedex">FedEx</option></select></td>' +
 			'<td><button type="button" class="button fk-remove-box">&times;</button></td>';
 

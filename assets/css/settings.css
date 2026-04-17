@@ -1,0 +1,125 @@
+/**
+ * FK USPS Optimizer — Settings page styles.
+ *
+ * Keeps the box-definitions table compact so it does not force the page wider
+ * than the standard WordPress admin layout.
+ */
+
+/* -------------------------------------------------------------------------
+ * Box table
+ * ---------------------------------------------------------------------- */
+
+/* Break the table out of the form-table td that constrains it. */
+.fk-boxes-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+#fk-boxes-table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+	min-width: 820px;
+	font-size: 13px;
+}
+
+/* Column widths — compact layout. */
+#fk-boxes-table th,
+#fk-boxes-table td {
+	padding: 6px 4px;
+	vertical-align: middle;
+}
+
+/* Reference — just wide enough for a short name. */
+#fk-boxes-table .col-ref {
+	width: 130px;
+}
+
+/* Package code — short codes like "package". */
+#fk-boxes-table .col-pkg-code {
+	width: 80px;
+}
+
+/* Name — display name. */
+#fk-boxes-table .col-name {
+	width: 140px;
+}
+
+/* Type dropdown. */
+#fk-boxes-table .col-type {
+	width: 80px;
+}
+
+/* Numeric dimension / weight columns. */
+#fk-boxes-table .col-dim {
+	width: 52px;
+}
+
+/* Carrier dropdown. */
+#fk-boxes-table .col-carrier {
+	width: 68px;
+}
+
+/* Remove button. */
+#fk-boxes-table .col-actions {
+	width: 36px;
+	text-align: center;
+}
+
+/* Make all inputs inside the table fill their cells. */
+#fk-boxes-table input[type="text"],
+#fk-boxes-table input[type="number"] {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	padding: 3px 5px;
+	font-size: 13px;
+}
+
+#fk-boxes-table select {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	font-size: 13px;
+}
+
+/* Grouped header cells for Outer / Inner dimension groups. */
+#fk-boxes-table thead th {
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	text-align: left;
+	background: #f9f9f9;
+	border-bottom: 1px solid #c3c4c7;
+}
+
+#fk-boxes-table thead tr.fk-dim-group th {
+	text-align: center;
+	font-weight: 600;
+	border-bottom: 1px solid #dcdcde;
+	background: #f0f0f1;
+	padding: 3px 4px;
+	font-size: 11px;
+}
+
+#fk-boxes-table tbody tr:nth-child(even) {
+	background: #f9f9f9;
+}
+
+#fk-boxes-table tfoot td {
+	padding: 8px 4px;
+}
+
+/* Remove button styling. */
+#fk-boxes-table .fk-remove-box {
+	min-width: 0;
+	padding: 0 6px;
+	line-height: 24px;
+	color: #b32d2e;
+	border-color: #b32d2e;
+}
+#fk-boxes-table .fk-remove-box:hover {
+	background: #b32d2e;
+	color: #fff;
+	border-color: #b32d2e;
+}

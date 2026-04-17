@@ -25,6 +25,9 @@
 /vendor/dvdoug/boxpacker/.readthedocs.yaml
 /vendor/dvdoug/boxpacker/.scrutinizer.yml
 
+# Composer temporary files
+/vendor/composer/tmp-*
+
 /node_modules/
 /build/
 /.phpunit.result.cache

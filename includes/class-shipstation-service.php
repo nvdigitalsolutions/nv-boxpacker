@@ -89,17 +89,50 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Map the ShipStation carrier code to a box-restriction keyword.
+	 *
+	 * The returned keyword matches the values stored in each box definition's
+	 * `carrier_restriction` field (e.g. 'usps', 'ups', 'fedex') so that
+	 * `Settings::get_boxes_for_carrier()` can filter out boxes that belong
+	 * to a different carrier.
+	 *
+	 * @return string Carrier keyword (e.g. 'usps', 'ups', 'fedex'), or ''
+	 *                when the carrier code is unknown.
+	 */
+	public function get_carrier_keyword(): string {
+		$carrier_code = $this->get_carrier_code();
+
+		$map = array(
+			'stamps_com'   => 'usps',
+			'usps'         => 'usps',
+			'endicia'      => 'usps',
+			'ups_walleted' => 'ups',
+			'ups'          => 'ups',
+			'fedex'        => 'fedex',
+			'dhl_express'  => 'dhl',
+		);
+
+		return $map[ $carrier_code ] ?? '';
+	}
+
+	/**
 	 * Derive a human-readable service label from the carrier and service codes.
 	 *
 	 * Maps well-known carrier codes (e.g. 'stamps_com', 'ups_walleted') and
 	 * service codes (e.g. 'usps_priority_mail', 'ups_ground') to friendly
 	 * names like "USPS Priority" or "UPS Ground".
 	 *
+	 * When $override_service_code is provided (e.g. the serviceCode returned
+	 * by the ShipStation API), it is used instead of the instance's
+	 * configured service code.  This ensures the label matches the actual
+	 * service that was rated, not the one that was requested.
+	 *
+	 * @param string $override_service_code Optional service code from the API response.
 	 * @return string Human-readable label such as "USPS Priority" or "UPS Ground".
 	 */
-	public function get_service_label(): string {
+	public function get_service_label( string $override_service_code = '' ): string {
 		$carrier_code = $this->get_carrier_code();
-		$service_code = $this->get_service_code();
+		$service_code = '' !== $override_service_code ? $override_service_code : $this->get_service_code();
 
 		$carrier_names = array(
 			'stamps_com'   => 'USPS',
@@ -115,6 +148,7 @@ class ShipStation_Service {
 			'usps_priority_mail'         => 'Priority',
 			'usps_priority_mail_express' => 'Priority Express',
 			'usps_first_class_mail'      => 'First Class',
+			'usps_ground_advantage'      => 'Ground Advantage',
 			'usps_parcel_select'         => 'Parcel Select',
 			'usps_media_mail'            => 'Media Mail',
 			'ups_ground'                 => 'Ground',
@@ -353,13 +387,14 @@ class ShipStation_Service {
 			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 
 			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
-				$best_plan = array(
+				$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
+				$best_plan         = array(
 					'package_number'          => $package_number,
 					'mode'                    => $candidate['mode'],
 					'package_code'            => $candidate['package_code'],
 					'package_name'            => $candidate['package_name'],
-					'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'service_label'           => $this->get_service_label(),
+					'service_code'            => $rate_service_code,
+					'service_label'           => $this->get_service_label( $rate_service_code ),
 					'rate_amount'             => $total_cost,
 					'currency'                => 'USD',
 					'weight_oz'               => (float) $candidate['weight_oz'],
@@ -396,15 +431,16 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate       = $response['rate'];
-			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
-			$plans[]    = array(
+			$rate              = $response['rate'];
+			$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+			$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
+			$plans[]           = array(
 				'package_number'          => $package_number,
 				'mode'                    => $candidate['mode'],
 				'package_code'            => $candidate['package_code'],
 				'package_name'            => $candidate['package_name'],
-				'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'service_label'           => $this->get_service_label(),
+				'service_code'            => $rate_service_code,
+				'service_label'           => $this->get_service_label( $rate_service_code ),
 				'rate_amount'             => $total_cost,
 				'currency'                => 'USD',
 				'weight_oz'               => (float) $candidate['weight_oz'],
@@ -439,7 +475,7 @@ class ShipStation_Service {
 	protected function build_candidates( array $package ): array {
 		$candidates = array();
 
-		foreach ( $this->settings->get_boxes() as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( $this->get_carrier_keyword() ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}

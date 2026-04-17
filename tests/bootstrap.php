@@ -315,6 +315,13 @@ function wp_create_nonce( $action = -1 ): string {
 }
 
 /**
+ * Enqueue a stylesheet (no-op in tests).
+ *
+ * @param mixed ...$args Ignored.
+ */
+function wp_enqueue_style( ...$args ): void {}
+
+/**
  * Enqueue a script (no-op in tests).
  *
  * @param mixed ...$args Ignored.
