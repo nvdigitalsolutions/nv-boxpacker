@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/rebuild-zip-for-testing-again',
-        'version' => 'dev-copilot/rebuild-zip-for-testing-again',
-        'reference' => '18970c44d8637657bc01bd18e3d3c4a547a62579',
+        'pretty_version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
+        'version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
+        'reference' => 'e4730ec6411c0bb0c7c1e703dd4dea4860e9d148',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/rebuild-zip-for-testing-again',
-            'version' => 'dev-copilot/rebuild-zip-for-testing-again',
-            'reference' => '18970c44d8637657bc01bd18e3d3c4a547a62579',
+            'pretty_version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
+            'version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
+            'reference' => 'e4730ec6411c0bb0c7c1e703dd4dea4860e9d148',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
