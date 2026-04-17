@@ -270,7 +270,7 @@ The plan structure is:
 ```php
 [
     'package_number' => 1,
-    'mode'           => 'cubic',          // 'cubic' or 'flat_rate_box'
+    'mode'           => 'cubic',          // 'cubic', 'flat_rate_box', or 'package'
     'package_code'   => 'package',
     'package_name'   => 'Custom Cubic Small',
     'service_code'   => 'usps_priority_mail',
@@ -418,7 +418,7 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `reference` | string | Human-readable label shown in admin UI and logs. |
 | `package_code` | string | Carrier package code sent to the API (e.g. `package`, `small_flat_rate_box`). |
 | `package_name` | string | Display name shown in the shipping plan. |
-| `box_type` | string | `"cubic"` for custom cubic boxes; `"flat_rate"` for USPS flat-rate boxes. |
+| `box_type` | string | `"cubic"` for custom cubic boxes; `"flat_rate"` for USPS flat-rate boxes. When `"cubic"` is used with a non-USPS carrier, the box is treated as a regular package (mode `"package"`) and USPS cubic eligibility rules are not applied. |
 | `outer_width` | number | Outer width in **inches** (decimals supported, e.g. `12.25`). |
 | `outer_length` | number | Outer length in **inches** (decimals supported). |
 | `outer_depth` | number | Outer depth (height) in **inches** (decimals supported). |
@@ -429,13 +429,15 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `max_weight` | number | Maximum payload weight in **pounds** (decimals supported). |
 | `carrier_restriction` | string | Restrict this box to a specific carrier: `"usps"`, `"ups"`, `"fedex"`, or `""` (empty = available to all carriers). |
 
-**USPS Cubic Eligibility Rules (enforced automatically):**
+**USPS Cubic Eligibility Rules (enforced automatically for USPS carriers only):**
 
 - Volume ≤ 0.5 cubic feet.
 - Longest side ≤ 18 inches.
 - Total package weight (items + box) ≤ 20 lbs (320 oz).
 
-Boxes that do not meet these criteria are silently excluded from cubic candidates. They are still considered as flat-rate candidates if `box_type` is `"flat_rate"`.
+These rules are only enforced when the carrier is USPS (e.g. `stamps_com`, `usps`, `endicia`). Non-USPS carriers such as UPS and FedEx treat `cubic`-type boxes as regular packages — USPS cubic limits do not apply and the boxes are not excluded based on volume, longest side, or weight thresholds.
+
+Boxes that do not meet these criteria when used with a USPS carrier are silently excluded from cubic candidates. They are still considered as flat-rate candidates if `box_type` is `"flat_rate"`.
 
 **Example JSON:**
 
@@ -590,6 +592,12 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.3.0
+
+- **Fixed:** Boxes with `box_type: "cubic"` and a non-USPS carrier restriction (e.g. UPS) were incorrectly excluded by the USPS cubic eligibility rules (≤ 0.5 ft³, ≤ 320 oz, longest side ≤ 18″). The cubic eligibility check is now only applied when the carrier is USPS. Non-USPS carriers (UPS, FedEx, etc.) treat cubic-type boxes as regular packages and skip the USPS-specific size/weight limits entirely.
+- **Changed:** Non-USPS cubic boxes now produce candidates with `mode: "package"` (instead of `"cubic"`) and an empty `cubic_tier`, since USPS cubic tiers are not applicable to other carriers.
+- **Improved:** Documentation updated to clarify that USPS cubic eligibility rules are carrier-specific and do not affect non-USPS carriers.
 
 ### 1.2.9
 

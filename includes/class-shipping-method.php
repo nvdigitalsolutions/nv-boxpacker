@@ -139,72 +139,100 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$rates            = array();
 
 		foreach ( $carrier_services as $carrier_service ) {
-			$total_cost     = 0.0;
-			$all_rated      = true;
-			$service_labels = array();
-			$delivery_dates = array();
+			// Collect ALL plans for every package so we can group by service_code.
+			// When a specific service_code is configured each plan will share the
+			// same code and the downstream grouping produces a single rate (same
+			// behaviour as before).  When service_code is empty the API returns
+			// rates for every available service and we create one rate per service.
+			$per_package_service_best = array(); // service_code => package_index => cheapest plan.
+			$all_rated                = true;
 
 			foreach ( $packed_packages as $index => $packed ) {
-				$plan = $carrier_service->build_test_package_plan( $packed, $ship_to, $index + 1 );
+				$plans = $carrier_service->build_all_test_package_plans( $packed, $ship_to, $index + 1 );
 
-				if ( empty( $plan ) ) {
+				if ( empty( $plans ) ) {
 					$all_rated = false;
 					break;
 				}
 
-				$total_cost      += (float) $plan['rate_amount'];
-				$service_labels[] = $plan['service_label'] ?? '';
-
-				$date = (string) ( $plan['estimated_delivery_date'] ?? '' );
-				if ( '' !== $date ) {
-					$delivery_dates[] = $date;
+				// Keep the cheapest plan per service_code for this package.
+				foreach ( $plans as $plan ) {
+					$sc = $plan['service_code'] ?? '';
+					if ( ! isset( $per_package_service_best[ $sc ][ $index ] )
+						|| (float) $plan['rate_amount'] < (float) $per_package_service_best[ $sc ][ $index ]['rate_amount']
+					) {
+						$per_package_service_best[ $sc ][ $index ] = $plan;
+					}
 				}
 			}
 
-			if ( ! $all_rated || $total_cost <= 0 ) {
+			if ( ! $all_rated ) {
 				continue;
 			}
 
-			// Use the carrier service label when all packages share the same one;
-			// fall back to the method title for backward compatibility.
-			$unique_labels = array_unique( array_filter( $service_labels ) );
-			$title         = 1 === count( $unique_labels )
-				? reset( $unique_labels )
-				: $this->title;
+			// Build one rate per service_code that has plans for ALL packages.
+			foreach ( $per_package_service_best as $sc => $plans_by_index ) {
+				if ( count( $plans_by_index ) !== $package_count ) {
+					continue;
+				}
 
-			$label = $title;
-			if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
-				$label = sprintf(
-					/* translators: 1: method title, 2: package count. */
-					_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
-					$title,
-					$package_count
+				$total_cost     = 0.0;
+				$service_labels = array();
+				$delivery_dates = array();
+
+				foreach ( $plans_by_index as $plan ) {
+					$total_cost      += (float) $plan['rate_amount'];
+					$service_labels[] = $plan['service_label'] ?? '';
+
+					$date = (string) ( $plan['estimated_delivery_date'] ?? '' );
+					if ( '' !== $date ) {
+						$delivery_dates[] = $date;
+					}
+				}
+
+				if ( $total_cost <= 0 ) {
+					continue;
+				}
+
+				$unique_labels = array_unique( array_filter( $service_labels ) );
+				$title         = 1 === count( $unique_labels )
+					? reset( $unique_labels )
+					: $this->title;
+
+				$label = $title;
+				if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
+					$label = sprintf(
+						/* translators: 1: method title, 2: package count. */
+						_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+						$title,
+						$package_count
+					);
+				}
+
+				$meta_data = array();
+				if ( $settings->is_show_estimated_delivery_enabled() ) {
+					if ( ! empty( $delivery_dates ) ) {
+						sort( $delivery_dates );
+						$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
+						if ( '' !== $formatted ) {
+							$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
+							/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
+							$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+						}
+					} else {
+						$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
+						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
+						/* translators: %s: "(No Estimate)" placeholder. */
+						$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+					}
+				}
+
+				$rates[] = array(
+					'label'     => $label,
+					'cost'      => $total_cost,
+					'meta_data' => $meta_data,
 				);
 			}
-
-			$meta_data = array();
-			if ( $settings->is_show_estimated_delivery_enabled() ) {
-				if ( ! empty( $delivery_dates ) ) {
-					sort( $delivery_dates );
-					$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
-					if ( '' !== $formatted ) {
-						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
-						/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
-						$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
-					}
-				} else {
-					$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
-					$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
-					/* translators: %s: "(No Estimate)" placeholder. */
-					$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
-				}
-			}
-
-			$rates[] = array(
-				'label'     => $label,
-				'cost'      => $total_cost,
-				'meta_data' => $meta_data,
-			);
 		}
 
 		// Sort cheapest-first.
@@ -240,6 +268,9 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$seen_labels      = array();
 
 		foreach ( $carrier_services as $carrier_service ) {
+			// Collect all plans per package, then group by service_code so
+			// that the cartesian product only combines plans that share the
+			// same service (avoids mixing e.g. UPS Ground with UPS Next Day).
 			$per_package_plans = array();
 
 			foreach ( $packed_packages as $index => $packed ) {
@@ -253,85 +284,122 @@ class Shipping_Method extends \WC_Shipping_Method {
 				$per_package_plans[] = $plans;
 			}
 
-			$combos = $this->cartesian_product( $per_package_plans );
+			// Determine all unique service_codes across every package.
+			$all_service_codes = array();
+			foreach ( $per_package_plans as $plans ) {
+				foreach ( $plans as $plan ) {
+					$sc                       = $plan['service_code'] ?? '';
+					$all_service_codes[ $sc ] = true;
+				}
+			}
 
-			foreach ( $combos as $combo ) {
-				$total          = 0.0;
-				$names          = array();
-				$service_labels = array();
-				$delivery_dates = array();
+			// For each service_code, filter plans per package and build combos.
+			foreach ( array_keys( $all_service_codes ) as $sc ) {
+				$filtered_per_package = array();
+				$skip_service         = false;
 
-				foreach ( $combo as $plan ) {
-					$total           += (float) $plan['rate_amount'];
-					$names[]          = $plan['package_name'];
-					$service_labels[] = $plan['service_label'] ?? '';
+				foreach ( $per_package_plans as $plans ) {
+					$filtered = array_values(
+						array_filter(
+							$plans,
+							static function ( array $p ) use ( $sc ): bool {
+								return ( $p['service_code'] ?? '' ) === $sc;
+							}
+						)
+					);
 
-					$date = (string) ( $plan['estimated_delivery_date'] ?? '' );
-					if ( '' !== $date ) {
-						$delivery_dates[] = $date;
+					if ( empty( $filtered ) ) {
+						$skip_service = true;
+						break;
 					}
+
+					$filtered_per_package[] = $filtered;
 				}
 
-				if ( $total <= 0 ) {
+				if ( $skip_service ) {
 					continue;
 				}
 
-				// Consolidate repeated box names: "Small + Small + Large" → "2× Small + Large".
-				$grouped = array_count_values( $names );
-				$parts   = array();
-				foreach ( $grouped as $name => $count ) {
-					$parts[] = $count > 1
-						? sprintf( '%d× %s', $count, $name )
-						: $name;
-				}
+				$combos = $this->cartesian_product( $filtered_per_package );
 
-				// Use the carrier service label when available; fall back to the
-				// method title for backward compatibility.
-				$unique_labels = array_unique( array_filter( $service_labels ) );
-				$title_prefix  = 1 === count( $unique_labels )
-					? reset( $unique_labels )
-					: $this->title;
+				foreach ( $combos as $combo ) {
+					$total          = 0.0;
+					$names          = array();
+					$service_labels = array();
+					$delivery_dates = array();
 
-				$label = $title_prefix . ' — ' . implode( ' + ', $parts );
+					foreach ( $combo as $plan ) {
+						$total           += (float) $plan['rate_amount'];
+						$names[]          = $plan['package_name'];
+						$service_labels[] = $plan['service_label'] ?? '';
 
-				if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
-					$label = sprintf(
-						/* translators: 1: combined label, 2: package count. */
-						_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
-						$label,
-						$package_count
+						$date = (string) ( $plan['estimated_delivery_date'] ?? '' );
+						if ( '' !== $date ) {
+							$delivery_dates[] = $date;
+						}
+					}
+
+					if ( $total <= 0 ) {
+						continue;
+					}
+
+					// Consolidate repeated box names: "Small + Small + Large" → "2× Small + Large".
+					$grouped = array_count_values( $names );
+					$parts   = array();
+					foreach ( $grouped as $name => $count ) {
+						$parts[] = $count > 1
+							? sprintf( '%d× %s', $count, $name )
+							: $name;
+					}
+
+					// Use the carrier service label when available; fall back to the
+					// method title for backward compatibility.
+					$unique_labels = array_unique( array_filter( $service_labels ) );
+					$title_prefix  = 1 === count( $unique_labels )
+						? reset( $unique_labels )
+						: $this->title;
+
+					$label = $title_prefix . ' — ' . implode( ' + ', $parts );
+
+					if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
+						$label = sprintf(
+							/* translators: 1: combined label, 2: package count. */
+							_n( '%1$s (%2$d package)', '%1$s (%2$d packages)', $package_count, 'fk-usps-optimizer' ),
+							$label,
+							$package_count
+						);
+					}
+
+					$meta_data = array();
+					if ( $settings->is_show_estimated_delivery_enabled() ) {
+						if ( ! empty( $delivery_dates ) ) {
+							sort( $delivery_dates );
+							$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
+							if ( '' !== $formatted ) {
+								$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
+								/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
+								$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+							}
+						} else {
+							$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
+							$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
+							/* translators: %s: "(No Estimate)" placeholder. */
+							$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+						}
+					}
+
+					// Deduplicate equivalent combos (permutations of the same set of box types).
+					if ( isset( $seen_labels[ $label ] ) ) {
+						continue;
+					}
+					$seen_labels[ $label ] = true;
+
+					$rates[] = array(
+						'label'     => $label,
+						'cost'      => $total,
+						'meta_data' => $meta_data,
 					);
 				}
-
-				$meta_data = array();
-				if ( $settings->is_show_estimated_delivery_enabled() ) {
-					if ( ! empty( $delivery_dates ) ) {
-						sort( $delivery_dates );
-						$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
-						if ( '' !== $formatted ) {
-							$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
-							/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
-							$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
-						}
-					} else {
-						$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
-						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
-						/* translators: %s: "(No Estimate)" placeholder. */
-						$meta_data['est_delivery_display'] = sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
-					}
-				}
-
-				// Deduplicate equivalent combos (permutations of the same set of box types).
-				if ( isset( $seen_labels[ $label ] ) ) {
-					continue;
-				}
-				$seen_labels[ $label ] = true;
-
-				$rates[] = array(
-					'label'     => $label,
-					'cost'      => $total,
-					'meta_data' => $meta_data,
-				);
 			}
 		}
 

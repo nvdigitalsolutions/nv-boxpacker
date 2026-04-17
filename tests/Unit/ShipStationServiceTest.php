@@ -290,6 +290,7 @@ class ShipStationServiceTest extends TestCase {
 
 	public function test_build_candidates_returns_matching_cubic_box(): void {
 		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
 		$this->assertCount( 1, $candidates );
 		$this->assertSame( 'cubic', $candidates[0]['mode'] );
@@ -362,6 +363,95 @@ class ShipStationServiceTest extends TestCase {
 		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
 
 		$this->assertCount( 1, $candidates );
+	}
+
+	public function test_build_candidates_skips_usps_cubic_check_for_ups_carrier(): void {
+		// Box 4 from the bug report: 12.25×12×7, carrier UPS, type cubic.
+		// Volume = 1029 in³ = 0.596 ft³ — exceeds USPS cubic limit of 0.5 ft³.
+		// For UPS, the USPS cubic eligibility check should NOT be applied.
+		$box = $this->make_box( array(
+			'reference'    => '4 Bag',
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.0,
+			'outer_length' => 12.25,
+			'outer_depth'  => 7.0,
+			'inner_width'  => 12.0,
+			'inner_length' => 12.25,
+			'inner_depth'  => 7.0,
+			'max_weight'   => 70.0,
+		) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'ups_walleted', '' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'package', $candidates[0]['mode'] );
+		$this->assertSame( '', $candidates[0]['cubic_tier'] );
+	}
+
+	public function test_build_candidates_applies_usps_cubic_check_for_usps_carrier(): void {
+		// Same oversized cubic box — but now under a USPS carrier.
+		// Volume exceeds 0.5 ft³ so the box should be excluded.
+		$box = $this->make_box( array(
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.0,
+			'outer_length' => 12.25,
+			'outer_depth'  => 7.0,
+			'inner_width'  => 12.0,
+			'inner_length' => 12.25,
+			'inner_depth'  => 7.0,
+			'max_weight'   => 70.0,
+		) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'stamps_com', 'usps_priority_mail' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 0, $candidates );
+	}
+
+	public function test_build_candidates_ups_cubic_box_mode_is_package(): void {
+		// A cubic box that IS within USPS cubic limits — verify that for
+		// UPS the mode is 'package' (not 'cubic') and cubic_tier is empty.
+		$box = $this->make_box( array( 'box_type' => 'cubic' ) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'ups_walleted', 'ups_ground' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'package', $candidates[0]['mode'] );
+		$this->assertSame( '', $candidates[0]['cubic_tier'] );
+	}
+
+	public function test_build_candidates_usps_cubic_box_mode_is_cubic(): void {
+		// Same small cubic box under USPS — mode should be 'cubic' with tier.
+		$box = $this->make_box( array( 'box_type' => 'cubic' ) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'stamps_com', 'usps_priority_mail' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'cubic', $candidates[0]['mode'] );
+		$this->assertNotEmpty( $candidates[0]['cubic_tier'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -935,6 +1025,27 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'ups_ground', $service->get_service_code() );
 	}
 
+	public function test_get_service_code_returns_empty_when_override_is_empty_string(): void {
+		// Even when Settings has a non-empty default, an explicit '' override
+		// should be respected so the API returns rates for ALL services.
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', '' );
+		$this->assertSame( '', $service->get_service_code() );
+	}
+
+	public function test_get_carrier_code_returns_empty_when_override_is_empty_string(): void {
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$service = new ShipStation_Service( $this->settings, '', 'usps_priority_mail' );
+		$this->assertSame( '', $service->get_carrier_code() );
+	}
+
+	public function test_get_service_code_falls_back_to_settings_when_override_is_null(): void {
+		// When constructed without explicit overrides, should fall back to settings.
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$service = new ShipStation_Service( $this->settings );
+		$this->assertSame( 'usps_priority_mail', $service->get_service_code() );
+	}
+
 	// -------------------------------------------------------------------------
 	// get_service_label
 	// -------------------------------------------------------------------------
@@ -1215,5 +1326,224 @@ class ShipStationServiceTest extends TestCase {
 		// 3 transit calendar days → Thu Jan 4; + 2 business days (Fri, Mon) → 2024-01-08.
 		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
 		$this->assertSame( '2024-01-08', $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// request_all_rates
+	// -------------------------------------------------------------------------
+
+	public function test_request_all_rates_returns_all_rates_sorted(): void {
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'ups_next_day_air', 'shipmentCost' => 25.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_2nd_day_air', 'shipmentCost' => 15.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$result = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertTrue( $result['success'] );
+		$this->assertCount( 3, $result['rates'] );
+		// Sorted cheapest-first.
+		$this->assertSame( 'ups_ground', $result['rates'][0]['serviceCode'] );
+		$this->assertSame( 'ups_2nd_day_air', $result['rates'][1]['serviceCode'] );
+		$this->assertSame( 'ups_next_day_air', $result['rates'][2]['serviceCode'] );
+	}
+
+	public function test_request_all_rates_fails_when_no_credentials(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( '' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( '' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+
+		$result = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertFalse( $result['success'] );
+	}
+
+	public function test_request_all_rates_fails_when_empty_response(): void {
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array() ),
+		);
+
+		$result = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertFalse( $result['success'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// build_all_test_package_plans with empty service_code (multi-service)
+	// -------------------------------------------------------------------------
+
+	public function test_build_all_plans_expands_multiple_services_when_service_code_empty(): void {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'ups_walleted' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( '' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		// Create a service with empty service_code override.
+		$service = new ShipStation_Service( $settings, 'ups_walleted', '' );
+
+		// API returns multiple services.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_next_day_air', 'shipmentCost' => 25.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_2nd_day_air', 'shipmentCost' => 15.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// Should have 3 plans (one per service), not 1 (cheapest only).
+		$this->assertCount( 3, $plans );
+
+		// Sorted cheapest-first.
+		$this->assertSame( 'ups_ground', $plans[0]['service_code'] );
+		$this->assertSame( 9.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 'UPS Ground', $plans[0]['service_label'] );
+
+		$this->assertSame( 'ups_2nd_day_air', $plans[1]['service_code'] );
+		$this->assertSame( 15.00, $plans[1]['rate_amount'] );
+
+		$this->assertSame( 'ups_next_day_air', $plans[2]['service_code'] );
+		$this->assertSame( 25.00, $plans[2]['rate_amount'] );
+	}
+
+	public function test_build_all_plans_single_service_when_service_code_set(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		// API returns a single rate for the specific service.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 8.50, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// Single service configured → 1 plan per box candidate.
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_priority_mail', $plans[0]['service_code'] );
+	}
+
+	public function test_build_all_plans_empty_service_code_multiple_candidates(): void {
+		$settings = $this->createMock( Settings::class );
+
+		$box_a = $this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) );
+		$box_b = $this->make_box( array(
+			'reference'    => 'Box B',
+			'package_name' => 'Box B',
+			'outer_width'  => 9,
+			'outer_length' => 9,
+			'outer_depth'  => 7,
+			'inner_width'  => 9,
+			'inner_length' => 9,
+			'inner_depth'  => 7,
+		) );
+
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box_a, $box_b ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'ups_walleted' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( '' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$service = new ShipStation_Service( $settings, 'ups_walleted', '' );
+
+		$call = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call ) {
+			++$call;
+			// First candidate (Box A): 2 services.
+			// Second candidate (Box B): 2 services.
+			$cost_offset = ( 1 === $call ) ? 0 : 1;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00 + $cost_offset, 'otherCost' => 0.00 ),
+					array( 'serviceCode' => 'ups_next_day_air', 'shipmentCost' => 25.00 + $cost_offset, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// 2 services × 2 candidates = 4 plans.
+		$this->assertCount( 4, $plans );
+		// Sorted cheapest-first: UPS Ground Box A (9), UPS Ground Box B (10), UPS Next Day Box A (25), UPS Next Day Box B (26).
+		$this->assertSame( 9.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 'ups_ground', $plans[0]['service_code'] );
+		$this->assertSame( 10.00, $plans[1]['rate_amount'] );
+		$this->assertSame( 'ups_ground', $plans[1]['service_code'] );
+		$this->assertSame( 25.00, $plans[2]['rate_amount'] );
+		$this->assertSame( 'ups_next_day_air', $plans[2]['service_code'] );
+		$this->assertSame( 26.00, $plans[3]['rate_amount'] );
+		$this->assertSame( 'ups_next_day_air', $plans[3]['service_code'] );
+	}
+
+	public function test_build_all_plans_expands_usps_services_when_service_code_empty(): void {
+		// Simulate the real-world scenario: settings has a non-empty default
+		// service code, but the pair override is explicitly empty.
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		// Settings has a non-empty default — the bug was that this value was used
+		// instead of the explicit '' override.
+		$settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		// Create service with explicit empty service_code override.
+		$service = new ShipStation_Service( $settings, 'stamps_com', '' );
+
+		// API returns multiple USPS services when serviceCode is empty.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 8.69, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'usps_ground_advantage', 'shipmentCost' => 5.50, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'usps_priority_mail_express', 'shipmentCost' => 28.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// All 3 USPS services should appear, not just Priority.
+		$this->assertCount( 3, $plans );
+
+		// Sorted cheapest-first.
+		$this->assertSame( 'usps_ground_advantage', $plans[0]['service_code'] );
+		$this->assertSame( 5.50, $plans[0]['rate_amount'] );
+		$this->assertSame( 'USPS Ground Advantage', $plans[0]['service_label'] );
+
+		$this->assertSame( 'usps_priority_mail', $plans[1]['service_code'] );
+		$this->assertSame( 8.69, $plans[1]['rate_amount'] );
+		$this->assertSame( 'USPS Priority', $plans[1]['service_label'] );
+
+		$this->assertSame( 'usps_priority_mail_express', $plans[2]['service_code'] );
+		$this->assertSame( 28.00, $plans[2]['rate_amount'] );
 	}
 }
