@@ -425,31 +425,62 @@ class ShipStation_Service {
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate( $ship_to, $candidate, $order_id );
+			// When service_code is empty the API returns rates for every
+			// available service; expand each rate into its own plan.
+			if ( '' === $service_code ) {
+				$response = $this->request_all_rates( $ship_to, $candidate, $order_id );
 
-			if ( ! $response['success'] ) {
-				continue;
+				if ( ! $response['success'] ) {
+					continue;
+				}
+
+				foreach ( $response['rates'] as $rate ) {
+					$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+					$rate_service_code = (string) ( $rate['serviceCode'] ?? '' );
+					$plans[]           = array(
+						'package_number'          => $package_number,
+						'mode'                    => $candidate['mode'],
+						'package_code'            => $candidate['package_code'],
+						'package_name'            => $candidate['package_name'],
+						'service_code'            => $rate_service_code,
+						'service_label'           => $this->get_service_label( $rate_service_code ),
+						'rate_amount'             => $total_cost,
+						'currency'                => 'USD',
+						'weight_oz'               => (float) $candidate['weight_oz'],
+						'dimensions'              => $candidate['dimensions'],
+						'cubic_tier'              => $candidate['cubic_tier'],
+						'packing_list'            => $this->build_packing_list( $package['items'] ),
+						'items'                   => $package['items'],
+						'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
+					);
+				}
+			} else {
+				$response = $this->request_rate( $ship_to, $candidate, $order_id );
+
+				if ( ! $response['success'] ) {
+					continue;
+				}
+
+				$rate              = $response['rate'];
+				$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+				$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
+				$plans[]           = array(
+					'package_number'          => $package_number,
+					'mode'                    => $candidate['mode'],
+					'package_code'            => $candidate['package_code'],
+					'package_name'            => $candidate['package_name'],
+					'service_code'            => $rate_service_code,
+					'service_label'           => $this->get_service_label( $rate_service_code ),
+					'rate_amount'             => $total_cost,
+					'currency'                => 'USD',
+					'weight_oz'               => (float) $candidate['weight_oz'],
+					'dimensions'              => $candidate['dimensions'],
+					'cubic_tier'              => $candidate['cubic_tier'],
+					'packing_list'            => $this->build_packing_list( $package['items'] ),
+					'items'                   => $package['items'],
+					'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
+				);
 			}
-
-			$rate              = $response['rate'];
-			$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
-			$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
-			$plans[]           = array(
-				'package_number'          => $package_number,
-				'mode'                    => $candidate['mode'],
-				'package_code'            => $candidate['package_code'],
-				'package_name'            => $candidate['package_name'],
-				'service_code'            => $rate_service_code,
-				'service_label'           => $this->get_service_label( $rate_service_code ),
-				'rate_amount'             => $total_cost,
-				'currency'                => 'USD',
-				'weight_oz'               => (float) $candidate['weight_oz'],
-				'dimensions'              => $candidate['dimensions'],
-				'cubic_tier'              => $candidate['cubic_tier'],
-				'packing_list'            => $this->build_packing_list( $package['items'] ),
-				'items'                   => $package['items'],
-				'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
-			);
 		}
 
 		usort(
@@ -642,6 +673,129 @@ class ShipStation_Service {
 		return array(
 			'success' => true,
 			'rate'    => $rates[0],
+		);
+	}
+
+	/**
+	 * Request ALL rates from the ShipStation API for a candidate shipment.
+	 *
+	 * Unlike request_rate() which returns only the cheapest rate, this method
+	 * returns every rate from the API response.  This is especially useful
+	 * when the service code is empty and the API returns rates for all
+	 * available services of the carrier (e.g. UPS Ground, UPS Next Day, etc.).
+	 *
+	 * @param array $ship_to   ShipStation-compatible destination address.
+	 * @param array $candidate Candidate shipment (mode, package_code, dimensions, weight_oz).
+	 * @param int   $order_id  Order ID for log context; 0 for test runs.
+	 * @return array ['success' => bool, 'rates' => array[]].
+	 */
+	protected function request_all_rates( array $ship_to, array $candidate, int $order_id = 0 ): array {
+		$api_key      = $this->settings->get_shipstation_api_key();
+		$api_secret   = $this->settings->get_shipstation_api_secret();
+		$carrier_code = $this->get_carrier_code();
+
+		if ( '' === $api_key || '' === $api_secret ) {
+			$this->log( 'Missing ShipStation credentials.', array( 'order_id' => $order_id ) );
+			return array( 'success' => false );
+		}
+
+		if ( '' === $carrier_code ) {
+			$this->log( 'ShipStation carrier code is not configured.', array( 'order_id' => $order_id ) );
+			return array( 'success' => false );
+		}
+
+		$ship_from = $this->settings->get_ship_from_address();
+
+		$payload = array(
+			'carrierCode'    => $carrier_code,
+			'serviceCode'    => $this->get_service_code(),
+			'packageCode'    => $candidate['package_code'],
+			'fromPostalCode' => $ship_from['postal_code'] ?? '',
+			'toState'        => $ship_to['state_province'] ?? '',
+			'toCountry'      => $ship_to['country_code'] ?? 'US',
+			'toPostalCode'   => $ship_to['postal_code'] ?? '',
+			'toCity'         => $ship_to['city_locality'] ?? '',
+			'weight'         => array(
+				'value' => round( $candidate['weight_oz'], 2 ),
+				'units' => 'ounces',
+			),
+			'dimensions'     => array(
+				'units'  => 'inches',
+				'length' => $candidate['dimensions']['length'],
+				'width'  => $candidate['dimensions']['width'],
+				'height' => $candidate['dimensions']['height'],
+			),
+			'confirmation'   => 'none',
+			'residential'    => false,
+		);
+
+		$auth     = base64_encode( $api_key . ':' . $api_secret ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Standard Basic-Auth encoding, not obfuscation.
+		$api_url  = (string) apply_filters( 'fk_usps_optimizer_shipstation_api_url', self::API_BASE_URL );
+		$endpoint = trailingslashit( $api_url ) . 'shipments/getrates';
+
+		$response = wp_remote_post(
+			$endpoint,
+			array(
+				'timeout' => 30,
+				'headers' => array(
+					'Authorization' => 'Basic ' . $auth,
+					'Content-Type'  => 'application/json',
+				),
+				'body'    => wp_json_encode( $payload ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			$this->log(
+				'ShipStation request failed.',
+				array(
+					'order_id' => $order_id,
+					'error'    => $response->get_error_message(),
+				)
+			);
+			return array( 'success' => false );
+		}
+
+		$code  = (int) wp_remote_retrieve_response_code( $response );
+		$body  = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$rates = is_array( $body ) ? $body : array();
+
+		if ( $code < 200 || $code >= 300 ) {
+			$this->log(
+				'ShipStation returned a non-success response.',
+				array(
+					'order_id' => $order_id,
+					'status'   => $code,
+					'body'     => $body,
+				)
+			);
+			return array( 'success' => false );
+		}
+
+		if ( empty( $rates ) ) {
+			$this->log(
+				'ShipStation returned no rates.',
+				array(
+					'order_id' => $order_id,
+					'body'     => $body,
+				)
+			);
+			return array( 'success' => false );
+		}
+
+		// Sort cheapest-first.
+		usort(
+			$rates,
+			static function ( array $a, array $b ): int {
+				$cost_a = (float) $a['shipmentCost'] + (float) ( $a['otherCost'] ?? 0 );
+				$cost_b = (float) $b['shipmentCost'] + (float) ( $b['otherCost'] ?? 0 );
+				return $cost_a <=> $cost_b;
+			}
+		);
+
+		return array(
+			'success' => true,
+			'rates'   => $rates,
 		);
 	}
 
