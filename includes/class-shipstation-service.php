@@ -38,29 +38,33 @@ class ShipStation_Service {
 	/**
 	 * Optional carrier code override.
 	 *
-	 * When non-empty, this value is used instead of the Settings getter.
+	 * When non-null, this value is used instead of the Settings getter.
+	 * An explicit empty string means "all carrier services".
 	 *
-	 * @var string
+	 * @var string|null
 	 */
-	protected $carrier_code_override = '';
+	protected $carrier_code_override;
 
 	/**
 	 * Optional service code override.
 	 *
-	 * When non-empty, this value is used instead of the Settings getter.
+	 * When non-null, this value is used instead of the Settings getter.
+	 * An explicit empty string means "all services for the carrier".
 	 *
-	 * @var string
+	 * @var string|null
 	 */
-	protected $service_code_override = '';
+	protected $service_code_override;
 
 	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings     Plugin settings instance.
-	 * @param string   $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
-	 * @param string   $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
+	 * @param Settings    $settings     Plugin settings instance.
+	 * @param string|null $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
+	 *                                  Pass null (default) to fall back to Settings; pass '' for all carriers.
+	 * @param string|null $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
+	 *                                  Pass null (default) to fall back to Settings; pass '' for all services.
 	 */
-	public function __construct( Settings $settings, string $carrier_code = '', string $service_code = '' ) {
+	public function __construct( Settings $settings, ?string $carrier_code = null, ?string $service_code = null ) {
 		$this->settings              = $settings;
 		$this->carrier_code_override = $carrier_code;
 		$this->service_code_override = $service_code;
@@ -72,7 +76,7 @@ class ShipStation_Service {
 	 * @return string Carrier code.
 	 */
 	public function get_carrier_code(): string {
-		return '' !== $this->carrier_code_override
+		return null !== $this->carrier_code_override
 			? $this->carrier_code_override
 			: $this->settings->get_shipstation_carrier_code();
 	}
@@ -83,9 +87,36 @@ class ShipStation_Service {
 	 * @return string Service code.
 	 */
 	public function get_service_code(): string {
-		return '' !== $this->service_code_override
+		return null !== $this->service_code_override
 			? $this->service_code_override
 			: $this->settings->get_shipstation_service_code();
+	}
+
+	/**
+	 * Map the ShipStation carrier code to a box-restriction keyword.
+	 *
+	 * The returned keyword matches the values stored in each box definition's
+	 * `carrier_restriction` field (e.g. 'usps', 'ups', 'fedex') so that
+	 * `Settings::get_boxes_for_carrier()` can filter out boxes that belong
+	 * to a different carrier.
+	 *
+	 * @return string Carrier keyword (e.g. 'usps', 'ups', 'fedex'), or ''
+	 *                when the carrier code is unknown.
+	 */
+	public function get_carrier_keyword(): string {
+		$carrier_code = $this->get_carrier_code();
+
+		$map = array(
+			'stamps_com'   => 'usps',
+			'usps'         => 'usps',
+			'endicia'      => 'usps',
+			'ups_walleted' => 'ups',
+			'ups'          => 'ups',
+			'fedex'        => 'fedex',
+			'dhl_express'  => 'dhl',
+		);
+
+		return $map[ $carrier_code ] ?? '';
 	}
 
 	/**
@@ -95,11 +126,17 @@ class ShipStation_Service {
 	 * service codes (e.g. 'usps_priority_mail', 'ups_ground') to friendly
 	 * names like "USPS Priority" or "UPS Ground".
 	 *
+	 * When $override_service_code is provided (e.g. the serviceCode returned
+	 * by the ShipStation API), it is used instead of the instance's
+	 * configured service code.  This ensures the label matches the actual
+	 * service that was rated, not the one that was requested.
+	 *
+	 * @param string $override_service_code Optional service code from the API response.
 	 * @return string Human-readable label such as "USPS Priority" or "UPS Ground".
 	 */
-	public function get_service_label(): string {
+	public function get_service_label( string $override_service_code = '' ): string {
 		$carrier_code = $this->get_carrier_code();
-		$service_code = $this->get_service_code();
+		$service_code = '' !== $override_service_code ? $override_service_code : $this->get_service_code();
 
 		$carrier_names = array(
 			'stamps_com'   => 'USPS',
@@ -115,6 +152,7 @@ class ShipStation_Service {
 			'usps_priority_mail'         => 'Priority',
 			'usps_priority_mail_express' => 'Priority Express',
 			'usps_first_class_mail'      => 'First Class',
+			'usps_ground_advantage'      => 'Ground Advantage',
 			'usps_parcel_select'         => 'Parcel Select',
 			'usps_media_mail'            => 'Media Mail',
 			'ups_ground'                 => 'Ground',
@@ -349,25 +387,10 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate       = $response['rate'];
-			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+			$plan = $this->build_plan_from_rate( $response['rate'], $candidate, $package, $package_number, $service_code );
 
-			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
-				$best_plan = array(
-					'package_number' => $package_number,
-					'mode'           => $candidate['mode'],
-					'package_code'   => $candidate['package_code'],
-					'package_name'   => $candidate['package_name'],
-					'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => $total_cost,
-					'currency'       => 'USD',
-					'weight_oz'      => (float) $candidate['weight_oz'],
-					'dimensions'     => $candidate['dimensions'],
-					'cubic_tier'     => $candidate['cubic_tier'],
-					'packing_list'   => $this->build_packing_list( $package['items'] ),
-					'items'          => $package['items'],
-				);
+			if ( empty( $best_plan ) || $plan['rate_amount'] < (float) $best_plan['rate_amount'] ) {
+				$best_plan = $plan;
 			}
 		}
 
@@ -389,29 +412,27 @@ class ShipStation_Service {
 		$plans        = array();
 
 		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate( $ship_to, $candidate, $order_id );
+			// When service_code is empty the API returns rates for every
+			// available service; expand each rate into its own plan.
+			if ( '' === $service_code ) {
+				$response = $this->request_all_rates( $ship_to, $candidate, $order_id );
 
-			if ( ! $response['success'] ) {
-				continue;
+				if ( ! $response['success'] ) {
+					continue;
+				}
+
+				foreach ( $response['rates'] as $rate ) {
+					$plans[] = $this->build_plan_from_rate( $rate, $candidate, $package, $package_number, '' );
+				}
+			} else {
+				$response = $this->request_rate( $ship_to, $candidate, $order_id );
+
+				if ( ! $response['success'] ) {
+					continue;
+				}
+
+				$plans[] = $this->build_plan_from_rate( $response['rate'], $candidate, $package, $package_number, $service_code );
 			}
-
-			$rate       = $response['rate'];
-			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
-			$plans[]    = array(
-				'package_number' => $package_number,
-				'mode'           => $candidate['mode'],
-				'package_code'   => $candidate['package_code'],
-				'package_name'   => $candidate['package_name'],
-				'service_code'   => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => $total_cost,
-				'currency'       => 'USD',
-				'weight_oz'      => (float) $candidate['weight_oz'],
-				'dimensions'     => $candidate['dimensions'],
-				'cubic_tier'     => $candidate['cubic_tier'],
-				'packing_list'   => $this->build_packing_list( $package['items'] ),
-				'items'          => $package['items'],
-			);
 		}
 
 		usort(
@@ -422,6 +443,41 @@ class ShipStation_Service {
 		);
 
 		return $plans;
+	}
+
+	/**
+	 * Build a shipping plan array from a single ShipStation rate entry.
+	 *
+	 * Shared helper used by build_package_plan_for_address and
+	 * build_all_plans_for_address to avoid duplicating plan construction.
+	 *
+	 * @param array  $rate                 Single rate entry from the ShipStation API response.
+	 * @param array  $candidate            Candidate shipment (mode, package_code, etc.).
+	 * @param array  $package              Packed package data (items, weight_oz, etc.).
+	 * @param int    $package_number       1-based package sequence number.
+	 * @param string $fallback_service_code Service code to use when the rate does not include one.
+	 * @return array Shipping plan data.
+	 */
+	protected function build_plan_from_rate( array $rate, array $candidate, array $package, int $package_number, string $fallback_service_code ): array {
+		$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+		$rate_service_code = (string) ( $rate['serviceCode'] ?? $fallback_service_code );
+
+		return array(
+			'package_number'          => $package_number,
+			'mode'                    => $candidate['mode'],
+			'package_code'            => $candidate['package_code'],
+			'package_name'            => $candidate['package_name'],
+			'service_code'            => $rate_service_code,
+			'service_label'           => $this->get_service_label( $rate_service_code ),
+			'rate_amount'             => $total_cost,
+			'currency'                => 'USD',
+			'weight_oz'               => (float) $candidate['weight_oz'],
+			'dimensions'              => $candidate['dimensions'],
+			'cubic_tier'              => $candidate['cubic_tier'],
+			'packing_list'            => $this->build_packing_list( $package['items'] ),
+			'items'                   => $package['items'],
+			'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -435,9 +491,11 @@ class ShipStation_Service {
 	 * @return array Candidate shipment arrays.
 	 */
 	protected function build_candidates( array $package ): array {
-		$candidates = array();
+		$candidates      = array();
+		$carrier_keyword = $this->get_carrier_keyword();
+		$is_usps         = 'usps' === $carrier_keyword;
 
-		foreach ( $this->settings->get_boxes() as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( $carrier_keyword ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}
@@ -449,19 +507,30 @@ class ShipStation_Service {
 			);
 			$weight_oz  = (float) $package['weight_oz'] + (float) $box['empty_weight'];
 
-			if ( 'cubic' === $box['box_type'] ) {
-				if ( ! $this->is_cubic_eligible( $dimensions, $weight_oz ) ) {
-					continue;
-				}
+			// USPS cubic eligibility rules (≤0.5 ft³, ≤320 oz, longest side ≤18″)
+			// only apply to USPS carriers.  Non-USPS carriers (UPS, FedEx, etc.)
+			// treat cubic-type boxes as regular packages.
+			$use_cubic = 'cubic' === $box['box_type'] && $is_usps;
+
+			if ( $use_cubic && ! $this->is_cubic_eligible( $dimensions, $weight_oz ) ) {
+				continue;
+			}
+
+			if ( $use_cubic ) {
+				$mode = 'cubic';
+			} elseif ( 'flat_rate' === $box['box_type'] ) {
+				$mode = 'flat_rate_box';
+			} else {
+				$mode = 'package';
 			}
 
 			$candidates[] = array(
-				'mode'         => 'cubic' === $box['box_type'] ? 'cubic' : 'flat_rate_box',
+				'mode'         => $mode,
 				'package_code' => $box['package_code'],
 				'package_name' => $box['package_name'],
 				'dimensions'   => $dimensions,
 				'weight_oz'    => $weight_oz,
-				'cubic_tier'   => 'cubic' === $box['box_type'] ? $this->get_cubic_tier( $dimensions ) : '',
+				'cubic_tier'   => $use_cubic ? $this->get_cubic_tier( $dimensions ) : '',
 				'box'          => $box,
 			);
 		}
@@ -498,6 +567,33 @@ class ShipStation_Service {
 	 * @return array ['success' => bool, 'rate' => array|null].
 	 */
 	protected function request_rate( array $ship_to, array $candidate, int $order_id = 0 ): array {
+		$result = $this->request_all_rates( $ship_to, $candidate, $order_id );
+
+		if ( ! $result['success'] ) {
+			return array( 'success' => false );
+		}
+
+		return array(
+			'success' => true,
+			'rate'    => $result['rates'][0],
+		);
+	}
+
+	/**
+	 * Request ALL rates from the ShipStation API for a candidate shipment.
+	 *
+	 * Unlike request_rate() which returns only the cheapest rate, this method
+	 * returns every rate from the API response sorted cheapest-first.  This is
+	 * especially useful when the service code is empty and the API returns
+	 * rates for all available services of the carrier (e.g. UPS Ground, UPS
+	 * Next Day, etc.).
+	 *
+	 * @param array $ship_to   ShipStation-compatible destination address.
+	 * @param array $candidate Candidate shipment (mode, package_code, dimensions, weight_oz).
+	 * @param int   $order_id  Order ID for log context; 0 for test runs.
+	 * @return array ['success' => bool, 'rates' => array[]].
+	 */
+	protected function request_all_rates( array $ship_to, array $candidate, int $order_id = 0 ): array {
 		$api_key      = $this->settings->get_shipstation_api_key();
 		$api_secret   = $this->settings->get_shipstation_api_secret();
 		$carrier_code = $this->get_carrier_code();
@@ -591,7 +687,7 @@ class ShipStation_Service {
 			return array( 'success' => false );
 		}
 
-		// Pick the cheapest rate (shipmentCost + otherCost).
+		// Sort cheapest-first.
 		usort(
 			$rates,
 			static function ( array $a, array $b ): int {
@@ -603,7 +699,7 @@ class ShipStation_Service {
 
 		return array(
 			'success' => true,
-			'rate'    => $rates[0],
+			'rates'   => $rates,
 		);
 	}
 
@@ -701,6 +797,126 @@ class ShipStation_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Extract an estimated delivery date from a ShipStation rate response.
+	 *
+	 * The ShipStation getrates API may return delivery information under
+	 * several field names depending on the carrier and API version:
+	 *   - 'estimatedDeliveryDate' — ISO 8601 datetime string (preferred).
+	 *   - 'deliveryDays'          — integer transit-day count.
+	 *   - 'transitDays'           — legacy field name for transit-day count.
+	 *
+	 * The method checks each field in order and returns the first usable
+	 * value as a YYYY-MM-DD date string, or '' when no data is available.
+	 *
+	 * @param array $rate Rate entry from ShipStation response.
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function extract_delivery_date( array $rate ): string {
+		// 1. Direct ISO datetime string from the API.
+		$iso = (string) ( $rate['estimatedDeliveryDate'] ?? '' );
+		if ( '' !== $iso ) {
+			try {
+				$date = new \DateTime( $iso );
+				return $date->format( 'Y-m-d' );
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch -- Intentional: invalid date falls through to day-count fallbacks.
+			}
+		}
+
+		// 2. Day-count fields — try both names the API may use.
+		foreach ( array( 'deliveryDays', 'transitDays' ) as $key ) {
+			if ( isset( $rate[ $key ] ) && (int) $rate[ $key ] > 0 ) {
+				return $this->compute_delivery_date( (int) $rate[ $key ] );
+			}
+		}
+
+		// 3. Fallback: estimate from the service code's typical transit days
+		// (only when the admin has enabled the setting).
+		if ( $this->settings->is_use_default_transit_days_enabled() ) {
+			$service_code = (string) ( $rate['serviceCode'] ?? '' );
+			$default_days = $this->get_default_transit_days( $service_code );
+			if ( $default_days > 0 ) {
+				return $this->compute_delivery_date( $default_days );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get default transit days for a carrier service code.
+	 *
+	 * The ShipStation getrates endpoint does not always return delivery-day
+	 * or estimated-delivery-date information.  When those fields are absent
+	 * this method provides a reasonable worst-case estimate based on
+	 * carrier-published transit times so that the checkout still displays
+	 * an estimated delivery date.
+	 *
+	 * @param string $service_code ShipStation service code.
+	 * @return int Estimated transit days, or 0 when unknown.
+	 */
+	protected function get_default_transit_days( string $service_code ): int {
+		$map = array(
+			// USPS services.
+			'usps_priority_mail'         => 3,
+			'usps_priority_mail_express' => 2,
+			'usps_first_class_mail'      => 5,
+			'usps_ground_advantage'      => 5,
+			'usps_parcel_select'         => 8,
+			'usps_media_mail'            => 8,
+			// UPS services.
+			'ups_ground'                 => 5,
+			'ups_ground_saver'           => 5,
+			'ups_3_day_select'           => 3,
+			'ups_2nd_day_air'            => 2,
+			'ups_next_day_air_saver'     => 1,
+			'ups_next_day_air'           => 1,
+			// FedEx services.
+			'fedex_ground'               => 5,
+			'fedex_home_delivery'        => 5,
+			'fedex_express_saver'        => 3,
+			'fedex_2day'                 => 2,
+		);
+
+		return $map[ $service_code ] ?? 0;
+	}
+
+	/**
+	 * Compute an estimated delivery date string from a transit-day count.
+	 *
+	 * Uses the current WordPress site time as the start date, adds the
+	 * given number of calendar transit days, then adds the configured
+	 * buffer as **business days** (Monday–Friday only).  Returns an empty
+	 * string when $transit_days is zero or negative.
+	 *
+	 * @param int $transit_days Number of transit days (calendar).
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function compute_delivery_date( int $transit_days ): string {
+		if ( $transit_days <= 0 ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( current_time( 'mysql' ) );
+			$date->modify( '+' . $transit_days . ' days' );
+
+			$buffer = $this->settings->get_transit_days_buffer();
+			$added  = 0;
+			while ( $added < $buffer ) {
+				$date->modify( '+1 day' );
+				$dow = (int) $date->format( 'N' ); // 1=Mon … 7=Sun.
+				if ( $dow <= 5 ) {
+					++$added;
+				}
+			}
+
+			return $date->format( 'Y-m-d' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 
 	// -------------------------------------------------------------------------

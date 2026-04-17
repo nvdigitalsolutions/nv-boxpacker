@@ -37,15 +37,20 @@ class ShipEngine_Service {
 	 * ShipEngine carriers configured in this plugin are always USPS-based,
 	 * so the label is derived from the service code alone.
 	 *
+	 * When $override_service_code is provided (e.g. the serviceCode returned
+	 * by the ShipEngine API), it is used instead of the settings value.
+	 *
+	 * @param string $override_service_code Optional service code from the API response.
 	 * @return string Human-readable label such as "USPS Priority".
 	 */
-	public function get_service_label(): string {
-		$service_code = $this->settings->get_shipengine_service_code();
+	public function get_service_label( string $override_service_code = '' ): string {
+		$service_code = '' !== $override_service_code ? $override_service_code : $this->settings->get_shipengine_service_code();
 
 		$service_names = array(
 			'usps_priority_mail'         => 'Priority',
 			'usps_priority_mail_express' => 'Priority Express',
 			'usps_first_class_mail'      => 'First Class',
+			'usps_ground_advantage'      => 'Ground Advantage',
 			'usps_parcel_select'         => 'Parcel Select',
 			'usps_media_mail'            => 'Media Mail',
 		);
@@ -128,19 +133,20 @@ class ShipEngine_Service {
 			if ( empty( $best_plan ) || (float) $rate['shipping_amount']['amount'] < (float) $best_plan['rate_amount'] ) {
 				$dimensions = $candidate['dimensions'];
 				$best_plan  = array(
-					'package_number' => $package_number,
-					'mode'           => $candidate['mode'],
-					'package_code'   => $candidate['package_code'],
-					'package_name'   => $candidate['package_name'],
-					'service_code'   => $service_code,
-					'service_label'  => $this->get_service_label(),
-					'rate_amount'    => (float) $rate['shipping_amount']['amount'],
-					'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
-					'weight_oz'      => (float) $candidate['weight_oz'],
-					'dimensions'     => $dimensions,
-					'cubic_tier'     => $candidate['cubic_tier'],
-					'packing_list'   => $this->build_packing_list( $package['items'] ),
-					'items'          => $package['items'],
+					'package_number'          => $package_number,
+					'mode'                    => $candidate['mode'],
+					'package_code'            => $candidate['package_code'],
+					'package_name'            => $candidate['package_name'],
+					'service_code'            => $service_code,
+					'service_label'           => $this->get_service_label(),
+					'rate_amount'             => (float) $rate['shipping_amount']['amount'],
+					'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
+					'weight_oz'               => (float) $candidate['weight_oz'],
+					'dimensions'              => $dimensions,
+					'cubic_tier'              => $candidate['cubic_tier'],
+					'packing_list'            => $this->build_packing_list( $package['items'] ),
+					'items'                   => $package['items'],
+					'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 				);
 			}
 		}
@@ -172,19 +178,20 @@ class ShipEngine_Service {
 			$rate       = $response['rate'];
 			$dimensions = $candidate['dimensions'];
 			$plans[]    = array(
-				'package_number' => $package_number,
-				'mode'           => $candidate['mode'],
-				'package_code'   => $candidate['package_code'],
-				'package_name'   => $candidate['package_name'],
-				'service_code'   => $service_code,
-				'service_label'  => $this->get_service_label(),
-				'rate_amount'    => (float) $rate['shipping_amount']['amount'],
-				'currency'       => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
-				'weight_oz'      => (float) $candidate['weight_oz'],
-				'dimensions'     => $dimensions,
-				'cubic_tier'     => $candidate['cubic_tier'],
-				'packing_list'   => $this->build_packing_list( $package['items'] ),
-				'items'          => $package['items'],
+				'package_number'          => $package_number,
+				'mode'                    => $candidate['mode'],
+				'package_code'            => $candidate['package_code'],
+				'package_name'            => $candidate['package_name'],
+				'service_code'            => $service_code,
+				'service_label'           => $this->get_service_label(),
+				'rate_amount'             => (float) $rate['shipping_amount']['amount'],
+				'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
+				'weight_oz'               => (float) $candidate['weight_oz'],
+				'dimensions'              => $dimensions,
+				'cubic_tier'              => $candidate['cubic_tier'],
+				'packing_list'            => $this->build_packing_list( $package['items'] ),
+				'items'                   => $package['items'],
+				'estimated_delivery_date' => $this->extract_delivery_date( $rate ),
 			);
 		}
 
@@ -207,7 +214,7 @@ class ShipEngine_Service {
 	protected function build_candidates( array $package ): array {
 		$candidates = array();
 
-		foreach ( $this->settings->get_boxes() as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( 'usps' ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}
@@ -428,6 +435,103 @@ class ShipEngine_Service {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Extract an estimated delivery date from a ShipEngine rate response.
+	 *
+	 * ShipEngine rate objects include both 'estimated_delivery_date' (an
+	 * ISO 8601 datetime string that may be null) and 'delivery_days' (an
+	 * integer day count that may also be null).  This method uses the
+	 * explicit date when available and falls back to computing a date from
+	 * the day count.
+	 *
+	 * @param array $rate Rate entry from ShipEngine response.
+	 * @return string ISO 8601 date or datetime string, or ''.
+	 */
+	protected function extract_delivery_date( array $rate ): string {
+		// 1. Direct ISO datetime string from the API (preferred).
+		$iso = (string) ( $rate['estimated_delivery_date'] ?? '' );
+		if ( '' !== $iso ) {
+			return $iso;
+		}
+
+		// 2. Compute from delivery_days when the explicit date is null.
+		$days = isset( $rate['delivery_days'] ) ? (int) $rate['delivery_days'] : 0;
+		if ( $days > 0 ) {
+			return $this->compute_delivery_date( $days );
+		}
+
+		// 3. Fallback: estimate from the service code's typical transit days
+		// (only when the admin has enabled the setting).
+		if ( $this->settings->is_use_default_transit_days_enabled() ) {
+			$service_code = (string) ( $rate['service_code'] ?? '' );
+			$default_days = $this->get_default_transit_days( $service_code );
+			if ( $default_days > 0 ) {
+				return $this->compute_delivery_date( $default_days );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Get default transit days for a carrier service code.
+	 *
+	 * ShipEngine rate responses may omit both estimated_delivery_date and
+	 * delivery_days for certain carrier / service combinations.  When those
+	 * fields are absent this method provides a reasonable worst-case
+	 * estimate based on carrier-published transit times.
+	 *
+	 * @param string $service_code ShipEngine service code.
+	 * @return int Estimated transit days, or 0 when unknown.
+	 */
+	protected function get_default_transit_days( string $service_code ): int {
+		$map = array(
+			'usps_priority_mail'         => 3,
+			'usps_priority_mail_express' => 2,
+			'usps_first_class_mail'      => 5,
+			'usps_ground_advantage'      => 5,
+			'usps_parcel_select'         => 8,
+			'usps_media_mail'            => 8,
+		);
+
+		return $map[ $service_code ] ?? 0;
+	}
+
+	/**
+	 * Compute an estimated delivery date string from a day count.
+	 *
+	 * Uses the current WordPress site time as the start date, adds the
+	 * given number of calendar transit days, then adds the configured
+	 * buffer as **business days** (Monday–Friday only).
+	 *
+	 * @param int $days Number of delivery days (calendar).
+	 * @return string ISO 8601 date string (e.g. '2024-01-15'), or ''.
+	 */
+	protected function compute_delivery_date( int $days ): string {
+		if ( $days <= 0 ) {
+			return '';
+		}
+
+		try {
+			$date = new \DateTime( current_time( 'mysql' ) );
+			$date->modify( '+' . $days . ' days' );
+
+			$buffer = $this->settings->get_transit_days_buffer();
+			$added  = 0;
+			while ( $added < $buffer ) {
+				$date->modify( '+1 day' );
+				$dow = (int) $date->format( 'N' ); // 1=Mon … 7=Sun.
+				if ( $dow <= 5 ) {
+					++$added;
+				}
+			}
+
+			return $date->format( 'Y-m-d' );
+		} catch ( \Throwable $e ) {
+			return '';
+		}
 	}
 
 	/**

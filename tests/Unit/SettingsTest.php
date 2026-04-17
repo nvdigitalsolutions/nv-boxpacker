@@ -105,8 +105,8 @@ class SettingsTest extends TestCase {
 
 		$result = $this->settings->get_boxes();
 		$this->assertNotEmpty( $result );
-		// Should be the default set (5 boxes).
-		$this->assertCount( 5, $result );
+		// Should be the default set (6 boxes).
+		$this->assertCount( 6, $result );
 	}
 
 	public function test_get_boxes_applies_filter(): void {
@@ -119,6 +119,68 @@ class SettingsTest extends TestCase {
 
 		$refs = array_column( $result, 'reference' );
 		$this->assertContains( 'Filtered Box', $refs );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_boxes_for_carrier
+	// -------------------------------------------------------------------------
+
+	public function test_get_boxes_for_carrier_returns_all_when_no_restriction(): void {
+		$boxes = array(
+			array( 'reference' => 'Box A', 'carrier_restriction' => '' ),
+			array( 'reference' => 'Box B', 'carrier_restriction' => '' ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes_for_carrier( 'usps' );
+		$this->assertCount( 2, $result );
+	}
+
+	public function test_get_boxes_for_carrier_filters_by_carrier(): void {
+		$boxes = array(
+			array( 'reference' => 'USPS Box', 'carrier_restriction' => 'usps' ),
+			array( 'reference' => 'UPS Box', 'carrier_restriction' => 'ups' ),
+			array( 'reference' => 'Any Box', 'carrier_restriction' => '' ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes_for_carrier( 'usps' );
+		$this->assertCount( 2, $result );
+		$refs = array_column( $result, 'reference' );
+		$this->assertContains( 'USPS Box', $refs );
+		$this->assertContains( 'Any Box', $refs );
+		$this->assertNotContains( 'UPS Box', $refs );
+	}
+
+	public function test_get_boxes_for_carrier_returns_all_when_empty_carrier(): void {
+		$boxes = array(
+			array( 'reference' => 'USPS Box', 'carrier_restriction' => 'usps' ),
+			array( 'reference' => 'Any Box', 'carrier_restriction' => '' ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes_for_carrier( '' );
+		$this->assertCount( 2, $result );
+	}
+
+	public function test_get_boxes_for_carrier_is_case_insensitive(): void {
+		$boxes = array(
+			array( 'reference' => 'USPS Box', 'carrier_restriction' => 'USPS' ),
+			array( 'reference' => 'UPS Box', 'carrier_restriction' => 'ups' ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes_for_carrier( 'usps' );
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'USPS Box', $result[0]['reference'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -419,13 +481,194 @@ class SettingsTest extends TestCase {
 		$this->assertSame( 'flat_rate', $decoded[0]['box_type'] );
 	}
 
+	public function test_sanitize_boxes_json_preserves_decimal_dimensions(): void {
+		$boxes = array( array(
+			'reference'    => 'Decimal Box',
+			'package_code' => 'package',
+			'package_name' => 'Decimal Box',
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.25,
+			'outer_length' => 11.5,
+			'outer_depth'  => 6.75,
+			'inner_width'  => 12.25,
+			'inner_length' => 11.5,
+			'inner_depth'  => 6.75,
+			'empty_weight' => 3.5,
+			'max_weight'   => 17.25,
+		) );
+
+		$result  = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertSame( 12.25, $decoded[0]['outer_width'] );
+		$this->assertSame( 11.5, $decoded[0]['outer_length'] );
+		$this->assertSame( 6.75, $decoded[0]['outer_depth'] );
+		$this->assertSame( 12.25, $decoded[0]['inner_width'] );
+		$this->assertSame( 11.5, $decoded[0]['inner_length'] );
+		$this->assertSame( 6.75, $decoded[0]['inner_depth'] );
+		$this->assertSame( 3.5, $decoded[0]['empty_weight'] );
+		$this->assertSame( 17.25, $decoded[0]['max_weight'] );
+	}
+
+	public function test_sanitize_boxes_json_preserves_carrier_restriction(): void {
+		$boxes = array( array(
+			'reference'           => 'USPS Box',
+			'package_code'        => 'small_flat_rate_box',
+			'package_name'        => 'Small Flat Rate',
+			'box_type'            => 'flat_rate',
+			'outer_width'         => 9,
+			'outer_length'        => 6,
+			'outer_depth'         => 2,
+			'inner_width'         => 9,
+			'inner_length'        => 6,
+			'inner_depth'         => 2,
+			'empty_weight'        => 4,
+			'max_weight'          => 70,
+			'carrier_restriction' => 'usps',
+		) );
+
+		$result  = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertSame( 'usps', $decoded[0]['carrier_restriction'] );
+	}
+
+	public function test_sanitize_boxes_json_defaults_carrier_restriction_to_empty(): void {
+		$boxes = array( array(
+			'reference'    => 'Box',
+			'package_code' => 'package',
+			'package_name' => 'Box',
+			'box_type'     => 'cubic',
+			'outer_width'  => 8,
+			'outer_length' => 8,
+			'outer_depth'  => 6,
+			'inner_width'  => 8,
+			'inner_length' => 8,
+			'inner_depth'  => 6,
+			'empty_weight' => 3,
+			'max_weight'   => 20,
+		) );
+
+		$result  = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertSame( '', $decoded[0]['carrier_restriction'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// sanitize_boxes_array (protected)
+	// -------------------------------------------------------------------------
+
+	public function test_sanitize_boxes_array_returns_valid_json(): void {
+		$rows = array(
+			array(
+				'reference'           => 'Box A',
+				'package_code'        => 'package',
+				'package_name'        => 'Box A',
+				'box_type'            => 'cubic',
+				'outer_width'         => '8',
+				'outer_length'        => '6',
+				'outer_depth'         => '6',
+				'inner_width'         => '8',
+				'inner_length'        => '6',
+				'inner_depth'         => '6',
+				'empty_weight'        => '3',
+				'max_weight'          => '5',
+				'carrier_restriction' => '',
+			),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertIsArray( $decoded );
+		$this->assertCount( 1, $decoded );
+		$this->assertSame( 'Box A', $decoded[0]['reference'] );
+		$this->assertEquals( 8, $decoded[0]['outer_width'] );
+	}
+
+	public function test_sanitize_boxes_array_skips_blank_reference(): void {
+		$rows = array(
+			array( 'reference' => '', 'package_code' => 'package', 'max_weight' => '5' ),
+			array( 'reference' => 'Valid', 'package_code' => 'package', 'max_weight' => '10', 'carrier_restriction' => 'usps' ),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertCount( 1, $decoded );
+		$this->assertSame( 'Valid', $decoded[0]['reference'] );
+	}
+
+	public function test_sanitize_boxes_array_returns_defaults_when_empty(): void {
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( array() ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertIsArray( $decoded );
+		$this->assertCount( 6, $decoded );
+	}
+
+	public function test_sanitize_boxes_array_preserves_carrier_restriction(): void {
+		$rows = array(
+			array(
+				'reference'           => 'USPS Box',
+				'package_code'        => 'medium_flat_rate_box',
+				'package_name'        => 'Medium FR',
+				'box_type'            => 'flat_rate',
+				'outer_width'         => '14',
+				'outer_length'        => '12',
+				'outer_depth'         => '3',
+				'inner_width'         => '14',
+				'inner_length'        => '12',
+				'inner_depth'         => '3',
+				'empty_weight'        => '6',
+				'max_weight'          => '70',
+				'carrier_restriction' => 'usps',
+			),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertSame( 'usps', $decoded[0]['carrier_restriction'] );
+	}
+
+	public function test_sanitize_settings_accepts_boxes_array_from_table_ui(): void {
+		$input = array(
+			'boxes' => array(
+				array(
+					'reference'           => 'Table Box',
+					'package_code'        => 'package',
+					'package_name'        => 'Table Box',
+					'box_type'            => 'cubic',
+					'outer_width'         => '10',
+					'outer_length'        => '8',
+					'outer_depth'         => '6',
+					'inner_width'         => '10',
+					'inner_length'        => '8',
+					'inner_depth'         => '6',
+					'empty_weight'        => '2',
+					'max_weight'          => '15',
+					'carrier_restriction' => 'ups',
+				),
+			),
+		) + $this->empty_settings_input();
+
+		$result  = $this->settings->sanitize_settings( $input );
+		$decoded = json_decode( $result['boxes_json'], true );
+
+		$this->assertCount( 1, $decoded );
+		$this->assertSame( 'Table Box', $decoded[0]['reference'] );
+		$this->assertSame( 'ups', $decoded[0]['carrier_restriction'] );
+	}
+
 	// -------------------------------------------------------------------------
 	// get_default_boxes (protected)
 	// -------------------------------------------------------------------------
 
-	public function test_get_default_boxes_returns_five_entries(): void {
+	public function test_get_default_boxes_returns_six_entries(): void {
 		$defaults = $this->call_protected( 'get_default_boxes' );
-		$this->assertCount( 5, $defaults );
+		$this->assertCount( 6, $defaults );
 	}
 
 	public function test_get_default_boxes_includes_cubic_and_flat_rate_types(): void {
@@ -437,7 +680,7 @@ class SettingsTest extends TestCase {
 	}
 
 	public function test_get_default_boxes_each_entry_has_required_keys(): void {
-		$required = array( 'reference', 'package_code', 'package_name', 'box_type', 'outer_width', 'outer_length', 'outer_depth', 'inner_width', 'inner_length', 'inner_depth', 'empty_weight', 'max_weight' );
+		$required = array( 'reference', 'package_code', 'package_name', 'box_type', 'outer_width', 'outer_length', 'outer_depth', 'inner_width', 'inner_length', 'inner_depth', 'empty_weight', 'max_weight', 'carrier_restriction' );
 		$defaults = $this->call_protected( 'get_default_boxes' );
 
 		foreach ( $defaults as $box ) {
@@ -488,6 +731,46 @@ class SettingsTest extends TestCase {
 		$this->settings->render_field( array( 'key' => 'boxes_json' ) );
 		$output = ob_get_clean();
 		$this->assertStringContainsString( 'textarea', $output );
+	}
+
+	public function test_render_field_outputs_table_for_boxes_table(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'boxes_table' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'fk-boxes-table', $output );
+		$this->assertStringContainsString( 'fk-add-box', $output );
+		$this->assertStringContainsString( 'carrier_restriction', $output );
+		$this->assertStringContainsString( 'fk-remove-box', $output );
+	}
+
+	public function test_render_field_boxes_table_renders_saved_boxes(): void {
+		$boxes = array(
+			array(
+				'reference'           => 'My Custom Box',
+				'package_code'        => 'package',
+				'package_name'        => 'My Custom Box',
+				'box_type'            => 'cubic',
+				'outer_width'         => 10,
+				'outer_length'        => 8,
+				'outer_depth'         => 6,
+				'inner_width'         => 10,
+				'inner_length'        => 8,
+				'inner_depth'         => 6,
+				'empty_weight'        => 2,
+				'max_weight'          => 15,
+				'carrier_restriction' => 'ups',
+			),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'boxes_table' ) );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'My Custom Box', $output );
+		$this->assertStringContainsString( 'value="ups"', $output );
 	}
 
 	public function test_render_field_outputs_checkboxes_for_carrier_with_usps_note(): void {
@@ -704,6 +987,137 @@ class SettingsTest extends TestCase {
 		$input  = $this->empty_settings_input();
 		$result = $this->settings->sanitize_settings( $input );
 		$this->assertSame( '0', $result['add_package_note'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// show_estimated_delivery
+	// -------------------------------------------------------------------------
+
+	public function test_show_estimated_delivery_disabled_by_default(): void {
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '1' );
+		$this->assertTrue( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_show_estimated_delivery_not_enabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'show_estimated_delivery' => '0' );
+		$this->assertFalse( $this->settings->is_show_estimated_delivery_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_show_estimated_delivery(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'show_estimated_delivery' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'checkbox', $output );
+		$this->assertStringContainsString( 'show_estimated_delivery', $output );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['show_estimated_delivery'] );
+	}
+
+	public function test_sanitize_settings_show_estimated_delivery_accepts_one(): void {
+		$input                          = $this->empty_settings_input();
+		$input['show_estimated_delivery'] = '1';
+		$result                         = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['show_estimated_delivery'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// use_default_transit_days
+	// -------------------------------------------------------------------------
+
+	public function test_use_default_transit_days_enabled_by_default(): void {
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_enabled_when_option_is_one(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '1' );
+		$this->assertTrue( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_use_default_transit_days_disabled_when_option_is_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'use_default_transit_days' => '0' );
+		$this->assertFalse( $this->settings->is_use_default_transit_days_enabled() );
+	}
+
+	public function test_render_field_outputs_checkbox_for_use_default_transit_days(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'use_default_transit_days' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'use_default_transit_days', $output );
+		$this->assertStringContainsString( 'type="checkbox"', $output );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '0', $result['use_default_transit_days'] );
+	}
+
+	public function test_sanitize_settings_use_default_transit_days_accepts_one(): void {
+		$input                            = $this->empty_settings_input();
+		$input['use_default_transit_days'] = '1';
+		$result                           = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '1', $result['use_default_transit_days'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// transit_days_buffer
+	// -------------------------------------------------------------------------
+
+	public function test_transit_days_buffer_defaults_to_zero(): void {
+		$this->assertSame( 0, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_transit_days_buffer_returns_stored_value(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'transit_days_buffer' => 2 );
+		$this->assertSame( 2, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_transit_days_buffer_clamps_negative_to_zero(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'transit_days_buffer' => -5 );
+		$this->assertSame( 0, $this->settings->get_transit_days_buffer() );
+	}
+
+	public function test_render_field_outputs_number_input_for_transit_days_buffer(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'transit_days_buffer' ) );
+		$output = ob_get_clean();
+		$this->assertStringContainsString( 'transit_days_buffer', $output );
+		$this->assertStringContainsString( 'type="number"', $output );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_defaults_to_zero(): void {
+		$input  = $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 0, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_accepts_positive_int(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '3';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 3, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_clamps_to_30(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '99';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 30, $result['transit_days_buffer'] );
+	}
+
+	public function test_sanitize_settings_transit_days_buffer_clamps_negative_to_zero(): void {
+		$input                        = $this->empty_settings_input();
+		$input['transit_days_buffer'] = '-5';
+		$result                       = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 0, $result['transit_days_buffer'] );
 	}
 
 	// -------------------------------------------------------------------------
