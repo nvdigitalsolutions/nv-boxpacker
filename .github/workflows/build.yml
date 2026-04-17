@@ -36,12 +36,11 @@ jobs:
       - name: Run build script
         run: bash bin/build.sh
 
-      - name: Copy ZIP to dist/
+      - name: Verify ZIP in dist/
         run: |
-          mkdir -p dist
           # Remove any previously committed ZIPs so old versions don't accumulate
-          rm -f dist/*.zip
-          cp build/*.zip dist/
+          # The build script already outputs the ZIP directly into dist/
+          ls dist/*.zip
 
       - name: Commit ZIP to repository
         run: |
