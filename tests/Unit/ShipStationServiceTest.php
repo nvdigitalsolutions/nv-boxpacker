@@ -290,6 +290,7 @@ class ShipStationServiceTest extends TestCase {
 
 	public function test_build_candidates_returns_matching_cubic_box(): void {
 		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
 		$this->assertCount( 1, $candidates );
 		$this->assertSame( 'cubic', $candidates[0]['mode'] );
@@ -362,6 +363,95 @@ class ShipStationServiceTest extends TestCase {
 		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
 
 		$this->assertCount( 1, $candidates );
+	}
+
+	public function test_build_candidates_skips_usps_cubic_check_for_ups_carrier(): void {
+		// Box 4 from the bug report: 12.25×12×7, carrier UPS, type cubic.
+		// Volume = 1029 in³ = 0.596 ft³ — exceeds USPS cubic limit of 0.5 ft³.
+		// For UPS, the USPS cubic eligibility check should NOT be applied.
+		$box = $this->make_box( array(
+			'reference'    => '4 Bag',
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.0,
+			'outer_length' => 12.25,
+			'outer_depth'  => 7.0,
+			'inner_width'  => 12.0,
+			'inner_length' => 12.25,
+			'inner_depth'  => 7.0,
+			'max_weight'   => 70.0,
+		) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'ups_walleted', '' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'package', $candidates[0]['mode'] );
+		$this->assertSame( '', $candidates[0]['cubic_tier'] );
+	}
+
+	public function test_build_candidates_applies_usps_cubic_check_for_usps_carrier(): void {
+		// Same oversized cubic box — but now under a USPS carrier.
+		// Volume exceeds 0.5 ft³ so the box should be excluded.
+		$box = $this->make_box( array(
+			'box_type'     => 'cubic',
+			'outer_width'  => 12.0,
+			'outer_length' => 12.25,
+			'outer_depth'  => 7.0,
+			'inner_width'  => 12.0,
+			'inner_length' => 12.25,
+			'inner_depth'  => 7.0,
+			'max_weight'   => 70.0,
+		) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'stamps_com', 'usps_priority_mail' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 0, $candidates );
+	}
+
+	public function test_build_candidates_ups_cubic_box_mode_is_package(): void {
+		// A cubic box that IS within USPS cubic limits — verify that for
+		// UPS the mode is 'package' (not 'cubic') and cubic_tier is empty.
+		$box = $this->make_box( array( 'box_type' => 'cubic' ) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'ups_walleted', 'ups_ground' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'package', $candidates[0]['mode'] );
+		$this->assertSame( '', $candidates[0]['cubic_tier'] );
+	}
+
+	public function test_build_candidates_usps_cubic_box_mode_is_cubic(): void {
+		// Same small cubic box under USPS — mode should be 'cubic' with tier.
+		$box = $this->make_box( array( 'box_type' => 'cubic' ) );
+
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
+		$service = new ShipStation_Service( $settings, 'stamps_com', 'usps_priority_mail' );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
+		$this->assertSame( 'cubic', $candidates[0]['mode'] );
+		$this->assertNotEmpty( $candidates[0]['cubic_tier'] );
 	}
 
 	// -------------------------------------------------------------------------

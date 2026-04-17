@@ -491,9 +491,11 @@ class ShipStation_Service {
 	 * @return array Candidate shipment arrays.
 	 */
 	protected function build_candidates( array $package ): array {
-		$candidates = array();
+		$candidates      = array();
+		$carrier_keyword = $this->get_carrier_keyword();
+		$is_usps         = 'usps' === $carrier_keyword;
 
-		foreach ( $this->settings->get_boxes_for_carrier( $this->get_carrier_keyword() ) as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( $carrier_keyword ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}
@@ -505,19 +507,30 @@ class ShipStation_Service {
 			);
 			$weight_oz  = (float) $package['weight_oz'] + (float) $box['empty_weight'];
 
-			if ( 'cubic' === $box['box_type'] ) {
-				if ( ! $this->is_cubic_eligible( $dimensions, $weight_oz ) ) {
-					continue;
-				}
+			// USPS cubic eligibility rules (≤0.5 ft³, ≤320 oz, longest side ≤18″)
+			// only apply to USPS carriers.  Non-USPS carriers (UPS, FedEx, etc.)
+			// treat cubic-type boxes as regular packages.
+			$use_cubic = 'cubic' === $box['box_type'] && $is_usps;
+
+			if ( $use_cubic && ! $this->is_cubic_eligible( $dimensions, $weight_oz ) ) {
+				continue;
+			}
+
+			if ( $use_cubic ) {
+				$mode = 'cubic';
+			} elseif ( 'flat_rate' === $box['box_type'] ) {
+				$mode = 'flat_rate_box';
+			} else {
+				$mode = 'package';
 			}
 
 			$candidates[] = array(
-				'mode'         => 'cubic' === $box['box_type'] ? 'cubic' : 'flat_rate_box',
+				'mode'         => $mode,
 				'package_code' => $box['package_code'],
 				'package_name' => $box['package_name'],
 				'dimensions'   => $dimensions,
 				'weight_oz'    => $weight_oz,
-				'cubic_tier'   => 'cubic' === $box['box_type'] ? $this->get_cubic_tier( $dimensions ) : '',
+				'cubic_tier'   => $use_cubic ? $this->get_cubic_tier( $dimensions ) : '',
 				'box'          => $box,
 			);
 		}
