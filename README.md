@@ -160,7 +160,7 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 |---|---|---|---|
 | **Show All Options** | Checkbox | Off | Display every combination of rated box candidates as a separate shipping option. Candidates are grouped **per carrier service** — the cartesian product runs within each service, not across services, preventing nonsensical cross-service combinations. Labels use the carrier-specific service name (e.g. "USPS Priority", "UPS Ground") derived from each plan's actual API-returned service code. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box"). When disabled, only the cheapest combined rate per service is shown. |
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
-| **Show Estimated Delivery Date** | Checkbox | Off | Append the carrier-provided estimated delivery date to each shipping option label. Example: "USPS Priority — Est. delivery: Mon, Jan 15". For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
+| **Show Estimated Delivery Date** | Checkbox | Off | Show the carrier-provided estimated delivery date on a **separate line** below each shipping option label. Example: "USPS Priority (1 package)" on the first line, "Est. delivery: Mon, Jan 15" on the second. For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
 | **Additional Business Days** | Number (0–30) | 0 | Extra business days (Monday–Friday) added to every estimated delivery date. Use this to account for order processing or handling time. Weekends are skipped, so a 2-business-day buffer applied on a Thursday pushes the estimate to the following Monday. Applies to both carrier-returned and default transit-day estimates. |
 
 ---
@@ -591,6 +591,12 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.2.9
+
+- **Fixed:** Carrier-restricted boxes (e.g. USPS-only flat rate boxes) are now properly filtered when building rate candidates. Previously `build_candidates()` in both `ShipEngine_Service` and `ShipStation_Service` called the unfiltered `get_boxes()` method, allowing USPS-only boxes to appear in UPS or FedEx rate results at checkout.
+- **New:** `ShipStation_Service::get_carrier_keyword()` — maps ShipStation carrier codes (e.g. `stamps_com` → `usps`, `ups_walleted` → `ups`, `fedex` → `fedex`) to the box restriction keywords used by `Settings::get_boxes_for_carrier()`.
+- **Changed:** Estimated delivery date now displays on a **separate line** below the shipping option label instead of being appended with an em-dash on the same line. Uses a `<br>` tag for cleaner two-line presentation at checkout (e.g. "USPS Priority (1 package)" on line 1, "Est. delivery: Mon, Jan 15" on line 2).
+
 ### 1.2.8
 
 - **New:** **Box Management Table UI** — box definitions are now managed via a visual table in the settings page instead of a raw JSON textarea. Each box can be added, edited, or removed individually with dedicated input fields for all dimensions, weights, and settings.
@@ -613,7 +619,7 @@ fk-usps-optimizer/
 
 ### 1.2.5
 
-- **New:** **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is appended to each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") is also passed as WooCommerce rate metadata for themes that render it.
+- **New:** **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is shown on a separate line below each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") is also passed as WooCommerce rate metadata for themes that render it.
 - **New:** `ShipStation_Service::compute_delivery_date()` — converts a transit-day count into an ISO 8601 date string by adding the given number of days to the current WordPress site time.
 - **New:** `Shipping_Method::format_estimated_delivery()` — formats an ISO 8601 datetime or YYYY-MM-DD date string into a short display label (e.g. "Mon, Jan 15").
 - **New:** Plan data returned by both carrier services now includes an `estimated_delivery_date` field.

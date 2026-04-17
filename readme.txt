@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.8
+Stable tag: 1.2.9
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -34,7 +34,7 @@ The plugin registers as a WooCommerce shipping method that can be added to any s
 
 **Show Package Count** — When enabled, the package count is appended to each shipping label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural handling.
 
-**Show Estimated Delivery Date** — When enabled, the carrier-provided estimated delivery date is appended to each shipping option label (e.g. "USPS Priority — Est. delivery: Mon, Jan 15"). Works with both ShipEngine and ShipStation. Also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it.
+**Show Estimated Delivery Date** — When enabled, the carrier-provided estimated delivery date is shown on a separate line below each shipping option label (e.g. "USPS Priority (1 package)" on the first line, "Est. delivery: Mon, Jan 15" on the second). Works with both ShipEngine and ShipStation. Also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it.
 
 **Additional Business Days** — Adds a configurable buffer (0–30 business days, Monday–Friday) to every estimated delivery date. Useful for order processing or handling time. Weekends are automatically skipped.
 
@@ -152,6 +152,11 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 
 == Changelog ==
 
+= 1.2.9 =
+* Fixed: Carrier-restricted boxes (e.g. USPS-only flat rate boxes) are now properly filtered when building rate candidates. Previously `build_candidates()` used the unfiltered `get_boxes()` method, allowing USPS-only boxes to appear in UPS or FedEx rate results.
+* New: `ShipStation_Service::get_carrier_keyword()` maps ShipStation carrier codes (e.g. `stamps_com`, `ups_walleted`) to the box restriction keywords (`usps`, `ups`, `fedex`) used by `get_boxes_for_carrier()`.
+* Changed: Estimated delivery date now displays on a **separate line** below the shipping option label instead of appended with an em-dash on the same line. Uses a `<br>` tag for cleaner presentation at checkout.
+
 = 1.2.8 =
 * New: **Box Management Table UI** — box definitions are now managed via a visual table instead of raw JSON. Each box can be added, edited, or removed individually with dedicated fields for all dimensions, weights, and settings.
 * New: **Carrier Restriction per box** — each box can be assigned to a specific carrier (USPS, UPS, FedEx) or left as "Any" for all carriers. USPS Flat Rate boxes can now be restricted so they are only considered for USPS shipments.
@@ -169,7 +174,7 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 * Fixed: Transit-days buffer now correctly adds business days (Monday–Friday) instead of calendar days, matching the "Additional Business Days" setting label.
 
 = 1.2.5 =
-* New: **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is appended to each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") also appears as WooCommerce rate metadata for themes that render it.
+* New: **Show Estimated Delivery Date** setting — when enabled, the carrier-provided estimated delivery date is shown on a separate line below each shipping option label on the cart and checkout pages (including FunnelKit Checkout). ShipEngine's `estimated_delivery_date` field is used directly; ShipStation's `transitDays` field is converted to a calendar date. The formatted date (e.g. "Est. delivery: Mon, Jan 15") also appears as WooCommerce rate metadata for themes that render it.
 
 = 1.2.4 =
 * Fixed: Box dimension and weight fields now accept decimal values (e.g. 12.25 inches). Previously `absint()` truncated decimals to integers, so a box entered as 12.25 × 11.5 was stored as 12 × 11.
