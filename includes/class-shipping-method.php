@@ -189,13 +189,13 @@ class Shipping_Method extends \WC_Shipping_Method {
 					$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
 					if ( '' !== $formatted ) {
 						/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
-						$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+						$label .= '<br>' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
 						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
 					}
 				} else {
 					$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
 					/* translators: %s: "(No Estimate)" placeholder. */
-					$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+					$label .= '<br>' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
 					$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
 				}
 			}
@@ -310,13 +310,13 @@ class Shipping_Method extends \WC_Shipping_Method {
 						$formatted = $this->format_estimated_delivery( end( $delivery_dates ) );
 						if ( '' !== $formatted ) {
 							/* translators: %s: formatted estimated delivery date, e.g. "Mon, Jan 15". */
-							$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
+							$label .= '<br>' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $formatted );
 							$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $formatted;
 						}
 					} else {
 						$no_estimate = __( '(No Estimate)', 'fk-usps-optimizer' );
 						/* translators: %s: "(No Estimate)" placeholder. */
-						$label .= ' — ' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
+						$label .= '<br>' . sprintf( __( 'Est. delivery: %s', 'fk-usps-optimizer' ), $no_estimate );
 						$meta_data[ __( 'Est. Delivery', 'fk-usps-optimizer' ) ] = $no_estimate;
 					}
 				}
