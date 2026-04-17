@@ -139,6 +139,9 @@ class Plugin {
 		require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-shipping-method.php';
 		add_filter( 'woocommerce_shipping_methods', array( $this, 'register_shipping_method' ) );
 
+		// Append estimated delivery date on its own line in the cart/checkout label.
+		add_filter( 'woocommerce_cart_shipping_method_full_label', array( $this, 'append_delivery_date_to_label' ), 10, 2 );
+
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
 		add_action( 'wp_ajax_fk_usps_test_connection', array( $this, 'handle_test_connection_ajax' ) );
 	}
@@ -287,6 +290,32 @@ class Plugin {
 	public function register_shipping_method( array $methods ): array {
 		$methods['fk_usps_optimizer'] = '\FK_USPS_Optimizer\Shipping_Method';
 		return $methods;
+	}
+
+	/**
+	 * Append estimated delivery date on a separate line in the cart/checkout
+	 * shipping label.
+	 *
+	 * WooCommerce sanitises the rate label, stripping HTML. This filter runs
+	 * after sanitisation and its output is rendered through wp_kses_post(),
+	 * which allows <br> tags.
+	 *
+	 * @param string            $label  The full shipping method label (name + price).
+	 * @param \WC_Shipping_Rate $method The shipping rate object.
+	 * @return string Modified label with delivery date on a new line.
+	 */
+	public function append_delivery_date_to_label( string $label, $method ): string {
+		if ( 'fk_usps_optimizer' !== $method->get_method_id() ) {
+			return $label;
+		}
+
+		$meta = $method->get_meta_data();
+
+		if ( ! empty( $meta['_est_delivery_display'] ) ) {
+			$label .= '<br>' . esc_html( $meta['_est_delivery_display'] );
+		}
+
+		return $label;
 	}
 
 	/**
