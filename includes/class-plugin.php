@@ -312,7 +312,7 @@ class Plugin {
 		$meta = $method->get_meta_data();
 
 		if ( ! empty( $meta['est_delivery_display'] ) ) {
-			$label .= '<br>&mdash; ' . esc_html( $meta['est_delivery_display'] );
+			$label .= '<br>' . esc_html( $meta['est_delivery_display'] );
 		}
 
 		return $label;
