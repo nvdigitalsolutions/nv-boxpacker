@@ -38,29 +38,33 @@ class ShipStation_Service {
 	/**
 	 * Optional carrier code override.
 	 *
-	 * When non-empty, this value is used instead of the Settings getter.
+	 * When non-null, this value is used instead of the Settings getter.
+	 * An explicit empty string means "all carrier services".
 	 *
-	 * @var string
+	 * @var string|null
 	 */
-	protected $carrier_code_override = '';
+	protected $carrier_code_override;
 
 	/**
 	 * Optional service code override.
 	 *
-	 * When non-empty, this value is used instead of the Settings getter.
+	 * When non-null, this value is used instead of the Settings getter.
+	 * An explicit empty string means "all services for the carrier".
 	 *
-	 * @var string
+	 * @var string|null
 	 */
-	protected $service_code_override = '';
+	protected $service_code_override;
 
 	/**
 	 * Constructor.
 	 *
-	 * @param Settings $settings     Plugin settings instance.
-	 * @param string   $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
-	 * @param string   $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
+	 * @param Settings    $settings     Plugin settings instance.
+	 * @param string|null $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
+	 *                                  Pass null (default) to fall back to Settings; pass '' for all carriers.
+	 * @param string|null $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
+	 *                                  Pass null (default) to fall back to Settings; pass '' for all services.
 	 */
-	public function __construct( Settings $settings, string $carrier_code = '', string $service_code = '' ) {
+	public function __construct( Settings $settings, ?string $carrier_code = null, ?string $service_code = null ) {
 		$this->settings              = $settings;
 		$this->carrier_code_override = $carrier_code;
 		$this->service_code_override = $service_code;
@@ -72,7 +76,7 @@ class ShipStation_Service {
 	 * @return string Carrier code.
 	 */
 	public function get_carrier_code(): string {
-		return '' !== $this->carrier_code_override
+		return null !== $this->carrier_code_override
 			? $this->carrier_code_override
 			: $this->settings->get_shipstation_carrier_code();
 	}
@@ -83,7 +87,7 @@ class ShipStation_Service {
 	 * @return string Service code.
 	 */
 	public function get_service_code(): string {
-		return '' !== $this->service_code_override
+		return null !== $this->service_code_override
 			? $this->service_code_override
 			: $this->settings->get_shipstation_service_code();
 	}

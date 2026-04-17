@@ -935,6 +935,27 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'ups_ground', $service->get_service_code() );
 	}
 
+	public function test_get_service_code_returns_empty_when_override_is_empty_string(): void {
+		// Even when Settings has a non-empty default, an explicit '' override
+		// should be respected so the API returns rates for ALL services.
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', '' );
+		$this->assertSame( '', $service->get_service_code() );
+	}
+
+	public function test_get_carrier_code_returns_empty_when_override_is_empty_string(): void {
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$service = new ShipStation_Service( $this->settings, '', 'usps_priority_mail' );
+		$this->assertSame( '', $service->get_carrier_code() );
+	}
+
+	public function test_get_service_code_falls_back_to_settings_when_override_is_null(): void {
+		// When constructed without explicit overrides, should fall back to settings.
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$service = new ShipStation_Service( $this->settings );
+		$this->assertSame( 'usps_priority_mail', $service->get_service_code() );
+	}
+
 	// -------------------------------------------------------------------------
 	// get_service_label
 	// -------------------------------------------------------------------------
@@ -1387,5 +1408,52 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'ups_next_day_air', $plans[2]['service_code'] );
 		$this->assertSame( 26.00, $plans[3]['rate_amount'] );
 		$this->assertSame( 'ups_next_day_air', $plans[3]['service_code'] );
+	}
+
+	public function test_build_all_plans_expands_usps_services_when_service_code_empty(): void {
+		// Simulate the real-world scenario: settings has a non-empty default
+		// service code, but the pair override is explicitly empty.
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		// Settings has a non-empty default — the bug was that this value was used
+		// instead of the explicit '' override.
+		$settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		// Create service with explicit empty service_code override.
+		$service = new ShipStation_Service( $settings, 'stamps_com', '' );
+
+		// API returns multiple USPS services when serviceCode is empty.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 8.69, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'usps_ground_advantage', 'shipmentCost' => 5.50, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'usps_priority_mail_express', 'shipmentCost' => 28.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// All 3 USPS services should appear, not just Priority.
+		$this->assertCount( 3, $plans );
+
+		// Sorted cheapest-first.
+		$this->assertSame( 'usps_ground_advantage', $plans[0]['service_code'] );
+		$this->assertSame( 5.50, $plans[0]['rate_amount'] );
+		$this->assertSame( 'USPS Ground Advantage', $plans[0]['service_label'] );
+
+		$this->assertSame( 'usps_priority_mail', $plans[1]['service_code'] );
+		$this->assertSame( 8.69, $plans[1]['rate_amount'] );
+		$this->assertSame( 'USPS Priority', $plans[1]['service_label'] );
+
+		$this->assertSame( 'usps_priority_mail_express', $plans[2]['service_code'] );
+		$this->assertSame( 28.00, $plans[2]['rate_amount'] );
 	}
 }
