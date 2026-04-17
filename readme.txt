@@ -17,7 +17,7 @@ This plugin prepares USPS Priority shipping plans for WooCommerce orders by:
 * collecting shippable order items,
 * packing them with `dvdoug/boxpacker` when available (falls back to a single-item-per-box strategy otherwise),
 * comparing custom cubic boxes and USPS flat-rate boxes,
-* requesting USPS Priority rates from **ShipEngine**, **ShipStation**, or both — comparing rates across all enabled carriers to find the cheapest option,
+* requesting USPS Priority rates from **ShipEngine**, **ShipStation**, or both — each configured carrier/service pair is offered as a separate shipping option at checkout so customers can compare (e.g. "USPS Priority $7.25" vs "UPS Ground $8.50"),
 * storing a package-by-package plan on the order for admin review and PirateShip export,
 * providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order, and
 * registering a native **WooCommerce Shipping Method** so it appears in shipping zones and provides live optimized rates during cart and checkout.
@@ -30,7 +30,7 @@ The plugin registers as a WooCommerce shipping method that can be added to any s
 
 = Display Settings =
 
-**Show All Options** — When enabled, every combination of rated box candidates (cartesian product) is offered as a separate shipping option in the cart and checkout. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box").
+**Show All Options** — When enabled, every combination of rated box candidates (cartesian product) is offered as a separate shipping option in the cart and checkout. Candidates are grouped **per carrier service** — the product runs within each service, not across services, preventing nonsensical cross-service combinations. Repeated box names are consolidated (e.g. "2× Small Flat Rate Box + Large Flat Rate Box").
 
 **Show Package Count** — When enabled, the package count is appended to each shipping label (e.g. "USPS Priority Mail (2 packages)") with proper singular/plural handling.
 
@@ -68,7 +68,7 @@ Boxes that do not meet these criteria are silently excluded from cubic candidate
 
 = Box Configuration =
 
-Boxes are managed via a visual table on the settings page. Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional carrier restriction (`Any`, `USPS`, `UPS`, `FedEx`). Carrier-restricted boxes are only considered for shipments with the matching carrier. See the `README.md` for the full JSON schema and examples.
+Boxes are managed via a compact visual table on the settings page. Outer and inner dimensions are grouped under labeled header rows ("Outer (in)" / "Inner (in)") and the table uses fixed-width columns so it fits within the standard WordPress admin layout. Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional carrier restriction (`Any`, `USPS`, `UPS`, `FedEx`). Carrier-restricted boxes are only considered for shipments with the matching carrier. See the `README.md` for the full JSON schema and examples.
 
 = PirateShip Export =
 
@@ -156,12 +156,13 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 * New: **Box Management Table UI** — box definitions are now managed via a visual table instead of raw JSON. Each box can be added, edited, or removed individually with dedicated fields for all dimensions, weights, and settings.
 * New: **Carrier Restriction per box** — each box can be assigned to a specific carrier (USPS, UPS, FedEx) or left as "Any" for all carriers. USPS Flat Rate boxes can now be restricted so they are only considered for USPS shipments.
 * New: `get_boxes_for_carrier()` method — returns only boxes available to the given carrier (unrestricted + carrier-matched).
-* Changed: Default box set updated to 1 Bag, 2 Bag, 3 Bag, 4 Bag (cubic, any carrier), USPS Medium Flat Rate, and USPS Large Flat Rate (flat rate, USPS-only).
-* Improved: JavaScript for dynamic add/remove of box rows with automatic index re-sequencing.
+* New: Added `usps_ground_advantage` ("USPS Ground Advantage") to service label maps in both ShipEngine and ShipStation services and to the default transit-day estimates (5 days).
 * Fixed: Checkout shipping options now display the correct service label for each configured carrier (e.g. "UPS Ground", "UPS 2nd Day Air", "USPS Ground Advantage") instead of showing the same label (e.g. "UPS Priority") for all options. Service labels are now derived from the actual API response `serviceCode`, not the instance's configured code.
 * Changed: Each configured carrier/service pair is now offered as a **separate shipping option** at checkout. Previously, rates from all services were mixed across packages into a single cheapest option; now customers see one rate per service (e.g. "USPS Priority $7.25" and "UPS Ground $8.50" as distinct choices).
 * Changed: "Show All Options" cartesian product is now grouped **per carrier service** instead of mixing candidates across services, preventing nonsensical cross-service combinations.
-* New: Added `usps_ground_advantage` ("USPS Ground Advantage") to service label maps in both ShipEngine and ShipStation services and to the default transit-day estimates (5 days).
+* Changed: Default box set updated to 1 Bag, 2 Bag, 3 Bag, 4 Bag (cubic, any carrier), USPS Medium Flat Rate, and USPS Large Flat Rate (flat rate, USPS-only).
+* Improved: **Compact box table layout** — the box definitions table now uses a dedicated CSS stylesheet (`assets/css/settings.css`) with fixed-width columns, grouped "Outer (in)" / "Inner (in)" header rows, and a horizontally scrollable wrapper so it fits within the standard WordPress admin page.
+* Improved: JavaScript for dynamic add/remove of box rows with automatic index re-sequencing.
 
 = 1.2.6 =
 * New: **Additional Business Days** setting — adds a configurable buffer (0–30 business days) to every estimated delivery date. The buffer skips weekends (Saturday and Sunday), so a 2-business-day buffer applied on a Thursday moves the estimate to the following Monday. Useful for accounting for order processing and handling time.
