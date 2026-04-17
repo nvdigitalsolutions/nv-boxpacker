@@ -36,6 +36,13 @@ class Settings {
 			return;
 		}
 
+		wp_enqueue_style(
+			'fk-usps-optimizer-settings',
+			FK_USPS_OPTIMIZER_URL . 'assets/css/settings.css',
+			array(),
+			FK_USPS_OPTIMIZER_VERSION
+		);
+
 		wp_enqueue_script(
 			'fk-usps-optimizer-settings',
 			FK_USPS_OPTIMIZER_URL . 'assets/js/settings.js',
@@ -271,45 +278,53 @@ class Settings {
 			}
 			$opt_key = self::OPTION_KEY;
 			?>
+			<div class="fk-boxes-wrap">
 			<table class="widefat fk-boxes-table" id="fk-boxes-table">
 				<thead>
+					<tr class="fk-dim-group">
+						<th colspan="4"></th>
+						<th colspan="3"><?php esc_html_e( 'Outer (in)', 'fk-usps-optimizer' ); ?></th>
+						<th colspan="3"><?php esc_html_e( 'Inner (in)', 'fk-usps-optimizer' ); ?></th>
+						<th colspan="2"><?php esc_html_e( 'Weight', 'fk-usps-optimizer' ); ?></th>
+						<th colspan="2"></th>
+					</tr>
 					<tr>
-						<th><?php esc_html_e( 'Reference', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Package Code', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Name', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Type', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'L', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'W', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'H', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Inner L', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Inner W', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Inner H', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Tare (oz)', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Max Wt (lbs)', 'fk-usps-optimizer' ); ?></th>
-						<th><?php esc_html_e( 'Carrier', 'fk-usps-optimizer' ); ?></th>
-						<th></th>
+						<th class="col-ref"><?php esc_html_e( 'Reference', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-pkg-code"><?php esc_html_e( 'Pkg Code', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-name"><?php esc_html_e( 'Name', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-type"><?php esc_html_e( 'Type', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'L', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'W', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'H', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'L', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'W', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'H', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'Tare oz', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-dim"><?php esc_html_e( 'Max lb', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-carrier"><?php esc_html_e( 'Carrier', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-actions"></th>
 					</tr>
 				</thead>
 				<tbody>
 			<?php foreach ( $boxes as $i => $box ) : ?>
 					<tr>
-						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][reference]" value="<?php echo esc_attr( $box['reference'] ?? '' ); ?>" class="regular-text" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_code]" value="<?php echo esc_attr( $box['package_code'] ?? 'package' ); ?>" class="small-text" /></td>
-						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_name]" value="<?php echo esc_attr( $box['package_name'] ?? '' ); ?>" class="regular-text" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][reference]" value="<?php echo esc_attr( $box['reference'] ?? '' ); ?>" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_code]" value="<?php echo esc_attr( $box['package_code'] ?? 'package' ); ?>" /></td>
+						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_name]" value="<?php echo esc_attr( $box['package_name'] ?? '' ); ?>" /></td>
 						<td>
 							<select name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][box_type]">
 								<option value="cubic" <?php selected( $box['box_type'] ?? 'cubic', 'cubic' ); ?>><?php esc_html_e( 'Cubic', 'fk-usps-optimizer' ); ?></option>
 								<option value="flat_rate" <?php selected( $box['box_type'] ?? '', 'flat_rate' ); ?>><?php esc_html_e( 'Flat Rate', 'fk-usps-optimizer' ); ?></option>
 							</select>
 						</td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_length]" value="<?php echo esc_attr( $box['outer_length'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_width]" value="<?php echo esc_attr( $box['outer_width'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_depth]" value="<?php echo esc_attr( $box['outer_depth'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_length]" value="<?php echo esc_attr( $box['inner_length'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_width]" value="<?php echo esc_attr( $box['inner_width'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_depth]" value="<?php echo esc_attr( $box['inner_depth'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][empty_weight]" value="<?php echo esc_attr( $box['empty_weight'] ?? 0 ); ?>" class="small-text" /></td>
-						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][max_weight]" value="<?php echo esc_attr( $box['max_weight'] ?? 0 ); ?>" class="small-text" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_length]" value="<?php echo esc_attr( $box['outer_length'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_width]" value="<?php echo esc_attr( $box['outer_width'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][outer_depth]" value="<?php echo esc_attr( $box['outer_depth'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_length]" value="<?php echo esc_attr( $box['inner_length'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_width]" value="<?php echo esc_attr( $box['inner_width'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][inner_depth]" value="<?php echo esc_attr( $box['inner_depth'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][empty_weight]" value="<?php echo esc_attr( $box['empty_weight'] ?? 0 ); ?>" /></td>
+						<td><input type="number" step="0.01" min="0" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][max_weight]" value="<?php echo esc_attr( $box['max_weight'] ?? 0 ); ?>" /></td>
 						<td>
 							<select name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][carrier_restriction]">
 								<option value="" <?php selected( $box['carrier_restriction'] ?? '', '' ); ?>><?php esc_html_e( 'Any', 'fk-usps-optimizer' ); ?></option>
@@ -330,6 +345,7 @@ class Settings {
 					</tr>
 				</tfoot>
 			</table>
+			</div>
 			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes).', 'fk-usps-optimizer' ); ?></p>
 			<?php
 			return;
