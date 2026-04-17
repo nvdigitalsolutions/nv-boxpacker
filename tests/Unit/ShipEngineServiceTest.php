@@ -283,7 +283,7 @@ class ShipEngineServiceTest extends TestCase {
 		$boxes = array(
 			$this->make_box( array( 'reference' => 'Small', 'box_type' => 'cubic' ) ),
 		);
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 16.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
@@ -295,7 +295,7 @@ class ShipEngineServiceTest extends TestCase {
 	public function test_build_candidates_excludes_box_when_package_does_not_fit(): void {
 		// Very heavy package; won't fit.
 		$boxes = array( $this->make_box( array( 'max_weight' => 1.0 ) ) );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 400.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
@@ -313,7 +313,7 @@ class ShipEngineServiceTest extends TestCase {
 				'box_type'     => 'cubic',
 			) ),
 		);
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		// Package fits in dimensions but box itself exceeds cubic limit.
 		$package    = $this->make_package(
@@ -335,7 +335,7 @@ class ShipEngineServiceTest extends TestCase {
 				'max_weight'   => 70,
 			) ),
 		);
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 16.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
@@ -346,7 +346,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_candidates_cubic_tier_is_set_for_cubic_box(): void {
 		$boxes = array( $this->make_box() );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 16.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
@@ -356,7 +356,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_candidates_cubic_tier_empty_for_flat_rate_box(): void {
 		$boxes = array( $this->make_box( array( 'box_type' => 'flat_rate' ) ) );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 16.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
@@ -367,12 +367,23 @@ class ShipEngineServiceTest extends TestCase {
 	public function test_build_candidates_adds_empty_box_weight_to_total(): void {
 		// empty_weight = 3 oz.
 		$boxes = array( $this->make_box( array( 'empty_weight' => 3.0 ) ) );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 
 		$package    = $this->make_package( array( 'weight_oz' => 10.0 ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
 
 		$this->assertSame( 13.0, $candidates[0]['weight_oz'] );
+	}
+
+	public function test_build_candidates_filters_boxes_for_usps_carrier(): void {
+		$this->settings->expects( $this->once() )
+			->method( 'get_boxes_for_carrier' )
+			->with( 'usps' )
+			->willReturn( array( $this->make_box() ) );
+
+		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
 	}
 
 	// -------------------------------------------------------------------------
@@ -517,7 +528,7 @@ class ShipEngineServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_build_package_plan_returns_empty_when_no_candidates(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array() );
 
 		$order   = $this->make_order();
 		$package = $this->make_package();
@@ -533,7 +544,7 @@ class ShipEngineServiceTest extends TestCase {
 			$this->make_box( array( 'reference' => 'Box A', 'package_name' => 'Box A' ) ),
 			$this->make_box( array( 'reference' => 'Box B', 'package_name' => 'Box B', 'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7, 'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) ),
 		);
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -568,7 +579,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_package_plan_populates_all_required_keys(): void {
 		$boxes = array( $this->make_box() );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -614,7 +625,7 @@ class ShipEngineServiceTest extends TestCase {
 			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
 			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
 
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box_a, $box_b ) );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -647,7 +658,7 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_returns_empty_when_no_candidates(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array() );
 
 		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
 		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
@@ -656,7 +667,7 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_uses_configured_service_code(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -927,7 +938,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_package_plan_includes_estimated_delivery_date_when_present(): void {
 		$boxes = array( $this->make_box() );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -961,7 +972,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_package_plan_estimated_delivery_date_defaults_to_empty_string(): void {
 		$boxes = array( $this->make_box() );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -990,7 +1001,7 @@ class ShipEngineServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -1072,7 +1083,7 @@ class ShipEngineServiceTest extends TestCase {
 
 	public function test_build_package_plan_uses_delivery_days_fallback(): void {
 		$boxes = array( $this->make_box() );
-		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
 		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
 		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );

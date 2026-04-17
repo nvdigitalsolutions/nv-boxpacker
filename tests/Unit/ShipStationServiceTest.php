@@ -289,21 +289,21 @@ class ShipStationServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_build_candidates_returns_matching_cubic_box(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
 		$this->assertCount( 1, $candidates );
 		$this->assertSame( 'cubic', $candidates[0]['mode'] );
 	}
 
 	public function test_build_candidates_excludes_box_when_package_too_heavy(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box( array( 'max_weight' => 1.0 ) ) ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box( array( 'max_weight' => 1.0 ) ) ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package( array( 'weight_oz' => 400.0 ) ) ) );
 		$this->assertCount( 0, $candidates );
 	}
 
 	public function test_build_candidates_includes_flat_rate_without_cubic_check(): void {
 		$box = $this->make_box( array( 'box_type' => 'flat_rate', 'package_code' => 'small_flat_rate_box', 'max_weight' => 70 ) );
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
 		$this->assertCount( 1, $candidates );
 		$this->assertSame( 'flat_rate_box', $candidates[0]['mode'] );
@@ -311,16 +311,57 @@ class ShipStationServiceTest extends TestCase {
 
 	public function test_build_candidates_adds_box_empty_weight_to_total(): void {
 		$box = $this->make_box( array( 'empty_weight' => 4.0 ) );
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package( array( 'weight_oz' => 10.0 ) ) ) );
 		$this->assertSame( 14.0, $candidates[0]['weight_oz'] );
 	}
 
 	public function test_build_candidates_cubic_tier_empty_for_flat_rate(): void {
 		$box = $this->make_box( array( 'box_type' => 'flat_rate' ) );
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
 		$candidates = $this->call_protected( 'build_candidates', array( $this->make_package() ) );
 		$this->assertSame( '', $candidates[0]['cubic_tier'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_carrier_keyword
+	// -------------------------------------------------------------------------
+
+	public function test_get_carrier_keyword_maps_stamps_com_to_usps(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_priority_mail' );
+		$this->assertSame( 'usps', $service->get_carrier_keyword() );
+	}
+
+	public function test_get_carrier_keyword_maps_ups_walleted_to_ups(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'ups_ground' );
+		$this->assertSame( 'ups', $service->get_carrier_keyword() );
+	}
+
+	public function test_get_carrier_keyword_maps_fedex_to_fedex(): void {
+		$service = new ShipStation_Service( $this->settings, 'fedex', 'fedex_ground' );
+		$this->assertSame( 'fedex', $service->get_carrier_keyword() );
+	}
+
+	public function test_get_carrier_keyword_returns_empty_for_unknown_carrier(): void {
+		$service = new ShipStation_Service( $this->settings, 'some_unknown_carrier', 'some_service' );
+		$this->assertSame( '', $service->get_carrier_keyword() );
+	}
+
+	public function test_build_candidates_uses_carrier_filtered_boxes(): void {
+		// Create a UPS service instance.
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'ups_ground' );
+
+		// get_boxes_for_carrier('ups') should be called — mock returns a single box.
+		$this->settings->expects( $this->once() )
+			->method( 'get_boxes_for_carrier' )
+			->with( 'ups' )
+			->willReturn( array( $this->make_box() ) );
+
+		$ref = new \ReflectionMethod( $service, 'build_candidates' );
+		$ref->setAccessible( true );
+		$candidates = $ref->invokeArgs( $service, array( $this->make_package() ) );
+
+		$this->assertCount( 1, $candidates );
 	}
 
 	// -------------------------------------------------------------------------
@@ -484,14 +525,14 @@ class ShipStationServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_build_test_package_plan_returns_empty_when_no_boxes(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array() );
 		$result = $this->service->build_test_package_plan( $this->make_package(), $this->make_ship_to(), 1 );
 		$this->assertSame( array(), $result );
 	}
 
 	public function test_build_test_package_plan_returns_empty_when_rate_fails(): void {
 		$box = $this->make_box();
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box ) );
 		$this->settings->method( 'get_shipstation_api_key' )->willReturn( '' );
 		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( '' );
 		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
@@ -502,7 +543,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_test_package_plan_returns_populated_plan(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 		$this->mock_rate_response( 8.50 );
 
@@ -522,7 +563,7 @@ class ShipStationServiceTest extends TestCase {
 			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
 			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
 
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box_a, $box_b ) );
 		$this->configure_credentials();
 
 		$call = 0;
@@ -561,7 +602,7 @@ class ShipStationServiceTest extends TestCase {
 		$order->method( 'get_shipping_postcode' )->willReturn( '78701' );
 		$order->method( 'get_shipping_country' )->willReturn( 'US' );
 
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 		$this->mock_rate_response( 7.50 );
 
@@ -581,7 +622,7 @@ class ShipStationServiceTest extends TestCase {
 			'outer_width' => 9, 'outer_length' => 9, 'outer_depth' => 7,
 			'inner_width' => 9, 'inner_length' => 9, 'inner_depth' => 7 ) );
 
-		$this->settings->method( 'get_boxes' )->willReturn( array( $box_a, $box_b ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $box_a, $box_b ) );
 		$this->configure_credentials();
 
 		$call = 0;
@@ -604,7 +645,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_returns_empty_when_no_boxes(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array() );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array() );
 
 		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
 
@@ -612,7 +653,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_uses_configured_service_code(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 
 		$GLOBALS['_test_wp_remote_post'] = array(
@@ -979,7 +1020,7 @@ class ShipStationServiceTest extends TestCase {
 	// -------------------------------------------------------------------------
 
 	public function test_build_test_package_plan_includes_estimated_delivery_date_when_transit_days_present(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 
 		$GLOBALS['_test_wp_remote_post'] = array(
@@ -1002,7 +1043,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_test_package_plan_estimated_delivery_date_uses_fallback_when_no_transit_days(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->settings->method( 'is_use_default_transit_days_enabled' )->willReturn( true );
 		$this->configure_credentials();
 		$this->mock_rate_response( 7.99 ); // No transitDays field, but serviceCode is usps_priority_mail.
@@ -1015,7 +1056,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_all_test_package_plans_includes_estimated_delivery_date(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 
 		$GLOBALS['_test_wp_remote_post'] = array(
@@ -1081,7 +1122,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_test_package_plan_uses_estimated_delivery_date_field(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 
 		$GLOBALS['_test_wp_remote_post'] = array(
@@ -1103,7 +1144,7 @@ class ShipStationServiceTest extends TestCase {
 	}
 
 	public function test_build_test_package_plan_uses_delivery_days_field(): void {
-		$this->settings->method( 'get_boxes' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
 		$this->configure_credentials();
 
 		$GLOBALS['_test_wp_remote_post'] = array(

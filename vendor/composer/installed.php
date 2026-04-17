@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
         'version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
-        'reference' => 'cb48f9912b8237df76075f2906abf7d1b2f1dbf1',
+        'reference' => '24c5932ee4061a5dcb535c2ffe10e296a38266a5',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
             'version' => 'dev-copilot/fix-checkout-labels-rate-grouping',
-            'reference' => 'cb48f9912b8237df76075f2906abf7d1b2f1dbf1',
+            'reference' => '24c5932ee4061a5dcb535c2ffe10e296a38266a5',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

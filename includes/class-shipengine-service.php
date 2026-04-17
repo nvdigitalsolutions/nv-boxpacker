@@ -214,7 +214,7 @@ class ShipEngine_Service {
 	protected function build_candidates( array $package ): array {
 		$candidates = array();
 
-		foreach ( $this->settings->get_boxes() as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( 'usps' ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}

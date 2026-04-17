@@ -89,6 +89,33 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Map the ShipStation carrier code to a box-restriction keyword.
+	 *
+	 * The returned keyword matches the values stored in each box definition's
+	 * `carrier_restriction` field (e.g. 'usps', 'ups', 'fedex') so that
+	 * `Settings::get_boxes_for_carrier()` can filter out boxes that belong
+	 * to a different carrier.
+	 *
+	 * @return string Carrier keyword (e.g. 'usps', 'ups', 'fedex'), or ''
+	 *                when the carrier code is unknown.
+	 */
+	public function get_carrier_keyword(): string {
+		$carrier_code = $this->get_carrier_code();
+
+		$map = array(
+			'stamps_com'   => 'usps',
+			'usps'         => 'usps',
+			'endicia'      => 'usps',
+			'ups_walleted' => 'ups',
+			'ups'          => 'ups',
+			'fedex'        => 'fedex',
+			'dhl_express'  => 'dhl',
+		);
+
+		return $map[ $carrier_code ] ?? '';
+	}
+
+	/**
 	 * Derive a human-readable service label from the carrier and service codes.
 	 *
 	 * Maps well-known carrier codes (e.g. 'stamps_com', 'ups_walleted') and
@@ -448,7 +475,7 @@ class ShipStation_Service {
 	protected function build_candidates( array $package ): array {
 		$candidates = array();
 
-		foreach ( $this->settings->get_boxes() as $box ) {
+		foreach ( $this->settings->get_boxes_for_carrier( $this->get_carrier_keyword() ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
 			}
