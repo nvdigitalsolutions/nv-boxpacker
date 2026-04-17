@@ -928,6 +928,27 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( 'USPS First Class', $service->get_service_label() );
 	}
 
+	public function test_get_service_label_usps_ground_advantage(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_ground_advantage' );
+		$this->assertSame( 'USPS Ground Advantage', $service->get_service_label() );
+	}
+
+	public function test_get_service_label_override_service_code(): void {
+		// Instance configured with usps_priority_mail but override with ups_ground.
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'usps_priority_mail' );
+		$this->assertSame( 'UPS Ground', $service->get_service_label( 'ups_ground' ) );
+	}
+
+	public function test_get_service_label_override_empty_falls_back_to_instance(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_priority_mail' );
+		$this->assertSame( 'USPS Priority', $service->get_service_label( '' ) );
+	}
+
+	public function test_get_service_label_ups_2nd_day_air(): void {
+		$service = new ShipStation_Service( $this->settings, 'ups_walleted', 'ups_2nd_day_air' );
+		$this->assertSame( 'UPS 2nd Day Air', $service->get_service_label() );
+	}
+
 	// -------------------------------------------------------------------------
 	// compute_delivery_date (protected)
 	// -------------------------------------------------------------------------

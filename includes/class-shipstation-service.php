@@ -95,11 +95,17 @@ class ShipStation_Service {
 	 * service codes (e.g. 'usps_priority_mail', 'ups_ground') to friendly
 	 * names like "USPS Priority" or "UPS Ground".
 	 *
+	 * When $override_service_code is provided (e.g. the serviceCode returned
+	 * by the ShipStation API), it is used instead of the instance's
+	 * configured service code.  This ensures the label matches the actual
+	 * service that was rated, not the one that was requested.
+	 *
+	 * @param string $override_service_code Optional service code from the API response.
 	 * @return string Human-readable label such as "USPS Priority" or "UPS Ground".
 	 */
-	public function get_service_label(): string {
+	public function get_service_label( string $override_service_code = '' ): string {
 		$carrier_code = $this->get_carrier_code();
-		$service_code = $this->get_service_code();
+		$service_code = '' !== $override_service_code ? $override_service_code : $this->get_service_code();
 
 		$carrier_names = array(
 			'stamps_com'   => 'USPS',
@@ -115,6 +121,7 @@ class ShipStation_Service {
 			'usps_priority_mail'         => 'Priority',
 			'usps_priority_mail_express' => 'Priority Express',
 			'usps_first_class_mail'      => 'First Class',
+			'usps_ground_advantage'      => 'Ground Advantage',
 			'usps_parcel_select'         => 'Parcel Select',
 			'usps_media_mail'            => 'Media Mail',
 			'ups_ground'                 => 'Ground',
@@ -353,13 +360,14 @@ class ShipStation_Service {
 			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
 
 			if ( empty( $best_plan ) || $total_cost < (float) $best_plan['rate_amount'] ) {
-				$best_plan = array(
+				$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
+				$best_plan         = array(
 					'package_number'          => $package_number,
 					'mode'                    => $candidate['mode'],
 					'package_code'            => $candidate['package_code'],
 					'package_name'            => $candidate['package_name'],
-					'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
-					'service_label'           => $this->get_service_label(),
+					'service_code'            => $rate_service_code,
+					'service_label'           => $this->get_service_label( $rate_service_code ),
 					'rate_amount'             => $total_cost,
 					'currency'                => 'USD',
 					'weight_oz'               => (float) $candidate['weight_oz'],
@@ -396,15 +404,16 @@ class ShipStation_Service {
 				continue;
 			}
 
-			$rate       = $response['rate'];
-			$total_cost = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
-			$plans[]    = array(
+			$rate              = $response['rate'];
+			$total_cost        = (float) $rate['shipmentCost'] + (float) ( $rate['otherCost'] ?? 0 );
+			$rate_service_code = (string) ( $rate['serviceCode'] ?? $service_code );
+			$plans[]           = array(
 				'package_number'          => $package_number,
 				'mode'                    => $candidate['mode'],
 				'package_code'            => $candidate['package_code'],
 				'package_name'            => $candidate['package_name'],
-				'service_code'            => (string) ( $rate['serviceCode'] ?? $service_code ),
-				'service_label'           => $this->get_service_label(),
+				'service_code'            => $rate_service_code,
+				'service_label'           => $this->get_service_label( $rate_service_code ),
 				'rate_amount'             => $total_cost,
 				'currency'                => 'USD',
 				'weight_oz'               => (float) $candidate['weight_oz'],
