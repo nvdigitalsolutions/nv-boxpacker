@@ -371,6 +371,11 @@ All filters follow the naming convention `fk_usps_optimizer_{name}`.
 | `fk_usps_optimizer_shipstation_service_code` | `'usps_priority_mail'` | Override the ShipStation service code at runtime. |
 | `fk_usps_optimizer_shipstation_service_pairs` | _(primary + additional)_ | Override the array of ShipStation carrier+service pairs used for rate shopping. Each entry is an associative array with `carrier_code` and `service_code`. |
 | `fk_usps_optimizer_shipstation_api_url` | `'https://ssapi.shipstation.com'` | Override the ShipStation API base URL (useful for mocking in tests). |
+| `fk_usps_optimizer_api_timeout` | `8` | Per-request timeout (seconds) for ShipEngine/ShipStation HTTP calls. Receives the carrier slug (`'shipengine'` or `'shipstation'`). |
+| `fk_usps_optimizer_max_candidates` | `3` | Maximum number of rated candidate boxes per packed package. Receives the full candidate array as context. Lower values trade rate variety for fewer API calls. |
+| `fk_usps_optimizer_rate_cache_ttl` | `300` | TTL (seconds) for the rate-response transient cache. Set to `0` to disable caching. Sandbox endpoints bypass the cache regardless of this value. |
+| `fk_usps_optimizer_skip_rates` | `false` | When truthy, `Shipping_Method::calculate_shipping()` returns immediately. Receives the WooCommerce shipping package as context. Useful as a feature flag or debug toggle. |
+| `fk_usps_optimizer_min_postcode_length` | US/PR = `5`, CA = `3`, default = `3` | Minimum postcode length below which rate calculation is skipped (prevents API churn during partial-checkout typing). Receives the default int and the uppercased country code. Return `0` to disable the gate. |
 
 **Example — load credentials from environment variables:**
 
@@ -592,6 +597,17 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.3.1
+
+- **Improved:** **Checkout shipping rate latency** reduced significantly. ShipStation carrier-list calls are now deduplicated across configured service pairs (Phase 1), all rate HTTP requests are batched and dispatched in parallel through WordPress's `Requests::request_multiple()` with a sequential fallback (Phase 2), and rate-bearing candidate boxes per package are now capped (default 3, filterable).
+- **New:** Short-TTL transient cache around carrier rate calls (default 5 minutes). Sandbox endpoints are auto-bypassed. Filterable via `fk_usps_optimizer_rate_cache_ttl`.
+- **Changed:** Carrier API timeout reduced from 30s to 8s. Filterable per-carrier via `fk_usps_optimizer_api_timeout( int $seconds, string $carrier )`.
+- **New:** `fk_usps_optimizer_max_candidates` filter — caps the number of candidate boxes rated per package (default 3, receives the candidate array).
+- **New:** `fk_usps_optimizer_skip_rates` filter — boolean short-circuit on `Shipping_Method::calculate_shipping()`. Receives the WooCommerce shipping package as context. Returning `true` bypasses all rate work — useful as a feature flag or quick debug toggle.
+- **New:** Per-country minimum postcode length gate prevents API calls during partial-checkout keystrokes. Defaults: US/PR = 5, CA = 3, others = 3. Filterable via `fk_usps_optimizer_min_postcode_length( int $default, string $country )`; return `0` to disable.
+- **New:** Optional debug timing log — when WooCommerce debug logging is enabled, every `calculate_shipping()` call writes `elapsed_ms`, `rate_count`, `package_count`, and the destination postal/country to the `fk-usps-optimizer` logger source. Zero overhead when debug is off.
+- **Changed:** Destination country code is normalised to upper-case before the per-country postcode-length defaults are looked up, so `'us'` and `'US'` behave identically.
 
 ### 1.3.0
 

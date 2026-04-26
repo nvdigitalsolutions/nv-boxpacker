@@ -375,14 +375,82 @@ class Plugin {
 				if ( empty( $pairs ) ) {
 					// No pairs configured; use the default singleton.
 					$services[] = $this->shipstation_service;
+					continue;
 				}
 
-				// Create one instance per pair with explicit overrides.
+				// Group pairs by carrier_code so we can issue one API call per
+				// carrier instead of one per (carrier, service) pair.  When a
+				// carrier has multiple configured services we ask the API for
+				// "all services" (empty service_code) and filter the response
+				// to the configured services via the allow-list.
+				$grouped = array();
 				foreach ( $pairs as $pair ) {
+					$carrier_code = (string) ( $pair['carrier_code'] ?? '' );
+					$service_code = (string) ( $pair['service_code'] ?? '' );
+
+					if ( '' === $carrier_code ) {
+						continue;
+					}
+
+					if ( ! isset( $grouped[ $carrier_code ] ) ) {
+						$grouped[ $carrier_code ] = array();
+					}
+
+					if ( ! in_array( $service_code, $grouped[ $carrier_code ], true ) ) {
+						$grouped[ $carrier_code ][] = $service_code;
+					}
+				}
+
+				$is_primary_used = false;
+
+				foreach ( $grouped as $carrier_code => $service_codes ) {
+					$has_all_services = in_array( '', $service_codes, true );
+					$specific_codes   = array_values(
+						array_filter(
+							$service_codes,
+							static function ( string $code ): bool {
+								return '' !== $code;
+							}
+						)
+					);
+
+					// If the admin configured "all services" for this carrier,
+					// drop any specific codes — the wildcard supersedes them.
+					if ( $has_all_services ) {
+						$effective_service_code = '';
+						$allow_list             = null;
+					} elseif ( count( $specific_codes ) === 1 ) {
+						// Single specific service: keep the explicit code so
+						// the API request is as narrow as possible.
+						$effective_service_code = $specific_codes[0];
+						$allow_list             = null;
+					} else {
+						// Multiple specific services: ask for all and filter.
+						$effective_service_code = '';
+						$allow_list             = $specific_codes;
+					}
+
+					// Reuse the singleton for the first carrier that matches
+					// its configured carrier code; spin up new instances for
+					// the rest.  This keeps existing test/mock seams working.
+					$primary_carrier = $this->settings->get_shipstation_carrier_code();
+					$primary_service = $this->settings->get_shipstation_service_code();
+
+					if ( ! $is_primary_used
+						&& $carrier_code === $primary_carrier
+						&& $effective_service_code === $primary_service
+						&& null === $allow_list
+					) {
+						$services[]      = $this->shipstation_service;
+						$is_primary_used = true;
+						continue;
+					}
+
 					$services[] = new ShipStation_Service(
 						$this->settings,
-						$pair['carrier_code'],
-						$pair['service_code']
+						$carrier_code,
+						$effective_service_code,
+						$allow_list
 					);
 				}
 			}
