@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,16 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.1 =
+* Improved: **Checkout shipping rate latency** reduced significantly by deduplicating ShipStation carrier API calls across configured service pairs, batching/parallelizing all rate HTTP requests via WordPress's `Requests::request_multiple()`, and capping the number of rated box candidates per package (default 3, filterable).
+* New: Short-TTL transient cache around carrier rate calls (default 5 minutes; sandbox endpoints are bypassed automatically). Filterable via `fk_usps_optimizer_rate_cache_ttl`.
+* Changed: Carrier API timeout reduced from 30s to 8s. Filterable via `fk_usps_optimizer_api_timeout` (receives carrier name `shipengine`/`shipstation`).
+* New: `fk_usps_optimizer_max_candidates` filter — caps the number of candidate boxes that are rated per package (default 3, receives the candidate array).
+* New: `fk_usps_optimizer_skip_rates` filter — boolean short-circuit that bypasses `Shipping_Method::calculate_shipping()` entirely. Receives the WooCommerce shipping package as context. Useful as a feature flag or quick debug toggle.
+* New: Per-country minimum postcode length gate prevents API calls during partial-checkout keystrokes. Defaults: US/PR = 5, CA = 3, others = 3. Filterable via `fk_usps_optimizer_min_postcode_length` (receives the default int and the uppercased country code; return 0 to disable).
+* New: Optional debug timing log — when WooCommerce debug logging is enabled, every `calculate_shipping()` call logs `elapsed_ms`, `rate_count`, `package_count`, and the destination postal/country code to the `fk-usps-optimizer` logger source.
+* Changed: Country code in `Shipping_Method::should_skip_rate_calculation()` is now normalised to upper-case before per-country defaults are looked up.
 
 = 1.3.0 =
 * Fixed: Boxes with `box_type: "cubic"` and a non-USPS carrier restriction (e.g. UPS) were incorrectly excluded by the USPS cubic eligibility rules (≤0.5 ft³, ≤320 oz, longest side ≤18″). USPS cubic pricing rules now only apply when the carrier is USPS. Non-USPS carriers (UPS, FedEx, etc.) treat cubic-type boxes as regular packages.

@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/optimize-checkout-price-suggestion',
-        'version' => 'dev-copilot/optimize-checkout-price-suggestion',
-        'reference' => 'fdb5cd2d9dea65092dd47e88e9ca0b49735455db',
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '469361136aea799f8168ecf984cb4018031a6461',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/optimize-checkout-price-suggestion',
-            'version' => 'dev-copilot/optimize-checkout-price-suggestion',
-            'reference' => 'fdb5cd2d9dea65092dd47e88e9ca0b49735455db',
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '469361136aea799f8168ecf984cb4018031a6461',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
