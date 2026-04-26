@@ -36,6 +36,7 @@ class ShipStationServiceTest extends TestCase {
 		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
 		$GLOBALS['_test_wp_filters']     = array();
 		$GLOBALS['_test_wp_options']     = array();
+		$GLOBALS['_test_wp_transients']  = array();
 
 		$this->settings = $this->createMock( Settings::class );
 		$this->service  = new ShipStation_Service( $this->settings );
@@ -1545,5 +1546,218 @@ class ShipStationServiceTest extends TestCase {
 
 		$this->assertSame( 'usps_priority_mail_express', $plans[2]['service_code'] );
 		$this->assertSame( 28.00, $plans[2]['rate_amount'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Phase 1 optimizations: transient cache, candidate cap, timeout filter,
+	// allowed-service-codes allow-list.
+	// -------------------------------------------------------------------------
+
+	public function test_request_all_rates_caches_successful_response_in_transient(): void {
+		$this->configure_credentials();
+
+		$call_count                       = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		// First call: hits the API.
+		$first = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+		$this->assertTrue( $first['success'] );
+		$this->assertSame( 1, $call_count );
+
+		// Second identical call: served from transient cache, no second API call.
+		$second = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+		$this->assertTrue( $second['success'] );
+		$this->assertSame( 1, $call_count );
+		$this->assertSame( $first['rates'], $second['rates'] );
+	}
+
+	public function test_request_all_rates_does_not_cache_failed_response(): void {
+		$this->configure_credentials();
+
+		$call_count                       = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 500 ),
+				'body'     => json_encode( array( 'message' => 'oops' ) ),
+			);
+		};
+
+		$first  = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+		$second = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertFalse( $first['success'] );
+		$this->assertFalse( $second['success'] );
+		// Both calls must hit the API; failures are never cached.
+		$this->assertSame( 2, $call_count );
+	}
+
+	public function test_request_all_rates_bypasses_cache_in_sandbox_mode(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		// Sandbox enabled — must skip the transient cache.
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$call_count                       = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+		$this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertSame( 2, $call_count );
+	}
+
+	public function test_request_all_rates_uses_filtered_timeout(): void {
+		$this->configure_credentials();
+
+		$captured_timeout                = null;
+		$GLOBALS['_test_wp_remote_post'] = function ( string $url, array $args ) use ( &$captured_timeout ) {
+			$captured_timeout = $args['timeout'] ?? null;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99, 'otherCost' => 0.00 ),
+				) ),
+			);
+		};
+
+		$this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		// Default timeout is now 8 seconds (down from 30).
+		$this->assertSame( 8, $captured_timeout );
+
+		// Filter override applies.
+		$GLOBALS['_test_wp_filters']['fk_usps_optimizer_api_timeout'][] = static function () {
+			return 12;
+		};
+		$captured_timeout = null;
+		// New cache key — pass a different candidate to dodge the previous cache entry.
+		$other = $this->make_candidate();
+		$other['package_code'] = 'large_package';
+		$this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $other ) );
+		$this->assertSame( 12, $captured_timeout );
+	}
+
+	public function test_cap_candidates_keeps_smallest_n_by_volume(): void {
+		// Default cap is 3.  Provide 5 candidates with distinct volumes.
+		$candidates = array(
+			array( 'package_code' => 'huge',   'dimensions' => array( 'length' => 20, 'width' => 20, 'height' => 20 ) ),
+			array( 'package_code' => 'tiny',   'dimensions' => array( 'length' => 2,  'width' => 2,  'height' => 2  ) ),
+			array( 'package_code' => 'small',  'dimensions' => array( 'length' => 4,  'width' => 4,  'height' => 4  ) ),
+			array( 'package_code' => 'big',    'dimensions' => array( 'length' => 12, 'width' => 12, 'height' => 12 ) ),
+			array( 'package_code' => 'medium', 'dimensions' => array( 'length' => 8,  'width' => 8,  'height' => 8  ) ),
+		);
+
+		$capped = $this->call_protected( 'cap_candidates', array( $candidates ) );
+
+		$this->assertCount( 3, $capped );
+		$codes = array_map( static fn( array $c ) => $c['package_code'], $capped );
+		$this->assertSame( array( 'tiny', 'small', 'medium' ), $codes );
+	}
+
+	public function test_cap_candidates_filter_can_disable_cap(): void {
+		$candidates = array(
+			array( 'package_code' => 'a', 'dimensions' => array( 'length' => 1, 'width' => 1, 'height' => 1 ) ),
+			array( 'package_code' => 'b', 'dimensions' => array( 'length' => 2, 'width' => 2, 'height' => 2 ) ),
+			array( 'package_code' => 'c', 'dimensions' => array( 'length' => 3, 'width' => 3, 'height' => 3 ) ),
+			array( 'package_code' => 'd', 'dimensions' => array( 'length' => 4, 'width' => 4, 'height' => 4 ) ),
+			array( 'package_code' => 'e', 'dimensions' => array( 'length' => 5, 'width' => 5, 'height' => 5 ) ),
+		);
+
+		$GLOBALS['_test_wp_filters']['fk_usps_optimizer_max_candidates'][] = static function () {
+			return 0;
+		};
+
+		$capped = $this->call_protected( 'cap_candidates', array( $candidates ) );
+		$this->assertCount( 5, $capped );
+	}
+
+	public function test_build_all_plans_filters_to_allowed_service_codes(): void {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'ups_walleted' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( '' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		// API returns 4 services for UPS, but the admin only asked for 2.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'ups_ground',         'shipmentCost' => 9.00,  'otherCost' => 0 ),
+				array( 'serviceCode' => 'ups_3_day_select',   'shipmentCost' => 12.00, 'otherCost' => 0 ),
+				array( 'serviceCode' => 'ups_2nd_day_air',    'shipmentCost' => 15.00, 'otherCost' => 0 ),
+				array( 'serviceCode' => 'ups_next_day_air',   'shipmentCost' => 25.00, 'otherCost' => 0 ),
+			) ),
+		);
+
+		$service = new ShipStation_Service(
+			$settings,
+			'ups_walleted',
+			'',
+			array( 'ups_ground', 'ups_next_day_air' )
+		);
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// Only the configured services should remain.
+		$this->assertCount( 2, $plans );
+
+		$service_codes = array_map( static fn( array $p ) => $p['service_code'], $plans );
+		sort( $service_codes );
+		$this->assertSame( array( 'ups_ground', 'ups_next_day_air' ), $service_codes );
+
+		// Allow-list is exposed via getter.
+		$this->assertSame( array( 'ups_ground', 'ups_next_day_air' ), $service->get_allowed_service_codes() );
+	}
+
+	public function test_build_rate_cache_key_changes_with_inputs(): void {
+		$payload_a = array(
+			'carrierCode'    => 'stamps_com',
+			'serviceCode'    => 'usps_priority_mail',
+			'packageCode'    => 'package',
+			'fromPostalCode' => '90210',
+			'toCountry'      => 'US',
+			'toState'        => 'TX',
+			'toPostalCode'   => '78701',
+			'dimensions'     => array( 'length' => 8, 'width' => 8, 'height' => 6 ),
+			'weight'         => array( 'value' => 19.0, 'units' => 'ounces' ),
+		);
+		$payload_b              = $payload_a;
+		$payload_b['toPostalCode'] = '78702';
+
+		$key_a = $this->call_protected( 'build_rate_cache_key', array( $payload_a ) );
+		$key_b = $this->call_protected( 'build_rate_cache_key', array( $payload_b ) );
+
+		$this->assertNotSame( $key_a, $key_b );
+		$this->assertStringStartsWith( 'fk_usps_opt_ss_', $key_a );
+
+		// Same payload — same key.
+		$key_a2 = $this->call_protected( 'build_rate_cache_key', array( $payload_a ) );
+		$this->assertSame( $key_a, $key_a2 );
 	}
 }

@@ -56,18 +56,50 @@ class ShipStation_Service {
 	protected $service_code_override;
 
 	/**
+	 * Optional allow-list of service codes used to filter rated plans.
+	 *
+	 * When null (default) every plan returned by the API is kept.  When set
+	 * to a non-empty list, only plans whose `service_code` appears in the
+	 * list are kept.  This is used to deduplicate carrier API calls across
+	 * configured carrier+service pairs: instead of making one API call per
+	 * pair, a single call with `service_code=''` is made and the response
+	 * is filtered to the configured services.
+	 *
+	 * @var string[]|null
+	 */
+	protected $allowed_service_codes;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings    $settings     Plugin settings instance.
-	 * @param string|null $carrier_code Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
-	 *                                  Pass null (default) to fall back to Settings; pass '' for all carriers.
-	 * @param string|null $service_code Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
-	 *                                  Pass null (default) to fall back to Settings; pass '' for all services.
+	 * @param Settings      $settings              Plugin settings instance.
+	 * @param string|null   $carrier_code          Optional carrier code override (e.g. 'stamps_com', 'ups_walleted').
+	 *                                             Pass null (default) to fall back to Settings; pass '' for all carriers.
+	 * @param string|null   $service_code          Optional service code override (e.g. 'usps_priority_mail', 'ups_ground').
+	 *                                             Pass null (default) to fall back to Settings; pass '' for all services.
+	 * @param string[]|null $allowed_service_codes Optional list of service codes the caller is interested in.
+	 *                                             When provided and non-empty, plans returned by
+	 *                                             {@see build_all_plans_for_address()} are filtered to this list.
 	 */
-	public function __construct( Settings $settings, ?string $carrier_code = null, ?string $service_code = null ) {
+	public function __construct(
+		Settings $settings,
+		?string $carrier_code = null,
+		?string $service_code = null,
+		?array $allowed_service_codes = null
+	) {
 		$this->settings              = $settings;
 		$this->carrier_code_override = $carrier_code;
 		$this->service_code_override = $service_code;
+		$this->allowed_service_codes = $allowed_service_codes;
+	}
+
+	/**
+	 * Get the allow-list of service codes used to filter rated plans.
+	 *
+	 * @return string[]|null Allow-list, or null when no filter is active.
+	 */
+	public function get_allowed_service_codes(): ?array {
+		return $this->allowed_service_codes;
 	}
 
 	/**
@@ -279,10 +311,15 @@ class ShipStation_Service {
 		$api_url  = (string) apply_filters( 'fk_usps_optimizer_shipstation_api_url', self::API_BASE_URL );
 		$endpoint = trailingslashit( $api_url ) . 'carriers';
 
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipstation' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
+
 		$response = wp_remote_get(
 			$endpoint,
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
@@ -435,6 +472,22 @@ class ShipStation_Service {
 			}
 		}
 
+		// Restrict to the admin-configured service codes when an allow-list
+		// is set.  This lets a single carrier-level rate request fan out into
+		// multiple shipping options without including services the admin did
+		// not request.
+		if ( is_array( $this->allowed_service_codes ) && ! empty( $this->allowed_service_codes ) ) {
+			$allowed = array_flip( $this->allowed_service_codes );
+			$plans   = array_values(
+				array_filter(
+					$plans,
+					static function ( array $plan ) use ( $allowed ): bool {
+						return isset( $allowed[ (string) ( $plan['service_code'] ?? '' ) ] );
+					}
+				)
+			);
+		}
+
 		usort(
 			$plans,
 			static function ( array $a, array $b ): int {
@@ -535,7 +588,40 @@ class ShipStation_Service {
 			);
 		}
 
-		return $candidates;
+		return $this->cap_candidates( $candidates );
+	}
+
+	/**
+	 * Limit the candidate shipments to the smallest-volume N boxes.
+	 *
+	 * Larger boxes virtually never produce the cheapest rate, so rating
+	 * every fitting box wastes API calls and checkout latency.  Keeping
+	 * only the smallest fitting boxes preserves cheapest-rate selection
+	 * while drastically cutting roundtrips.
+	 *
+	 * The cap defaults to 3 and is filterable via
+	 * `fk_usps_optimizer_max_candidates`.  A value <= 0 disables the cap.
+	 *
+	 * @param array $candidates Candidate shipments.
+	 * @return array Capped candidate list.
+	 */
+	protected function cap_candidates( array $candidates ): array {
+		$max = (int) apply_filters( 'fk_usps_optimizer_max_candidates', 3, $candidates );
+
+		if ( $max <= 0 || count( $candidates ) <= $max ) {
+			return $candidates;
+		}
+
+		usort(
+			$candidates,
+			static function ( array $a, array $b ): int {
+				$va = (float) $a['dimensions']['length'] * (float) $a['dimensions']['width'] * (float) $a['dimensions']['height'];
+				$vb = (float) $b['dimensions']['length'] * (float) $b['dimensions']['width'] * (float) $b['dimensions']['height'];
+				return $va <=> $vb;
+			}
+		);
+
+		return array_slice( $candidates, 0, $max );
 	}
 
 	/**
@@ -637,10 +723,33 @@ class ShipStation_Service {
 		$api_url  = (string) apply_filters( 'fk_usps_optimizer_shipstation_api_url', self::API_BASE_URL );
 		$endpoint = trailingslashit( $api_url ) . 'shipments/getrates';
 
+		// Short-TTL transient cache keyed on the rate-shaping inputs.  This
+		// collapses repeat calls during a single checkout session and across
+		// shoppers shipping the same cart shape to the same destination ZIP.
+		// Sandbox traffic intentionally bypasses the cache so test flows
+		// always hit the live API.
+		$cache_key = $this->build_rate_cache_key( $payload );
+		$use_cache = ! $this->settings->is_sandbox_mode_enabled();
+
+		if ( $use_cache ) {
+			$cached = get_transient( $cache_key );
+			if ( is_array( $cached ) && ! empty( $cached ) ) {
+				return array(
+					'success' => true,
+					'rates'   => $cached,
+				);
+			}
+		}
+
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipstation' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
+
 		$response = wp_remote_post(
 			$endpoint,
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => array(
 					'Authorization' => 'Basic ' . $auth,
 					'Content-Type'  => 'application/json',
@@ -697,10 +806,52 @@ class ShipStation_Service {
 			}
 		);
 
+		if ( $use_cache ) {
+			$ttl = (int) apply_filters( 'fk_usps_optimizer_rate_cache_ttl', 5 * MINUTE_IN_SECONDS );
+			if ( $ttl > 0 ) {
+				set_transient( $cache_key, $rates, $ttl );
+			}
+		}
+
 		return array(
 			'success' => true,
 			'rates'   => $rates,
 		);
+	}
+
+	/**
+	 * Build a deterministic transient cache key for a rate request payload.
+	 *
+	 * The key incorporates only the inputs that materially change the rate
+	 * (carrier code, origin ZIP, destination ZIP/state/country, package code,
+	 * dimensions, weight) so that semantically identical requests share a
+	 * cache entry across sessions and shoppers.
+	 *
+	 * @param array $payload ShipStation getrates payload.
+	 * @return string Transient key (≤ 172 chars to stay within WP limits).
+	 */
+	protected function build_rate_cache_key( array $payload ): string {
+		$dim       = $payload['dimensions'] ?? array();
+		$weight    = $payload['weight'] ?? array();
+		$signature = implode(
+			'|',
+			array(
+				(string) ( $payload['carrierCode'] ?? '' ),
+				(string) ( $payload['serviceCode'] ?? '' ),
+				(string) ( $payload['packageCode'] ?? '' ),
+				(string) ( $payload['fromPostalCode'] ?? '' ),
+				(string) ( $payload['toCountry'] ?? '' ),
+				(string) ( $payload['toState'] ?? '' ),
+				(string) ( $payload['toPostalCode'] ?? '' ),
+				(string) ( $dim['length'] ?? '' ),
+				(string) ( $dim['width'] ?? '' ),
+				(string) ( $dim['height'] ?? '' ),
+				(string) ( $weight['value'] ?? '' ),
+				(string) ( $weight['units'] ?? '' ),
+			)
+		);
+
+		return 'fk_usps_opt_ss_' . md5( $signature );
 	}
 
 	// -------------------------------------------------------------------------

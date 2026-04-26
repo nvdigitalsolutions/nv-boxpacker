@@ -36,6 +36,7 @@ class ShipEngineServiceTest extends TestCase {
 		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
 		$GLOBALS['_test_wp_filters']     = array();
 		$GLOBALS['_test_wp_options']     = array();
+		$GLOBALS['_test_wp_transients']  = array();
 
 		$this->settings = $this->createMock( Settings::class );
 		$this->service  = new ShipEngine_Service( $this->settings );

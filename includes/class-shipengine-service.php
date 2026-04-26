@@ -243,7 +243,38 @@ class ShipEngine_Service {
 			);
 		}
 
-		return $candidates;
+		return $this->cap_candidates( $candidates );
+	}
+
+	/**
+	 * Limit the candidate shipments to the smallest-volume N boxes.
+	 *
+	 * Larger boxes virtually never produce the cheapest rate, so rating
+	 * every fitting box wastes API calls and checkout latency.  Keeping
+	 * only the smallest fitting boxes preserves cheapest-rate selection
+	 * while drastically cutting roundtrips.  Filterable via
+	 * `fk_usps_optimizer_max_candidates` (default 3, 0 disables the cap).
+	 *
+	 * @param array $candidates Candidate shipments.
+	 * @return array Capped candidate list.
+	 */
+	protected function cap_candidates( array $candidates ): array {
+		$max = (int) apply_filters( 'fk_usps_optimizer_max_candidates', 3, $candidates );
+
+		if ( $max <= 0 || count( $candidates ) <= $max ) {
+			return $candidates;
+		}
+
+		usort(
+			$candidates,
+			static function ( array $a, array $b ): int {
+				$va = (float) $a['dimensions']['length'] * (float) $a['dimensions']['width'] * (float) $a['dimensions']['height'];
+				$vb = (float) $b['dimensions']['length'] * (float) $b['dimensions']['width'] * (float) $b['dimensions']['height'];
+				return $va <=> $vb;
+			}
+		);
+
+		return array_slice( $candidates, 0, $max );
 	}
 
 	/**
@@ -321,10 +352,28 @@ class ShipEngine_Service {
 			),
 		);
 
+		$cache_key = $this->build_rate_cache_key( $payload );
+		$use_cache = ! $this->settings->is_sandbox_mode_enabled();
+
+		if ( $use_cache ) {
+			$cached = get_transient( $cache_key );
+			if ( is_array( $cached ) && ! empty( $cached ) ) {
+				return array(
+					'success' => true,
+					'rate'    => $cached,
+				);
+			}
+		}
+
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
+
 		$response = wp_remote_post(
 			'https://api.shipengine.com/v1/rates',
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',
@@ -382,10 +431,60 @@ class ShipEngine_Service {
 			}
 		);
 
+		$cheapest = $rates[0];
+
+		if ( $use_cache ) {
+			$ttl = (int) apply_filters( 'fk_usps_optimizer_rate_cache_ttl', 5 * MINUTE_IN_SECONDS );
+			if ( $ttl > 0 ) {
+				set_transient( $cache_key, $cheapest, $ttl );
+			}
+		}
+
 		return array(
 			'success' => true,
-			'rate'    => $rates[0],
+			'rate'    => $cheapest,
 		);
+	}
+
+	/**
+	 * Build a deterministic transient cache key for a ShipEngine rate request.
+	 *
+	 * The key incorporates only the inputs that materially change the rate:
+	 * carrier id list, service code, package code, origin ZIP, destination
+	 * ZIP/state/country, dimensions, and weight.  Semantically identical
+	 * requests therefore share a cache entry across sessions and shoppers.
+	 *
+	 * @param array $payload ShipEngine /v1/rates payload.
+	 * @return string Transient key.
+	 */
+	protected function build_rate_cache_key( array $payload ): string {
+		$shipment    = $payload['shipment'] ?? array();
+		$ship_to     = $shipment['ship_to'] ?? array();
+		$ship_from   = $shipment['ship_from'] ?? array();
+		$package     = $shipment['packages'][0] ?? array();
+		$dimensions  = $package['dimensions'] ?? array();
+		$weight      = $package['weight'] ?? array();
+		$carrier_ids = $payload['rate_options']['carrier_ids'] ?? array();
+
+		$signature = implode(
+			'|',
+			array(
+				implode( ',', (array) $carrier_ids ),
+				(string) ( $shipment['service_code'] ?? '' ),
+				(string) ( $package['package_code'] ?? '' ),
+				(string) ( $ship_from['postal_code'] ?? '' ),
+				(string) ( $ship_to['country_code'] ?? '' ),
+				(string) ( $ship_to['state_province'] ?? '' ),
+				(string) ( $ship_to['postal_code'] ?? '' ),
+				(string) ( $dimensions['length'] ?? '' ),
+				(string) ( $dimensions['width'] ?? '' ),
+				(string) ( $dimensions['height'] ?? '' ),
+				(string) ( $weight['value'] ?? '' ),
+				(string) ( $weight['unit'] ?? '' ),
+			)
+		);
+
+		return 'fk_usps_opt_se_' . md5( $signature );
 	}
 
 	/**
@@ -619,10 +718,15 @@ class ShipEngine_Service {
 			);
 		}
 
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
+
 		$response = wp_remote_get(
 			'https://api.shipengine.com/v1/carriers',
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',
