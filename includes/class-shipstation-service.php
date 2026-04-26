@@ -444,31 +444,31 @@ class ShipStation_Service {
 	 * @return array[] All successful plans sorted by rate_amount ascending.
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
-		$candidates   = $this->build_candidates( $package );
+		$candidates = $this->build_candidates( $package );
+
+		if ( empty( $candidates ) ) {
+			return array();
+		}
+
 		$service_code = $this->get_service_code();
+		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id );
 		$plans        = array();
 
-		foreach ( $candidates as $candidate ) {
+		foreach ( $candidates as $idx => $candidate ) {
+			$result = $results[ $idx ] ?? array( 'success' => false );
+
+			if ( ! $result['success'] || empty( $result['rates'] ) ) {
+				continue;
+			}
+
 			// When service_code is empty the API returns rates for every
 			// available service; expand each rate into its own plan.
 			if ( '' === $service_code ) {
-				$response = $this->request_all_rates( $ship_to, $candidate, $order_id );
-
-				if ( ! $response['success'] ) {
-					continue;
-				}
-
-				foreach ( $response['rates'] as $rate ) {
+				foreach ( $result['rates'] as $rate ) {
 					$plans[] = $this->build_plan_from_rate( $rate, $candidate, $package, $package_number, '' );
 				}
 			} else {
-				$response = $this->request_rate( $ship_to, $candidate, $order_id );
-
-				if ( ! $response['success'] ) {
-					continue;
-				}
-
-				$plans[] = $this->build_plan_from_rate( $response['rate'], $candidate, $package, $package_number, $service_code );
+				$plans[] = $this->build_plan_from_rate( $result['rates'][0], $candidate, $package, $package_number, $service_code );
 			}
 		}
 
@@ -680,18 +680,74 @@ class ShipStation_Service {
 	 * @return array ['success' => bool, 'rates' => array[]].
 	 */
 	protected function request_all_rates( array $ship_to, array $candidate, int $order_id = 0 ): array {
+		$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+
+		if ( null === $descriptor ) {
+			return array( 'success' => false );
+		}
+
+		// Short-TTL transient cache keyed on the rate-shaping inputs.  This
+		// collapses repeat calls during a single checkout session and across
+		// shoppers shipping the same cart shape to the same destination ZIP.
+		// Sandbox traffic intentionally bypasses the cache so test flows
+		// always hit the live API.
+		if ( $descriptor['use_cache'] ) {
+			$cached = get_transient( $descriptor['cache_key'] );
+			if ( is_array( $cached ) && ! empty( $cached ) ) {
+				return array(
+					'success' => true,
+					'rates'   => $cached,
+				);
+			}
+		}
+
+		$response = wp_remote_post(
+			$descriptor['endpoint'],
+			array(
+				'timeout' => $descriptor['timeout'],
+				'headers' => $descriptor['headers'],
+				'body'    => wp_json_encode( $descriptor['payload'] ),
+			)
+		);
+
+		$result = $this->parse_rate_response( $response, $order_id );
+
+		if ( $result['success'] && $descriptor['use_cache'] ) {
+			$this->cache_rate_response( $descriptor['cache_key'], $result['rates'] );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Build a rate-request descriptor for a single candidate shipment.
+	 *
+	 * The descriptor bundles every input both the single-call path
+	 * ({@see request_all_rates()}) and the parallel batch path
+	 * ({@see fetch_rates_for_candidates()}) need: the payload, the
+	 * cache key/flag, and the wire details (endpoint, headers, timeout).
+	 *
+	 * Returns null when credentials or carrier config are missing so the
+	 * caller can short-circuit without dispatching an HTTP request.
+	 *
+	 * @param array $ship_to   ShipStation-compatible destination address.
+	 * @param array $candidate Candidate shipment.
+	 * @param int   $order_id  Order ID for log context; 0 for test runs.
+	 * @return array|null Descriptor, or null when the request cannot be built.
+	 */
+	protected function build_rate_request_descriptor( array $ship_to, array $candidate, int $order_id = 0 ): ?array {
 		$api_key      = $this->settings->get_shipstation_api_key();
 		$api_secret   = $this->settings->get_shipstation_api_secret();
 		$carrier_code = $this->get_carrier_code();
 
 		if ( '' === $api_key || '' === $api_secret ) {
 			$this->log( 'Missing ShipStation credentials.', array( 'order_id' => $order_id ) );
-			return array( 'success' => false );
+			return null;
 		}
 
 		if ( '' === $carrier_code ) {
 			$this->log( 'ShipStation carrier code is not configured.', array( 'order_id' => $order_id ) );
-			return array( 'success' => false );
+			return null;
 		}
 
 		$ship_from = $this->settings->get_ship_from_address();
@@ -723,41 +779,36 @@ class ShipStation_Service {
 		$api_url  = (string) apply_filters( 'fk_usps_optimizer_shipstation_api_url', self::API_BASE_URL );
 		$endpoint = trailingslashit( $api_url ) . 'shipments/getrates';
 
-		// Short-TTL transient cache keyed on the rate-shaping inputs.  This
-		// collapses repeat calls during a single checkout session and across
-		// shoppers shipping the same cart shape to the same destination ZIP.
-		// Sandbox traffic intentionally bypasses the cache so test flows
-		// always hit the live API.
-		$cache_key = $this->build_rate_cache_key( $payload );
-		$use_cache = ! $this->settings->is_sandbox_mode_enabled();
-
-		if ( $use_cache ) {
-			$cached = get_transient( $cache_key );
-			if ( is_array( $cached ) && ! empty( $cached ) ) {
-				return array(
-					'success' => true,
-					'rates'   => $cached,
-				);
-			}
-		}
-
 		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipstation' );
 		if ( $timeout < 1 ) {
 			$timeout = 1;
 		}
 
-		$response = wp_remote_post(
-			$endpoint,
-			array(
-				'timeout' => $timeout,
-				'headers' => array(
-					'Authorization' => 'Basic ' . $auth,
-					'Content-Type'  => 'application/json',
-				),
-				'body'    => wp_json_encode( $payload ),
-			)
+		return array(
+			'payload'   => $payload,
+			'cache_key' => $this->build_rate_cache_key( $payload ),
+			'use_cache' => ! $this->settings->is_sandbox_mode_enabled(),
+			'endpoint'  => $endpoint,
+			'headers'   => array(
+				'Authorization' => 'Basic ' . $auth,
+				'Content-Type'  => 'application/json',
+			),
+			'timeout'   => $timeout,
 		);
+	}
 
+	/**
+	 * Parse a ShipStation rate-call HTTP response into a sorted-rates array.
+	 *
+	 * Logs and returns `['success' => false]` for transport errors, non-2xx
+	 * statuses, and empty rate lists.  On success, returns the rates sorted
+	 * cheapest-first.
+	 *
+	 * @param array|\WP_Error $response WordPress HTTP response.
+	 * @param int             $order_id Order ID for log context.
+	 * @return array ['success' => bool, 'rates' => array[]].
+	 */
+	protected function parse_rate_response( $response, int $order_id ): array {
 		if ( is_wp_error( $response ) ) {
 			$this->log(
 				'ShipStation request failed.',
@@ -806,17 +857,164 @@ class ShipStation_Service {
 			}
 		);
 
-		if ( $use_cache ) {
-			$ttl = (int) apply_filters( 'fk_usps_optimizer_rate_cache_ttl', 5 * MINUTE_IN_SECONDS );
-			if ( $ttl > 0 ) {
-				set_transient( $cache_key, $rates, $ttl );
-			}
-		}
-
 		return array(
 			'success' => true,
 			'rates'   => $rates,
 		);
+	}
+
+	/**
+	 * Persist a successful rate response into the transient cache.
+	 *
+	 * The TTL is filterable via `fk_usps_optimizer_rate_cache_ttl` and a
+	 * non-positive value disables caching.
+	 *
+	 * @param string $cache_key Transient key.
+	 * @param array  $rates     Sorted rates array.
+	 * @return void
+	 */
+	protected function cache_rate_response( string $cache_key, array $rates ): void {
+		$ttl = (int) apply_filters( 'fk_usps_optimizer_rate_cache_ttl', 5 * MINUTE_IN_SECONDS );
+		if ( $ttl > 0 ) {
+			set_transient( $cache_key, $rates, $ttl );
+		}
+	}
+
+	/**
+	 * Fetch rates for many candidates using a single concurrent HTTP batch.
+	 *
+	 * Cache hits short-circuit the batch entirely; only candidates that miss
+	 * the transient cache are dispatched.  When more than one candidate
+	 * misses, all misses fire concurrently via {@see dispatch_requests_multi()}.
+	 *
+	 * @param array $ship_to    Destination address.
+	 * @param array $candidates Candidate shipments (preserves index order).
+	 * @param int   $order_id   Order ID for log context.
+	 * @return array Map of candidate index ⇒ ['success' => bool, 'rates' => array[]].
+	 */
+	protected function fetch_rates_for_candidates( array $ship_to, array $candidates, int $order_id = 0 ): array {
+		$results   = array();
+		$pending   = array(); // Candidate index ⇒ descriptor.
+		$req_specs = array(); // Candidate index ⇒ multi-request spec.
+
+		foreach ( $candidates as $idx => $candidate ) {
+			$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+			if ( null === $descriptor ) {
+				$results[ $idx ] = array( 'success' => false );
+				continue;
+			}
+
+			if ( $descriptor['use_cache'] ) {
+				$cached = get_transient( $descriptor['cache_key'] );
+				if ( is_array( $cached ) && ! empty( $cached ) ) {
+					$results[ $idx ] = array(
+						'success' => true,
+						'rates'   => $cached,
+					);
+					continue;
+				}
+			}
+
+			$pending[ $idx ]   = $descriptor;
+			$req_specs[ $idx ] = array(
+				'url'     => $descriptor['endpoint'],
+				'headers' => $descriptor['headers'],
+				'data'    => wp_json_encode( $descriptor['payload'] ),
+				'timeout' => $descriptor['timeout'],
+			);
+		}
+
+		if ( ! empty( $req_specs ) ) {
+			$responses = $this->dispatch_requests_multi( $req_specs );
+			foreach ( $pending as $idx => $descriptor ) {
+				$response = $responses[ $idx ] ?? new \WP_Error( 'fk_usps_optimizer_no_response', 'No response from parallel dispatch.' );
+				$result   = $this->parse_rate_response( $response, $order_id );
+
+				$results[ $idx ] = $result;
+
+				if ( $result['success'] && $descriptor['use_cache'] ) {
+					$this->cache_rate_response( $descriptor['cache_key'], $result['rates'] );
+				}
+			}
+		}
+
+		ksort( $results );
+		return $results;
+	}
+
+	/**
+	 * Dispatch multiple HTTP POST requests concurrently.
+	 *
+	 * In production this uses `WpOrg\Requests\Requests::request_multiple()`
+	 * (bundled with WordPress 6.2+) to fire all requests on one wall-clock
+	 * roundtrip.  In unit tests the `_test_wp_requests_multiple` global stub
+	 * is honored when set; otherwise the implementation falls back to a
+	 * sequential loop of `wp_remote_post()` so existing tests keep working.
+	 *
+	 * @param array $requests Map of key ⇒ ['url'=>string, 'headers'=>array, 'data'=>string, 'timeout'=>int].
+	 * @return array Map of key ⇒ wp_remote_post()-shaped response or WP_Error.
+	 */
+	protected function dispatch_requests_multi( array $requests ): array {
+		// Test seam — preferred in unit tests so we can assert batch behavior.
+		if ( isset( $GLOBALS['_test_wp_requests_multiple'] ) && is_callable( $GLOBALS['_test_wp_requests_multiple'] ) ) {
+			$out = ( $GLOBALS['_test_wp_requests_multiple'] )( $requests );
+			if ( is_array( $out ) ) {
+				return $out;
+			}
+		}
+
+		// Production: WordPress 6.2+ ships WpOrg\Requests\Requests.
+		if ( class_exists( '\WpOrg\Requests\Requests' ) ) {
+			$multi = array();
+			foreach ( $requests as $key => $req ) {
+				$multi[ $key ] = array(
+					'url'     => (string) ( $req['url'] ?? '' ),
+					'headers' => (array) ( $req['headers'] ?? array() ),
+					'data'    => (string) ( $req['data'] ?? '' ),
+					'type'    => \WpOrg\Requests\Requests::POST,
+					'options' => array(
+						'timeout' => (int) ( $req['timeout'] ?? 8 ),
+					),
+				);
+			}
+
+			try {
+				$raw = \WpOrg\Requests\Requests::request_multiple( $multi );
+			} catch ( \Throwable $e ) {
+				$raw = null;
+			}
+
+			if ( is_array( $raw ) ) {
+				$out = array();
+				foreach ( $raw as $key => $resp ) {
+					if ( $resp instanceof \Throwable ) {
+						$out[ $key ] = new \WP_Error( 'http_request_failed', $resp->getMessage() );
+					} elseif ( is_object( $resp ) && property_exists( $resp, 'status_code' ) ) {
+						$out[ $key ] = array(
+							'response' => array( 'code' => (int) $resp->status_code ),
+							'body'     => isset( $resp->body ) ? (string) $resp->body : '',
+						);
+					} else {
+						$out[ $key ] = new \WP_Error( 'http_request_failed', 'Unexpected parallel response shape.' );
+					}
+				}
+				return $out;
+			}
+		}
+
+		// Sequential fallback.
+		$out = array();
+		foreach ( $requests as $key => $req ) {
+			$out[ $key ] = wp_remote_post(
+				(string) ( $req['url'] ?? '' ),
+				array(
+					'timeout' => (int) ( $req['timeout'] ?? 8 ),
+					'headers' => (array) ( $req['headers'] ?? array() ),
+					'body'    => (string) ( $req['data'] ?? '' ),
+				)
+			);
+		}
+		return $out;
 	}
 
 	/**

@@ -31,12 +31,13 @@ class ShipStationServiceTest extends TestCase {
 	private ShipStation_Service $service;
 
 	protected function setUp(): void {
-		$GLOBALS['_test_wp_remote_get']  = null;
-		$GLOBALS['_test_wp_remote_post'] = null;
-		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
-		$GLOBALS['_test_wp_filters']     = array();
-		$GLOBALS['_test_wp_options']     = array();
-		$GLOBALS['_test_wp_transients']  = array();
+		$GLOBALS['_test_wp_remote_get']        = null;
+		$GLOBALS['_test_wp_remote_post']       = null;
+		$GLOBALS['_test_wc_logger']            = new \WC_Test_Logger();
+		$GLOBALS['_test_wp_filters']           = array();
+		$GLOBALS['_test_wp_options']           = array();
+		$GLOBALS['_test_wp_transients']        = array();
+		$GLOBALS['_test_wp_requests_multiple'] = null;
 
 		$this->settings = $this->createMock( Settings::class );
 		$this->service  = new ShipStation_Service( $this->settings );
@@ -1759,5 +1760,253 @@ class ShipStationServiceTest extends TestCase {
 		// Same payload — same key.
 		$key_a2 = $this->call_protected( 'build_rate_cache_key', array( $payload_a ) );
 		$this->assertSame( $key_a, $key_a2 );
+	}
+
+	// -------------------------------------------------------------------------
+	// Phase 2 optimizations: parallel HTTP dispatch via Requests::request_multiple.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Build N boxes with distinct package_codes / dimensions so each yields
+	 * a separate cache key and a separate parallel request.
+	 *
+	 * @param int $count Number of boxes to build.
+	 * @return array[]
+	 */
+	private function make_distinct_boxes( int $count ): array {
+		$boxes = array();
+		for ( $i = 0; $i < $count; $i++ ) {
+			$dim     = 6 + $i; // 6, 7, 8, …
+			$boxes[] = $this->make_box(
+				array(
+					'reference'    => 'Box ' . $i,
+					'package_code' => 'package_' . $i,
+					'package_name' => 'Box ' . $i,
+					'outer_width'  => (float) $dim,
+					'outer_length' => (float) $dim,
+					'outer_depth'  => (float) $dim,
+					'inner_width'  => (float) $dim,
+					'inner_length' => (float) $dim,
+					'inner_depth'  => (float) $dim,
+				)
+			);
+		}
+		return $boxes;
+	}
+
+	public function test_build_all_plans_dispatches_a_single_parallel_batch(): void {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( $this->make_distinct_boxes( 3 ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$batch_calls    = 0;
+		$last_batch_size = 0;
+
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) use ( &$batch_calls, &$last_batch_size ) {
+			++$batch_calls;
+			$last_batch_size = count( $requests );
+
+			$responses = array();
+			$cost      = 5.00;
+			foreach ( $requests as $key => $req ) {
+				$responses[ $key ] = array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array(
+							'serviceCode'  => 'usps_priority_mail',
+							'shipmentCost' => $cost,
+							'otherCost'    => 0.00,
+						),
+					) ),
+				);
+				$cost += 1.00;
+			}
+			return $responses;
+		};
+
+		// If anything sneaks through to the per-call wp_remote_post path, fail
+		// the test by returning a 500 so plans don't materialise.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => '',
+		);
+
+		$service = new ShipStation_Service( $settings );
+		$plans   = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertSame( 1, $batch_calls, 'Parallel dispatch should be invoked exactly once.' );
+		$this->assertSame( 3, $last_batch_size, 'Batch should contain one spec per candidate.' );
+		$this->assertCount( 3, $plans, 'One plan per candidate should be produced from the batch.' );
+
+		// Sorted cheapest-first.
+		$this->assertSame( 5.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 6.00, $plans[1]['rate_amount'] );
+		$this->assertSame( 7.00, $plans[2]['rate_amount'] );
+	}
+
+	public function test_build_all_plans_excludes_cache_hits_from_parallel_batch(): void {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( $this->make_distinct_boxes( 3 ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$service = new ShipStation_Service( $settings );
+
+		// Pre-warm the cache for two of the three candidates.  These hits
+		// should bypass the parallel batch entirely.
+		$ship_to    = $this->make_ship_to();
+		$candidates = $this->call_protected_on( $service, 'build_candidates', array( $this->make_package() ) );
+		$this->assertCount( 3, $candidates );
+
+		foreach ( array( 0, 2 ) as $idx ) {
+			$descriptor = $this->call_protected_on( $service, 'build_rate_request_descriptor', array( $ship_to, $candidates[ $idx ], 0 ) );
+			$this->assertNotNull( $descriptor );
+			set_transient(
+				$descriptor['cache_key'],
+				array(
+					array(
+						'serviceCode'  => 'usps_priority_mail',
+						'shipmentCost' => 1.23 + $idx,
+						'otherCost'    => 0.00,
+					),
+				),
+				300
+			);
+		}
+
+		$batch_specs                          = array();
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) use ( &$batch_specs ) {
+			$batch_specs = $requests;
+			$responses   = array();
+			foreach ( $requests as $key => $req ) {
+				$responses[ $key ] = array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array(
+							'serviceCode'  => 'usps_priority_mail',
+							'shipmentCost' => 9.99,
+							'otherCost'    => 0.00,
+						),
+					) ),
+				);
+			}
+			return $responses;
+		};
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		// Only the single uncached candidate (index 1) should be in the batch.
+		$this->assertCount( 1, $batch_specs );
+		$this->assertSame( array( 1 ), array_keys( $batch_specs ) );
+
+		// Three plans total: two from the cache, one from the batch.
+		$this->assertCount( 3, $plans );
+
+		$rates = array_map( static fn( array $p ) => $p['rate_amount'], $plans );
+		sort( $rates );
+		$this->assertSame( array( 1.23, 3.23, 9.99 ), $rates );
+	}
+
+	public function test_build_all_plans_skips_failed_parallel_response(): void {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( $this->make_distinct_boxes( 2 ) );
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) {
+			$responses = array();
+			$first     = true;
+			foreach ( $requests as $key => $req ) {
+				if ( $first ) {
+					$responses[ $key ] = new \WP_Error( 'http_request_failed', 'cURL error 28' );
+					$first             = false;
+				} else {
+					$responses[ $key ] = array(
+						'response' => array( 'code' => 200 ),
+						'body'     => json_encode( array(
+							array(
+								'serviceCode'  => 'usps_priority_mail',
+								'shipmentCost' => 4.50,
+								'otherCost'    => 0.00,
+							),
+						) ),
+					);
+				}
+			}
+			return $responses;
+		};
+
+		$service = new ShipStation_Service( $settings );
+		$plans   = $service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		// Only the second candidate produced a plan; the first (failed) was skipped.
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 4.50, $plans[0]['rate_amount'] );
+	}
+
+	public function test_dispatch_requests_multi_falls_back_to_sequential_wp_remote_post(): void {
+		// No _test_wp_requests_multiple stub: should hit the sequential
+		// fallback (WpOrg\Requests\Requests is not loaded under the unit
+		// test bootstrap).  We assert each request hits wp_remote_post.
+		$call_count                       = 0;
+		$urls                             = array();
+		$GLOBALS['_test_wp_remote_post'] = function ( string $url ) use ( &$call_count, &$urls ) {
+			++$call_count;
+			$urls[] = $url;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '{}',
+			);
+		};
+
+		$out = $this->call_protected(
+			'dispatch_requests_multi',
+			array(
+				array(
+					'a' => array( 'url' => 'https://a.example/x', 'headers' => array(), 'data' => '{}', 'timeout' => 8 ),
+					'b' => array( 'url' => 'https://b.example/y', 'headers' => array(), 'data' => '{}', 'timeout' => 8 ),
+				),
+			)
+		);
+
+		$this->assertSame( 2, $call_count );
+		$this->assertSame( array( 'https://a.example/x', 'https://b.example/y' ), $urls );
+		$this->assertArrayHasKey( 'a', $out );
+		$this->assertArrayHasKey( 'b', $out );
+	}
+
+	/**
+	 * Reflection helper that invokes a protected method on a *specific*
+	 * service instance (the standard {@see call_protected()} only operates
+	 * on `$this->service`).
+	 *
+	 * @param object $instance Target instance.
+	 * @param string $method   Method name.
+	 * @param array  $args     Arguments.
+	 * @return mixed
+	 */
+	private function call_protected_on( object $instance, string $method, array $args = array() ) {
+		$ref = new \ReflectionMethod( $instance, $method );
+		$ref->setAccessible( true );
+		return $ref->invokeArgs( $instance, $args );
 	}
 }
