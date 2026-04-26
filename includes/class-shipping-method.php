@@ -70,9 +70,9 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * @param array $package WooCommerce shipping package.
 	 */
 	public function calculate_shipping( $package = array() ) {
-		$destination = $package['destination'] ?? array();
-
-		if ( empty( $destination['country'] ) || empty( $destination['postcode'] ) ) {
+		// Cheap short-circuits first — these run before any plugin bootstrap
+		// or rate work so partial-checkout keystrokes don't churn the API.
+		if ( $this->should_skip_rate_calculation( $package ) ) {
 			return;
 		}
 
@@ -85,18 +85,26 @@ class Shipping_Method extends \WC_Shipping_Method {
 		$plugin   = Plugin::bootstrap();
 		$settings = $plugin->get_settings();
 
+		// Optional debug timer — only the boolean check runs when debug is off.
+		$timing_enabled = $settings->is_debug_logging_enabled();
+		$started_at     = $timing_enabled ? microtime( true ) : 0.0;
+
 		$packed_packages = $plugin->get_packing_service()->pack_items( $items );
 
 		if ( empty( $packed_packages ) ) {
 			return;
 		}
 
-		$ship_to = $this->build_ship_to( $destination );
+		$ship_to = $this->build_ship_to( $package['destination'] ?? array() );
 
 		if ( $settings->is_show_all_options_enabled() ) {
 			$rates = $this->calculate_all_options( $plugin, $packed_packages, $ship_to, $settings );
 		} else {
 			$rates = $this->calculate_cheapest_option( $plugin, $packed_packages, $ship_to, $settings );
+		}
+
+		if ( $timing_enabled ) {
+			$this->log_calculate_shipping_timing( $started_at, $rates, $packed_packages, $ship_to );
 		}
 
 		if ( empty( $rates ) ) {
@@ -116,6 +124,93 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 			$this->add_rate( $rate_args );
 		}
+	}
+
+	/**
+	 * Decide whether to short-circuit a `calculate_shipping()` call.
+	 *
+	 * Returns true when one of the following is true:
+	 *  1. The caller has explicitly opted out via the
+	 *     `fk_usps_optimizer_skip_rates` filter (boolean, receives the WC
+	 *     package as context).  Useful as a feature flag or debug toggle.
+	 *  2. The destination country is empty.
+	 *  3. The destination postcode is shorter than the country's minimum
+	 *     length (US/PR=5, CA=3, others=3 by default).  The minimum is
+	 *     filterable via `fk_usps_optimizer_min_postcode_length`, which
+	 *     receives the default int and the uppercased country code.
+	 *
+	 * Pulled out of `calculate_shipping()` so the cheap pre-checks can be
+	 * unit-tested without bootstrapping the plugin.
+	 *
+	 * @param array $package WooCommerce shipping package.
+	 * @return bool True to skip, false to proceed with rate calculation.
+	 */
+	protected function should_skip_rate_calculation( array $package ): bool {
+		// Extension hook: third-party can hard-skip the rate work entirely.
+		if ( (bool) apply_filters( 'fk_usps_optimizer_skip_rates', false, $package ) ) {
+			return true;
+		}
+
+		$destination = $package['destination'] ?? array();
+		$country     = strtoupper( (string) ( $destination['country'] ?? '' ) );
+		$postcode    = trim( (string) ( $destination['postcode'] ?? '' ) );
+
+		if ( '' === $country ) {
+			return true;
+		}
+
+		// Per-country defaults — postcodes shorter than this are almost
+		// certainly partial input from a checkout field still being typed,
+		// so requesting rates would just burn API quota.
+		$defaults   = array(
+			'US' => 5,
+			'PR' => 5,
+			'CA' => 3,
+		);
+		$min_length = (int) apply_filters(
+			'fk_usps_optimizer_min_postcode_length',
+			$defaults[ $country ] ?? 3,
+			$country
+		);
+
+		if ( $min_length > 0 && strlen( $postcode ) < $min_length ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Emit a debug timing record for one `calculate_shipping()` invocation.
+	 *
+	 * Only invoked when `Settings::is_debug_logging_enabled()` is true; the
+	 * caller guards on that flag so we don't pay even the array-construction
+	 * cost on a cold checkout.
+	 *
+	 * @param float $started_at      Wall-clock time captured before rate work.
+	 * @param array $rates           Final rates returned from the calc helpers.
+	 * @param array $packed_packages Packed packages that were rated.
+	 * @param array $ship_to         Carrier-formatted destination address.
+	 * @return void
+	 */
+	protected function log_calculate_shipping_timing( float $started_at, array $rates, array $packed_packages, array $ship_to ): void {
+		if ( ! function_exists( 'wc_get_logger' ) ) {
+			return;
+		}
+
+		$elapsed_ms = (int) round( ( microtime( true ) - $started_at ) * 1000 );
+		$context    = array(
+			'elapsed_ms'    => $elapsed_ms,
+			'rate_count'    => count( $rates ),
+			'package_count' => count( $packed_packages ),
+			'postal_code'   => (string) ( $ship_to['postal_code'] ?? '' ),
+			'country_code'  => (string) ( $ship_to['country_code'] ?? '' ),
+		);
+
+		wc_get_logger()->debug(
+			'calculate_shipping completed ' . wp_json_encode( $context ),
+			array( 'source' => 'fk-usps-optimizer' )
+		);
 	}
 
 	/**
