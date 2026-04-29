@@ -218,7 +218,7 @@ When **Enable Debug Logging** is checked, all API requests, responses, and packi
 
 Box definitions are managed via a compact visual table in the **Box Definitions** section of the settings page. Each row represents one physical box and can be added, edited, or removed directly in the UI. The table uses grouped column headers — "Outer (in)" and "Inner (in)" — with fixed-width columns and a horizontally scrollable wrapper so it fits within the standard WordPress admin layout without forcing the page wider.
 
-Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`).
+Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`). The **Enabled** checkbox lets you temporarily exclude a box from packing/rating (for example, when a box is out of stock) without deleting its configuration — uncheck it to disable, re-check it when stock is replenished. Boxes saved before this setting existed are treated as enabled by default.
 
 See [Box Definition JSON Schema](#box-definition-json-schema) for the full field reference and a worked example.
 
@@ -433,6 +433,7 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `empty_weight` | number | Empty box weight in **ounces** (decimals supported). Added to item weight when calculating shipment weight. |
 | `max_weight` | number | Maximum payload weight in **pounds** (decimals supported). |
 | `carrier_restriction` | string | Restrict this box to a specific carrier: `"usps"`, `"ups"`, `"fedex"`, or `""` (empty = available to all carriers). |
+| `enabled` | boolean | Whether this box participates in packing/rating. Defaults to `true` when omitted (so legacy box definitions remain enabled). Set to `false` to temporarily disable a box (e.g. when stock is depleted) without removing it from the list. |
 
 **USPS Cubic Eligibility Rules (enforced automatically for USPS carriers only):**
 

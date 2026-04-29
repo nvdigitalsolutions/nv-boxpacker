@@ -65,6 +65,23 @@ class Packing_Service {
 			$boxes = $this->settings->get_boxes();
 		}
 
+		// Exclude any boxes that have been explicitly disabled (e.g. out of stock).
+		// Boxes lacking the `enabled` key are treated as enabled for backward compatibility.
+		$boxes = array_values(
+			array_filter(
+				$boxes,
+				static function ( $box ): bool {
+					if ( ! is_array( $box ) ) {
+						return false;
+					}
+					if ( ! array_key_exists( 'enabled', $box ) ) {
+						return true;
+					}
+					return (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN );
+				}
+			)
+		);
+
 		// Split items into those with real dimensions (optimise via BoxPacker)
 		// and those without (fall back to one-item-per-box).
 		$measured   = array();

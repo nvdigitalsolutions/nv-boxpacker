@@ -286,7 +286,7 @@ class Settings {
 						<th colspan="3"><?php esc_html_e( 'Outer (in)', 'fk-usps-optimizer' ); ?></th>
 						<th colspan="3"><?php esc_html_e( 'Inner (in)', 'fk-usps-optimizer' ); ?></th>
 						<th colspan="2"><?php esc_html_e( 'Weight', 'fk-usps-optimizer' ); ?></th>
-						<th colspan="2"></th>
+						<th colspan="3"></th>
 					</tr>
 					<tr>
 						<th class="col-ref"><?php esc_html_e( 'Reference', 'fk-usps-optimizer' ); ?></th>
@@ -302,12 +302,14 @@ class Settings {
 						<th class="col-dim"><?php esc_html_e( 'Tare oz', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-dim"><?php esc_html_e( 'Max lb', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-carrier"><?php esc_html_e( 'Carrier', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-enabled"><?php esc_html_e( 'Enabled', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-actions"></th>
 					</tr>
 				</thead>
 				<tbody>
 			<?php foreach ( $boxes as $i => $box ) : ?>
-					<tr>
+				<?php $is_enabled = ! array_key_exists( 'enabled', $box ) || (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN ); ?>
+					<tr class="<?php echo $is_enabled ? '' : 'fk-box-disabled'; ?>">
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][reference]" value="<?php echo esc_attr( $box['reference'] ?? '' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_code]" value="<?php echo esc_attr( $box['package_code'] ?? 'package' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_name]" value="<?php echo esc_attr( $box['package_name'] ?? '' ); ?>" /></td>
@@ -333,20 +335,27 @@ class Settings {
 								<option value="fedex" <?php selected( $box['carrier_restriction'] ?? '', 'fedex' ); ?>>FedEx</option>
 							</select>
 						</td>
+						<td class="col-enabled">
+							<input type="hidden" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][enabled]" value="0" />
+							<label class="fk-enabled-label">
+								<input type="checkbox" class="fk-box-enabled" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][enabled]" value="1" <?php checked( $is_enabled, true ); ?> />
+								<span class="screen-reader-text"><?php esc_html_e( 'Enabled', 'fk-usps-optimizer' ); ?></span>
+							</label>
+						</td>
 						<td><button type="button" class="button fk-remove-box">&times;</button></td>
 					</tr>
 			<?php endforeach; ?>
 				</tbody>
 				<tfoot>
 					<tr>
-						<td colspan="14">
+						<td colspan="15">
 							<button type="button" class="button button-secondary" id="fk-add-box"><?php esc_html_e( 'Add Box', 'fk-usps-optimizer' ); ?></button>
 						</td>
 					</tr>
 				</tfoot>
 			</table>
 			</div>
-			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes).', 'fk-usps-optimizer' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes). Uncheck Enabled to temporarily exclude a box from rating without deleting it (e.g. when stock runs out).', 'fk-usps-optimizer' ); ?></p>
 			<?php
 			return;
 		}
@@ -521,10 +530,30 @@ class Settings {
 				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
 				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
 				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
+				'enabled'             => $this->normalize_enabled_flag( $box ),
 			);
 		}
 
 		return wp_json_encode( $boxes );
+	}
+
+	/**
+	 * Normalise the `enabled` flag from a raw box array.
+	 *
+	 * Backward compatible: when the key is missing, defaults to true so that
+	 * previously-saved box definitions remain enabled until the admin
+	 * explicitly disables them.  Recognises common truthy/falsy
+	 * representations ('1'/'0', true/false, 'true'/'false', etc.).
+	 *
+	 * @param array $box Raw box record.
+	 * @return bool Whether the box is enabled.
+	 */
+	protected function normalize_enabled_flag( array $box ): bool {
+		if ( ! array_key_exists( 'enabled', $box ) ) {
+			return true;
+		}
+
+		return (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN );
 	}
 
 	/**
@@ -564,6 +593,7 @@ class Settings {
 				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
 				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
 				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
+				'enabled'             => $this->normalize_enabled_flag( $box ),
 			);
 		}
 
@@ -686,7 +716,7 @@ class Settings {
 	 * @return array Filtered array of box definitions.
 	 */
 	public function get_boxes_for_carrier( string $carrier ): array {
-		$boxes   = $this->get_boxes();
+		$boxes   = $this->get_enabled_boxes();
 		$carrier = strtolower( trim( $carrier ) );
 
 		if ( '' === $carrier ) {
@@ -704,6 +734,32 @@ class Settings {
 		}
 
 		return $filtered;
+	}
+
+	/**
+	 * Get only the box definitions that are currently enabled.
+	 *
+	 * Boxes can be temporarily disabled (e.g. when out of stock) without being
+	 * deleted.  A missing `enabled` key on a stored box is treated as enabled
+	 * for backward compatibility with previously-saved settings.
+	 *
+	 * @return array Array of enabled box definitions, re-indexed.
+	 */
+	public function get_enabled_boxes(): array {
+		$enabled = array();
+
+		foreach ( $this->get_boxes() as $box ) {
+			if ( ! is_array( $box ) ) {
+				continue;
+			}
+
+			// Default to enabled when the flag is missing (backward compatibility).
+			if ( ! array_key_exists( 'enabled', $box ) || (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN ) ) {
+				$enabled[] = $box;
+			}
+		}
+
+		return $enabled;
 	}
 
 	/**
@@ -1050,6 +1106,7 @@ class Settings {
 				'empty_weight'        => 3,
 				'max_weight'          => 5,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '2 Bag',
@@ -1065,6 +1122,7 @@ class Settings {
 				'empty_weight'        => 5,
 				'max_weight'          => 9,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '3 Bag',
@@ -1080,6 +1138,7 @@ class Settings {
 				'empty_weight'        => 7,
 				'max_weight'          => 13,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '4 Bag',
@@ -1095,6 +1154,7 @@ class Settings {
 				'empty_weight'        => 5,
 				'max_weight'          => 17,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => 'USPS Medium Flat Rate',
@@ -1110,6 +1170,7 @@ class Settings {
 				'empty_weight'        => 6,
 				'max_weight'          => 70,
 				'carrier_restriction' => 'usps',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => 'USPS Large Flat Rate',
@@ -1125,6 +1186,7 @@ class Settings {
 				'empty_weight'        => 8,
 				'max_weight'          => 70,
 				'carrier_restriction' => 'usps',
+				'enabled'             => true,
 			),
 		);
 	}
