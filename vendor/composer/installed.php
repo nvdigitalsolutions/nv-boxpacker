@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/update-metadata-notes-service-label',
         'version' => 'dev-copilot/update-metadata-notes-service-label',
-        'reference' => '02c836fc49fc4823ae2a2edfe38c39a9203b0cbc',
+        'reference' => '156b8e6234ad3a74fb032c5c52b366a442cfa6f6',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/update-metadata-notes-service-label',
             'version' => 'dev-copilot/update-metadata-notes-service-label',
-            'reference' => '02c836fc49fc4823ae2a2edfe38c39a9203b0cbc',
+            'reference' => '156b8e6234ad3a74fb032c5c52b366a442cfa6f6',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
