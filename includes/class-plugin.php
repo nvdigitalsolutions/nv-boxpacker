@@ -265,6 +265,23 @@ class Plugin {
 		if ( $this->settings->is_add_packing_to_customer_note_enabled() && ! empty( $plan['packages'] ) ) {
 			$this->write_packing_plan_to_customer_note( $order, $plan );
 		}
+
+		// Email the packing plan + PirateShip CSV to the configured
+		// recipients (if any) so shipping staff can import the CSV
+		// directly into PirateShip without first opening the order.
+		if ( ! empty( $plan['packages'] ) && ! empty( $this->settings->get_pirateship_notification_emails() ) ) {
+			try {
+				$this->export_service->send_order_notification( $order, $plan );
+			} catch ( \Throwable $throwable ) {
+				$this->log(
+					'PirateShip notification email failed',
+					array(
+						'order_id' => $order->get_id(),
+						'error'    => $throwable->getMessage(),
+					)
+				);
+			}
+		}
 	}
 
 	/**

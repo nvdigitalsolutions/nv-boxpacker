@@ -1391,6 +1391,67 @@ class SettingsTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// pirateship_notification_emails — sanitize, accessor, render
+	// -------------------------------------------------------------------------
+
+	public function test_sanitize_settings_keeps_valid_emails_comma_separated(): void {
+		$input  = array( 'pirateship_notification_emails' => 'a@example.com, b@example.com' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'a@example.com,b@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_accepts_newlines_and_semicolons_as_separators(): void {
+		$input  = array( 'pirateship_notification_emails' => "a@example.com\nb@example.com;c@example.com" ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'a@example.com,b@example.com,c@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_drops_invalid_emails_and_records_setting_error(): void {
+		$input  = array( 'pirateship_notification_emails' => 'good@example.com, not-an-email, also-bad@' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+
+		$this->assertSame( 'good@example.com', $result['pirateship_notification_emails'] );
+		$found = false;
+		foreach ( $GLOBALS['_test_settings_errors'] as $err ) {
+			if ( 'invalid_pirateship_notification_emails' === ( $err['code'] ?? '' ) ) {
+				$found = true;
+				break;
+			}
+		}
+		$this->assertTrue( $found, 'Expected a settings error for invalid email entries.' );
+	}
+
+	public function test_sanitize_settings_deduplicates_emails(): void {
+		$input  = array( 'pirateship_notification_emails' => 'x@example.com, x@example.com, y@example.com' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'x@example.com,y@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_pirateship_emails_empty_when_blank(): void {
+		$input  = array( 'pirateship_notification_emails' => '   ' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_get_pirateship_notification_emails_returns_array(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'pirateship_notification_emails' => 'a@example.com,b@example.com' );
+		$this->assertSame( array( 'a@example.com', 'b@example.com' ), $this->settings->get_pirateship_notification_emails() );
+	}
+
+	public function test_get_pirateship_notification_emails_returns_empty_array_when_unset(): void {
+		$this->assertSame( array(), $this->settings->get_pirateship_notification_emails() );
+	}
+
+	public function test_render_field_outputs_textarea_for_pirateship_notification_emails(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'pirateship_notification_emails' ) );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( '<textarea', $output );
+		$this->assertStringContainsString( 'pirateship_notification_emails', $output );
+	}
+
+	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
 

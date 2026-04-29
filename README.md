@@ -162,6 +162,7 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
 | **Show Estimated Delivery Date** | Checkbox | Off | Show the carrier-provided estimated delivery date on a **separate line** below each shipping option label. Example: "USPS Priority (1 package)" on the first line, "Est. delivery: Mon, Jan 15" on the second. For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
 | **Additional Business Days** | Number (0–30) | 0 | Extra business days (Monday–Friday) added to every estimated delivery date. Use this to account for order processing or handling time. Weekends are skipped, so a 2-business-day buffer applied on a Thursday pushes the estimate to the following Monday. Applies to both carrier-returned and default transit-day estimates. |
+| **PirateShip Notification Emails** | Text | _empty_ | Comma-separated list of email addresses (newlines and semicolons also accepted) to notify after every order. Each recipient receives the suggested packages, packing list, and a CSV attachment that can be imported directly into PirateShip. Invalid addresses are dropped on save and reported via an admin notice. Leave blank to disable. |
 
 ---
 
@@ -598,6 +599,13 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.3.4
+
+- **New:** **PirateShip Notification Emails** setting — comma-separated list of email addresses (newlines and semicolons are also accepted as separators) to notify after every order. The plugin sends each recipient a plain-text email containing the order's shipping address, the suggested packages with dimensions/weights/packing list, and a CSV file attachment that can be imported directly into [PirateShip](https://www.pirateship.com) without first opening the order in WordPress. Invalid email addresses are dropped on save and reported back via an admin notice.
+- **New:** `Settings::get_pirateship_notification_emails()` accessor returning the validated, deduplicated recipient list.
+- **New:** `PirateShip_Export::send_order_notification()`, `PirateShip_Export::build_csv_string()`, and `PirateShip_Export::build_email_body()` — used internally by `Plugin::process_order()` to build the CSV in memory, format the human-readable email body, and send the notification via `wp_mail()`.
+- **New:** `fk_usps_optimizer_pirateship_notification_emails` filter to override the recipient list at runtime, and `fk_usps_optimizer_pirateship_notification_email_args` filter to customise the subject, body, headers, or attachments before the email is sent.
 
 ### 1.3.3
 
