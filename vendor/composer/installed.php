@@ -3,7 +3,7 @@
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
         'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
         'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-        'reference' => '40ed584681ece0f9af1db439f4984c0cf476fc8d',
+        'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -58,7 +58,7 @@
         'nvdigitalsolutions/fk-usps-optimizer' => array(
             'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
             'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-            'reference' => '40ed584681ece0f9af1db439f4984c0cf476fc8d',
+            'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
