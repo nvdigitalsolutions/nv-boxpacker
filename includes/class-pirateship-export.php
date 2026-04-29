@@ -301,7 +301,7 @@ class PirateShip_Export {
 			// for the same order number) — fall back to a unique name
 			// in the same directory.
 			if ( file_exists( $desired_path ) ) {
-				$desired_path = $dir . wp_unique_filename( dirname( $tmp_path ), $filename );
+				$desired_path = $dir . wp_unique_filename( $dir, $filename );
 			}
 
 			if ( @rename( $tmp_path, $desired_path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort rename; fall back to original `.tmp` path on failure.
