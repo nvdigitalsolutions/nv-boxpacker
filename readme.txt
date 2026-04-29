@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.1
+Stable tag: 1.3.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,17 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.3 =
+* New: **Send Packing Plan to PirateShip via Customer Note** setting — when enabled, the per-package packing plan is appended to the order's customer note wrapped in hidden HTML comment markers (`<!-- fk-pack-start -->` ... `<!-- fk-pack-end -->`). PirateShip and other WooCommerce REST API consumers receive the full note (including the plan) so it can be displayed alongside the shipment, while a `woocommerce_order_get_customer_note` filter strips the marker block on every non-REST read so it stays out of customer emails, the My Account page, the admin order screen and invoices. Re-processing an order replaces any existing plan block in-place; pre-existing customer-entered note text is preserved.
+* New: **Enabled** checkbox per box definition — temporarily exclude a box from packing and rate candidates (e.g. when out of stock) without deleting its configuration. Disabled boxes are filtered out by `Settings::get_boxes()` and `get_boxes_for_carrier()`. Boxes saved before this setting existed are treated as enabled by default.
+
+= 1.3.2 =
+* New: Selected shipping service label (e.g. "USPS Priority Mail", "USPS Ground Advantage", "UPS Ground", "UPS 2nd Day Air", "UPS Next Day Air") is now surfaced in three human-readable views of the shipping plan:
+    * The order note added by `Plugin::build_package_note()` — a `Service: <label>` line directly under each `Package N:` header.
+    * The admin order meta box rendered by `Admin_UI::render_meta_box()` — a `Service: <label>` line between the `package_name (mode)` and `Rate:` lines.
+    * The rate-tester admin tool (`Admin_Test_UI::render_page()`) — the per-package "Service" row now prefers the friendly `service_label` over the raw `service_code`, with a graceful fallback to `service_code` for legacy plans without a label.
+* Note: Plan data already carried `service_label` per package since 1.2.6; this release just makes it visible in the surfaces above. No data-shape changes.
 
 = 1.3.1 =
 * Improved: **Checkout shipping rate latency** reduced significantly by deduplicating ShipStation carrier API calls across configured service pairs, batching/parallelizing all rate HTTP requests via WordPress's `Requests::request_multiple()`, and capping the number of rated box candidates per package (default 3, filterable).

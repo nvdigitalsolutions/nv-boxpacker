@@ -599,6 +599,13 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.3.3
+
+- **New:** **Send Packing Plan to PirateShip via Customer Note** setting — when enabled, the per-package packing plan is appended to the order's customer note wrapped in hidden HTML comment markers (`<!-- fk-pack-start -->` ... `<!-- fk-pack-end -->`). PirateShip and other WooCommerce REST API consumers receive the full note (including the plan) so it can be displayed alongside the shipment, while a `woocommerce_order_get_customer_note` filter strips the marker block on every non-REST read so it stays out of customer emails, the My Account page, the admin order screen and invoices. Re-processing an order replaces any existing plan block in-place; pre-existing customer-entered note text is preserved.
+- **New:** `Plugin::PACKING_NOTE_START_MARKER` / `PACKING_NOTE_END_MARKER` class constants delimit the plan block so external tooling can locate and parse it deterministically.
+- **New:** `Settings::is_add_packing_to_customer_note_enabled()` accessor for the new setting.
+- **New:** **Enabled** checkbox per box definition in the Box Management Table UI — temporarily exclude a box from packing and rate candidates (e.g. when out of stock) without deleting its configuration. `Settings::get_boxes()` and `Settings::get_boxes_for_carrier()` now filter out boxes whose `enabled` flag is `false`. Boxes saved before this setting existed are treated as enabled by default for backward compatibility.
+
 ### 1.3.2
 
 - **New:** Selected shipping service label (e.g. "USPS Priority Mail", "USPS Ground Advantage", "UPS Ground", "UPS 2nd Day Air", "UPS Next Day Air") is now surfaced in three human-readable views of the shipping plan:
