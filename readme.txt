@@ -126,7 +126,7 @@ Yes. Open **WooCommerce → USPS Test Pricing**, enter item dimensions and a des
 
 = How do I add custom boxes? =
 
-Use the **Box Definitions** table in **WooCommerce → USPS Optimizer** to add, edit, or remove boxes. Each row has fields for dimensions, weight, type, and carrier restriction. You can also add boxes at runtime using the `fk_usps_optimizer_boxes` filter. See `README.md` for the full schema.
+Use the **Box Definitions** table in **WooCommerce → USPS Optimizer** to add, edit, or remove boxes. Each row has fields for dimensions, weight, type, carrier restriction, and an **Enabled** checkbox that lets you temporarily exclude a box from rating (e.g. when stock runs out) without deleting it. You can also add boxes at runtime using the `fk_usps_optimizer_boxes` filter. See `README.md` for the full schema.
 
 = How do I load API credentials from environment variables? =
 

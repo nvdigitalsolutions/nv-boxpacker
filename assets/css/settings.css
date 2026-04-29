@@ -60,6 +60,24 @@
 	width: 68px;
 }
 
+/* Enabled checkbox column. */
+#fk-boxes-table .col-enabled {
+	width: 56px;
+	text-align: center;
+}
+
+#fk-boxes-table .col-enabled input[type="checkbox"] {
+	margin: 0;
+}
+
+/* Visually dim a row whose box has been disabled. */
+#fk-boxes-table tbody tr.fk-box-disabled td {
+	opacity: 0.55;
+}
+#fk-boxes-table tbody tr.fk-box-disabled .col-enabled {
+	opacity: 1;
+}
+
 /* Remove button. */
 #fk-boxes-table .col-actions {
 	width: 36px;

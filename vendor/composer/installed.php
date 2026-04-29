@@ -1,6 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
+        'pretty_version' => 'dev-copilot/enable-disable-bosses',
+        'version' => 'dev-copilot/enable-disable-bosses',
+        'reference' => '02c836fc49fc4823ae2a2edfe38c39a9203b0cbc',
         'pretty_version' => 'dev-copilot/update-metadata-notes-service-label',
         'version' => 'dev-copilot/update-metadata-notes-service-label',
         'reference' => 'ad8409f29f8db900e74be7bb756d4e3e87d32486',
@@ -56,6 +59,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
+            'pretty_version' => 'dev-copilot/enable-disable-bosses',
+            'version' => 'dev-copilot/enable-disable-bosses',
+            'reference' => '02c836fc49fc4823ae2a2edfe38c39a9203b0cbc',
             'pretty_version' => 'dev-copilot/update-metadata-notes-service-label',
             'version' => 'dev-copilot/update-metadata-notes-service-label',
             'reference' => 'ad8409f29f8db900e74be7bb756d4e3e87d32486',

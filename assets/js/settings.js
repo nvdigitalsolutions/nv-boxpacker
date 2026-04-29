@@ -177,6 +177,12 @@
 			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[empty_weight]" value="0" /></td>' +
 			'<td><input type="number" step="0.01" min="0" name="' + prefix + '[max_weight]" value="0" /></td>' +
 			'<td><select name="' + prefix + '[carrier_restriction]"><option value="">Any</option><option value="usps">USPS</option><option value="ups">UPS</option><option value="fedex">FedEx</option></select></td>' +
+			'<td class="col-enabled">' +
+				'<input type="hidden" name="' + prefix + '[enabled]" value="0" />' +
+				'<label class="fk-enabled-label">' +
+					'<input type="checkbox" class="fk-box-enabled" name="' + prefix + '[enabled]" value="1" checked="checked" />' +
+				'</label>' +
+			'</td>' +
 			'<td><button type="button" class="button fk-remove-box">&times;</button></td>';
 
 		tbody.appendChild( tr );
@@ -196,6 +202,27 @@
 		if ( row ) {
 			row.remove();
 			reindexBoxRows();
+		}
+	}
+
+	/**
+	 * Toggle the disabled-row CSS hook when the Enabled checkbox changes.
+	 *
+	 * @param {Event} event The change event.
+	 */
+	function handleEnabledToggle( event ) {
+		var target = event.target;
+		if ( ! target || ! target.classList || ! target.classList.contains( 'fk-box-enabled' ) ) {
+			return;
+		}
+		var row = target.closest( 'tr' );
+		if ( ! row ) {
+			return;
+		}
+		if ( target.checked ) {
+			row.classList.remove( 'fk-box-disabled' );
+		} else {
+			row.classList.add( 'fk-box-disabled' );
 		}
 	}
 
@@ -225,6 +252,7 @@
 		var boxTable = document.getElementById( 'fk-boxes-table' );
 		if ( boxTable ) {
 			boxTable.addEventListener( 'click', handleRemoveBox );
+			boxTable.addEventListener( 'change', handleEnabledToggle );
 		}
 	} );
 }() );
