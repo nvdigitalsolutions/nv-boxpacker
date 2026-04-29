@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/add-email-address-setting',
-        'version' => 'dev-copilot/add-email-address-setting',
-        'reference' => '458209801797897cacb7e939911ab620b4977c82',
+        'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+        'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+        'reference' => '40ed584681ece0f9af1db439f4984c0cf476fc8d',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/add-email-address-setting',
-            'version' => 'dev-copilot/add-email-address-setting',
-            'reference' => '458209801797897cacb7e939911ab620b4977c82',
+            'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+            'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+            'reference' => '40ed584681ece0f9af1db439f4984c0cf476fc8d',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
