@@ -485,6 +485,15 @@ class Plugin {
 				$package['package_name'],
 				$package['mode']
 			);
+
+			if ( ! empty( $package['service_label'] ) ) {
+				$lines[] = sprintf(
+					/* translators: %s shipping service label (e.g., "USPS Priority Mail", "UPS Ground"). */
+					__( 'Service: %s', 'fk-usps-optimizer' ),
+					$package['service_label']
+				);
+			}
+
 			$lines[] = sprintf(
 				/* translators: %s rate amount. */
 				__( 'Rate: $%s', 'fk-usps-optimizer' ),

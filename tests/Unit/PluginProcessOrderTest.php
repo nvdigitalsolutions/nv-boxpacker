@@ -65,6 +65,7 @@ class PluginProcessOrderTest extends TestCase {
 					'dimensions'     => array( 'length' => 9, 'width' => 6, 'height' => 2 ),
 					'weight_oz'      => 14,
 					'cubic_tier'     => '',
+					'service_label'  => 'USPS Priority Mail',
 					'packing_list'   => array( '2x Widget', '1x Gadget' ),
 				),
 			),
@@ -76,6 +77,7 @@ class PluginProcessOrderTest extends TestCase {
 		$this->assertStringContainsString( '1 package(s)', $note );
 		$this->assertStringContainsString( '$8.25', $note );
 		$this->assertStringContainsString( 'USPS Small Flat Rate Box', $note );
+		$this->assertStringContainsString( 'Service: USPS Priority Mail', $note );
 		$this->assertStringContainsString( '9 x 6 x 2 in', $note );
 		$this->assertStringContainsString( '14 oz', $note );
 		$this->assertStringContainsString( '2x Widget, 1x Gadget', $note );
@@ -118,6 +120,7 @@ class PluginProcessOrderTest extends TestCase {
 					'dimensions'     => array( 'length' => 10, 'width' => 8, 'height' => 4 ),
 					'weight_oz'      => 20,
 					'cubic_tier'     => '',
+					'service_label'  => 'USPS Priority Mail',
 					'packing_list'   => array( '1x Alpha' ),
 				),
 				array(
@@ -128,6 +131,7 @@ class PluginProcessOrderTest extends TestCase {
 					'dimensions'     => array( 'length' => 6, 'width' => 6, 'height' => 3 ),
 					'weight_oz'      => 12,
 					'cubic_tier'     => '0.1',
+					'service_label'  => 'UPS Ground',
 					'packing_list'   => array( '1x Beta' ),
 				),
 			),
@@ -139,6 +143,8 @@ class PluginProcessOrderTest extends TestCase {
 		$this->assertStringContainsString( '$18.50', $note );
 		$this->assertStringContainsString( 'Package 1: Box A', $note );
 		$this->assertStringContainsString( 'Package 2: Box B', $note );
+		$this->assertStringContainsString( 'Service: USPS Priority Mail', $note );
+		$this->assertStringContainsString( 'Service: UPS Ground', $note );
 	}
 
 	// -------------------------------------------------------------------------
