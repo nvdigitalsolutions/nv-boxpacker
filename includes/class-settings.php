@@ -187,7 +187,7 @@ class Settings {
 			'show_all_options'             => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
 			'show_package_count'           => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
 			'add_package_note'             => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
-			'add_packing_to_customer_note' => esc_html__( 'Append the packing plan to the order\'s customer note so PirateShip can display it via the WooCommerce REST API. The plan is wrapped in hidden marker comments and stripped from customer-facing surfaces (emails, account pages, admin order screen) — only REST API consumers see the plan.', 'fk-usps-optimizer' ),
+			'add_packing_to_customer_note' => esc_html__( 'Send the packing plan to PirateShip by injecting it into the order\'s customer-note field of the WooCommerce REST API response. The plan is stored as private order meta and is never written to the order\'s customer-note column, so it does not appear in customer emails, the My Account page, or invoices. The admin order edit screen shows the plan in the "USPS Priority Shipping Plan" metabox.', 'fk-usps-optimizer' ),
 			'show_estimated_delivery'      => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
 			'use_default_transit_days'     => esc_html__( 'When the carrier API does not return delivery-date information, use built-in service-code estimates (e.g. Priority Mail = 3 days). When unchecked, shows "(No Estimate)".', 'fk-usps-optimizer' ),
 		);
@@ -1018,12 +1018,13 @@ class Settings {
 	/**
 	 * Check whether "Send Packing Plan to PirateShip via Customer Note" is enabled.
 	 *
-	 * When active, the packing plan is appended to the order's customer note
-	 * wrapped in hidden marker comments (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`)
-	 * so PirateShip can read it via the WooCommerce REST API. A filter on
-	 * `woocommerce_order_get_customer_note` strips the marker block on
-	 * non-REST reads so customers do not see the plan in emails or on
-	 * account pages.
+	 * When active, the packing plan is stored as private order meta and
+	 * injected into the `customer_note` field of WooCommerce REST API
+	 * responses so PirateShip can display it. The order's persisted
+	 * customer-note column is left untouched, so the plan never appears in
+	 * customer-facing surfaces (emails, My Account, invoices). The admin
+	 * order edit screen shows the plan in the existing
+	 * "USPS Priority Shipping Plan" metabox.
 	 *
 	 * @return bool Whether the option is enabled.
 	 */

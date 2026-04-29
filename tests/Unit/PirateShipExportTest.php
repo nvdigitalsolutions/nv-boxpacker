@@ -359,6 +359,12 @@ class PirateShipExportTest extends TestCase {
 		$this->assertIsString( $attachment_path );
 		$this->assertNotSame( '', $attachment_path );
 
+		// The attachment must be sent with a `.csv` extension so the
+		// recipient sees a real CSV file, not the `.tmp` file produced
+		// by `wp_tempnam()`.
+		$this->assertStringEndsWith( '.csv', $attachment_path );
+		$this->assertStringContainsString( 'pirateship-order-321', basename( $attachment_path ) );
+
 		// Cleanup any stray temp file the stub may have left behind.
 		if ( file_exists( $attachment_path ) ) {
 			@unlink( $attachment_path );

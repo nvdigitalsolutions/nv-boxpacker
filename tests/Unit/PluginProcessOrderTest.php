@@ -266,10 +266,10 @@ class PluginProcessOrderTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
-	// process_order integration with customer-note packing plan
+	// process_order integration with packing-plan order meta
 	// -------------------------------------------------------------------------
 
-	public function test_process_order_writes_packing_plan_to_customer_note_when_enabled(): void {
+	public function test_process_order_stores_packing_plan_meta_when_enabled(): void {
 		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
 			'add_packing_to_customer_note' => '1',
 			'shipengine_api_key'           => 'test_key',
@@ -279,28 +279,32 @@ class PluginProcessOrderTest extends TestCase {
 		$this->stub_successful_rate_response();
 
 		$order = $this->build_packable_order_mock();
-		// No prior customer note.
+		// No prior customer note, no legacy markers to migrate.
 		$order->method( 'get_customer_note' )->willReturn( '' );
 
-		$captured = null;
-		$order->expects( $this->once() )
-			->method( 'set_customer_note' )
-			->with(
-				$this->callback(
-					function ( $note ) use ( &$captured ) {
-						$captured = $note;
-						return true;
-					}
-				)
+		// The plan must NOT be written into the customer-note column.
+		$order->expects( $this->never() )->method( 'set_customer_note' );
+
+		$captured_meta = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_meta ): void {
+					$captured_meta[ $key ] = $value;
+				}
 			);
 		$order->expects( $this->atLeastOnce() )->method( 'save' );
 
 		$this->plugin->process_order( 42, array(), $order );
 
-		$this->assertNotNull( $captured, 'set_customer_note should have been called.' );
-		$this->assertStringContainsString( '<!-- fk-pack-start -->', $captured );
-		$this->assertStringContainsString( '<!-- fk-pack-end -->', $captured );
-		$this->assertStringContainsString( 'USPS Shipping Plan', $captured );
+		$this->assertArrayHasKey(
+			Plugin::PACKING_NOTE_META_KEY,
+			$captured_meta,
+			'Plan should be stored under the packing-note meta key.'
+		);
+		$plan_text = (string) $captured_meta[ Plugin::PACKING_NOTE_META_KEY ];
+		$this->assertStringContainsString( 'USPS Shipping Plan', $plan_text );
+		$this->assertStringNotContainsString( '<!-- fk-pack-start -->', $plan_text );
+		$this->assertStringNotContainsString( '<!-- fk-pack-end -->', $plan_text );
 	}
 
 	public function test_process_order_does_not_touch_customer_note_when_disabled(): void {
@@ -315,10 +319,20 @@ class PluginProcessOrderTest extends TestCase {
 		$order = $this->build_packable_order_mock();
 		$order->expects( $this->never() )->method( 'set_customer_note' );
 
+		// No packing-plan meta should be written when the setting is off.
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ): void {
+					if ( Plugin::PACKING_NOTE_META_KEY === $key ) {
+						$this->fail( 'Packing-plan meta should not be written when setting is disabled.' );
+					}
+				}
+			);
+
 		$this->plugin->process_order( 42, array(), $order );
 	}
 
-	public function test_process_order_replaces_existing_packing_block_and_preserves_user_note(): void {
+	public function test_process_order_migrates_legacy_marker_block_from_customer_note(): void {
 		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
 			'add_packing_to_customer_note' => '1',
 			'shipengine_api_key'           => 'test_key',
@@ -333,61 +347,110 @@ class PluginProcessOrderTest extends TestCase {
 		$order = $this->build_packable_order_mock();
 		$order->method( 'get_customer_note' )->willReturn( $existing );
 
-		$captured = null;
+		// On legacy data the existing customer note must be cleaned up
+		// (markers removed) but the customer-entered prefix preserved.
+		$captured_note = null;
 		$order->expects( $this->once() )
 			->method( 'set_customer_note' )
 			->with(
 				$this->callback(
-					function ( $note ) use ( &$captured ) {
-						$captured = $note;
+					function ( $note ) use ( &$captured_note ) {
+						$captured_note = $note;
 						return true;
 					}
 				)
 			);
 
+		$captured_meta = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_meta ): void {
+					$captured_meta[ $key ] = $value;
+				}
+			);
+
 		$this->plugin->process_order( 42, array(), $order );
 
-		$this->assertNotNull( $captured );
-		$this->assertStringContainsString( $prior_user_note, $captured, 'Customer note prefix must be preserved.' );
-		$this->assertStringNotContainsString( 'OLD STALE PLAN', $captured, 'Stale plan block must be replaced.' );
-		// Exactly one start/end marker pair after replacement.
-		$this->assertSame( 1, substr_count( $captured, '<!-- fk-pack-start -->' ) );
-		$this->assertSame( 1, substr_count( $captured, '<!-- fk-pack-end -->' ) );
-		$this->assertStringContainsString( 'USPS Shipping Plan', $captured );
+		$this->assertNotNull( $captured_note );
+		$this->assertSame( $prior_user_note, $captured_note );
+		$this->assertStringNotContainsString( '<!-- fk-pack-start -->', $captured_note );
+		$this->assertStringNotContainsString( '<!-- fk-pack-end -->', $captured_note );
+		$this->assertStringNotContainsString( 'OLD STALE PLAN', $captured_note );
+
+		$this->assertArrayHasKey( Plugin::PACKING_NOTE_META_KEY, $captured_meta );
+		$this->assertStringContainsString( 'USPS Shipping Plan', (string) $captured_meta[ Plugin::PACKING_NOTE_META_KEY ] );
 	}
 
 	// -------------------------------------------------------------------------
-	// filter_customer_note_for_display
+	// inject_packing_plan_into_rest_response
 	// -------------------------------------------------------------------------
 
-	public function test_filter_customer_note_strips_packing_block_on_non_rest_reads(): void {
-		$value = "Hello\n\n<!-- fk-pack-start -->\nUSPS Shipping Plan\nTotal: 1 package(s), $7.99\n<!-- fk-pack-end -->";
+	public function test_rest_filter_appends_plan_to_customer_note_when_enabled(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'add_packing_to_customer_note' => '1',
+		);
 
-		$result = $this->plugin->filter_customer_note_for_display( $value );
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_meta' )
+			->with( Plugin::PACKING_NOTE_META_KEY )
+			->willReturn( "USPS Shipping Plan\nTotal: 1 package(s), $7.99" );
 
-		$this->assertSame( 'Hello', $result );
+		$response       = new \stdClass();
+		$response->data = array( 'customer_note' => 'Please leave at side door.' );
+
+		$result = $this->plugin->inject_packing_plan_into_rest_response( $response, $order );
+
+		$this->assertSame( $response, $result );
+		$this->assertStringContainsString( 'Please leave at side door.', $result->data['customer_note'] );
+		$this->assertStringContainsString( 'USPS Shipping Plan', $result->data['customer_note'] );
 	}
 
-	public function test_filter_customer_note_passes_through_on_rest_request(): void {
-		if ( ! defined( 'REST_REQUEST' ) ) {
-			define( 'REST_REQUEST', true );
-		}
+	public function test_rest_filter_uses_plan_alone_when_customer_note_empty(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'add_packing_to_customer_note' => '1',
+		);
 
-		$value  = "Hello\n\n<!-- fk-pack-start -->\nUSPS Shipping Plan\n<!-- fk-pack-end -->";
-		$result = $this->plugin->filter_customer_note_for_display( $value );
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_meta' )->willReturn( 'USPS Shipping Plan' );
 
-		$this->assertSame( $value, $result );
+		$response       = new \stdClass();
+		$response->data = array( 'customer_note' => '' );
+
+		$result = $this->plugin->inject_packing_plan_into_rest_response( $response, $order );
+
+		$this->assertSame( 'USPS Shipping Plan', $result->data['customer_note'] );
 	}
 
-	public function test_filter_customer_note_returns_unchanged_when_no_marker(): void {
-		$value  = 'Plain customer note with no packing plan.';
-		$result = $this->plugin->filter_customer_note_for_display( $value );
+	public function test_rest_filter_returns_response_unchanged_when_setting_disabled(): void {
+		// Setting disabled.
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array();
 
-		$this->assertSame( $value, $result );
+		$order = $this->createMock( \WC_Order::class );
+		// Even if meta is present, when the setting is off nothing should change.
+		$order->method( 'get_meta' )->willReturn( 'USPS Shipping Plan' );
+
+		$response       = new \stdClass();
+		$response->data = array( 'customer_note' => 'original' );
+
+		$result = $this->plugin->inject_packing_plan_into_rest_response( $response, $order );
+
+		$this->assertSame( 'original', $result->data['customer_note'] );
 	}
 
-	public function test_filter_customer_note_handles_empty_string(): void {
-		$this->assertSame( '', $this->plugin->filter_customer_note_for_display( '' ) );
+	public function test_rest_filter_returns_response_unchanged_when_meta_empty(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'add_packing_to_customer_note' => '1',
+		);
+
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_meta' )->willReturn( '' );
+
+		$response       = new \stdClass();
+		$response->data = array( 'customer_note' => 'original' );
+
+		$result = $this->plugin->inject_packing_plan_into_rest_response( $response, $order );
+
+		$this->assertSame( 'original', $result->data['customer_note'] );
 	}
 
 	// -------------------------------------------------------------------------

@@ -597,6 +597,35 @@ function trailingslashit( string $string ): string {
 }
 
 /**
+ * Generate a unique filename in the given directory (test stub).
+ *
+ * Mirrors WordPress core's `wp_unique_filename()` just well enough for
+ * tests: if the file already exists, append `-{n}` before the extension
+ * until an unused name is found.
+ *
+ * @param string $dir      Directory to check.
+ * @param string $filename Desired filename.
+ * @return string Unique filename within $dir.
+ */
+function wp_unique_filename( string $dir, string $filename ): string {
+	$dir       = rtrim( $dir, '/\\' ) . '/';
+	$ext       = '';
+	$dot_pos   = strrpos( $filename, '.' );
+	$base_name = $filename;
+	if ( false !== $dot_pos ) {
+		$ext       = substr( $filename, $dot_pos );
+		$base_name = substr( $filename, 0, $dot_pos );
+	}
+	$candidate = $base_name . $ext;
+	$i         = 1;
+	while ( file_exists( $dir . $candidate ) ) {
+		$candidate = $base_name . '-' . $i . $ext;
+		++$i;
+	}
+	return $candidate;
+}
+
+/**
  * Escape a string for use in JavaScript.
  *
  * Uses json_encode() with JSON_UNESCAPED_UNICODE and JSON_HEX_TAG so that
