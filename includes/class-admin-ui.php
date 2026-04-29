@@ -119,6 +119,15 @@ class Admin_UI {
 				)
 			) . '</strong></p>';
 			echo '<p>' . esc_html( sprintf( '%s (%s)', $package['package_name'], $package['mode'] ) ) . '</p>';
+			if ( ! empty( $package['service_label'] ) ) {
+				echo '<p>' . esc_html(
+					sprintf(
+						/* translators: %s shipping service label (e.g., "USPS Priority Mail", "UPS Ground"). */
+						__( 'Service: %s', 'fk-usps-optimizer' ),
+						$package['service_label']
+					)
+				) . '</p>';
+			}
 			echo '<p>' . esc_html(
 				sprintf(
 					/* translators: 1: currency code, 2: rate amount. */

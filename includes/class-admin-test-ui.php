@@ -270,7 +270,7 @@ class Admin_Test_UI {
 					</tr>
 					<tr>
 						<th scope="row"><?php echo esc_html__( 'Service', 'fk-usps-optimizer' ); ?></th>
-						<td><?php echo esc_html( $pkg['service_code'] ); ?></td>
+						<td><?php echo esc_html( ! empty( $pkg['service_label'] ) ? $pkg['service_label'] : $pkg['service_code'] ); ?></td>
 					</tr>
 					<tr>
 						<th scope="row"><?php echo esc_html__( 'Dimensions (L×W×H)', 'fk-usps-optimizer' ); ?></th>
