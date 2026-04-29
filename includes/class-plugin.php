@@ -28,6 +28,24 @@ require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-admin-test-ui.php';
  */
 class Plugin {
 	/**
+	 * Marker that prefixes the packing plan inside the order's customer note.
+	 *
+	 * Stored as an HTML comment so it does not render visibly even if a
+	 * theme or plugin bypasses the customer-note filter and outputs the
+	 * raw value. Both markers are stripped together on non-REST reads.
+	 *
+	 * @var string
+	 */
+	const PACKING_NOTE_START_MARKER = '<!-- fk-pack-start -->';
+
+	/**
+	 * Closing marker for the packing-plan block in the customer note.
+	 *
+	 * @var string
+	 */
+	const PACKING_NOTE_END_MARKER = '<!-- fk-pack-end -->';
+
+	/**
 	 * Singleton plugin instance.
 	 *
 	 * @var Plugin|null
@@ -144,6 +162,12 @@ class Plugin {
 
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
 		add_action( 'wp_ajax_fk_usps_test_connection', array( $this, 'handle_test_connection_ajax' ) );
+
+		// Strip the hidden packing-plan marker block from the customer note on
+		// non-REST reads so it stays out of customer emails, account pages
+		// and the admin order screen. PirateShip pulls orders via the REST
+		// API, where the full note (including the plan) is preserved.
+		add_filter( 'woocommerce_order_get_customer_note', array( $this, 'filter_customer_note_for_display' ), 10, 2 );
 	}
 
 	/**
@@ -236,6 +260,10 @@ class Plugin {
 
 		if ( $this->settings->is_add_package_note_enabled() && ! empty( $plan['packages'] ) ) {
 			$order->add_order_note( $this->build_package_note( $plan ) );
+		}
+
+		if ( $this->settings->is_add_packing_to_customer_note_enabled() && ! empty( $plan['packages'] ) ) {
+			$this->write_packing_plan_to_customer_note( $order, $plan );
 		}
 	}
 
@@ -526,6 +554,96 @@ class Plugin {
 		}
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Write the packing plan into the order's customer-note field, wrapped
+	 * in hidden marker comments so PirateShip can read it via the
+	 * WooCommerce REST API while a display-time filter keeps it out of
+	 * customer-facing surfaces.
+	 *
+	 * Idempotent: if a previous packing-plan block exists in the customer
+	 * note (e.g. when an order is re-processed) it is replaced rather than
+	 * appended, and any pre-existing customer-entered note text is
+	 * preserved.
+	 *
+	 * @param \WC_Order $order Order to update.
+	 * @param array     $plan  Shipping plan data.
+	 * @return void
+	 */
+	protected function write_packing_plan_to_customer_note( \WC_Order $order, array $plan ): void {
+		// Read the raw stored value (context "edit") so we don't recursively
+		// trigger our own display filter and end up appending to a stripped
+		// version of the note.
+		$existing = (string) $order->get_customer_note( 'edit' );
+		$existing = $this->strip_packing_plan_block( $existing );
+
+		$block = self::PACKING_NOTE_START_MARKER
+			. "\n" . $this->build_package_note( $plan ) . "\n"
+			. self::PACKING_NOTE_END_MARKER;
+
+		$new_note = '' === trim( $existing )
+			? $block
+			: rtrim( $existing ) . "\n\n" . $block;
+
+		$order->set_customer_note( $new_note );
+		$order->save();
+	}
+
+	/**
+	 * Filter callback for `woocommerce_order_get_customer_note` that strips
+	 * the hidden packing-plan block on non-REST reads.
+	 *
+	 * REST API consumers (e.g. PirateShip) see the full stored value so
+	 * they can extract the plan; everything else (customer emails, the
+	 * customer's account page, the admin order screen, invoices) sees only
+	 * the original customer-entered text.
+	 *
+	 * @param string         $value Customer note value.
+	 * @param \WC_Order|null $order Order being read (unused).
+	 * @return string Possibly stripped note.
+	 */
+	public function filter_customer_note_for_display( $value, $order = null ): string {
+		unset( $order );
+
+		$value = (string) $value;
+
+		if ( '' === $value || false === strpos( $value, self::PACKING_NOTE_START_MARKER ) ) {
+			return $value;
+		}
+
+		// REST consumers (PirateShip) need the raw note including the plan.
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return $value;
+		}
+
+		return $this->strip_packing_plan_block( $value );
+	}
+
+	/**
+	 * Remove a `<!-- fk-pack-start --> ... <!-- fk-pack-end -->` block from
+	 * a string and tidy up the surrounding whitespace.
+	 *
+	 * @param string $value Source string.
+	 * @return string String with the block removed.
+	 */
+	protected function strip_packing_plan_block( string $value ): string {
+		if ( '' === $value || false === strpos( $value, self::PACKING_NOTE_START_MARKER ) ) {
+			return $value;
+		}
+
+		$pattern = '/\s*' . preg_quote( self::PACKING_NOTE_START_MARKER, '/' )
+			. '.*?' . preg_quote( self::PACKING_NOTE_END_MARKER, '/' ) . '\s*/s';
+
+		$stripped = preg_replace( $pattern, '', $value );
+
+		if ( null === $stripped ) {
+			// On regex failure, fall back to the original value rather than
+			// nuking the customer note.
+			return $value;
+		}
+
+		return trim( $stripped );
 	}
 
 	/**

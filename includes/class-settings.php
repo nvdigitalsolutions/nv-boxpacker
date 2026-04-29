@@ -82,33 +82,34 @@ class Settings {
 		);
 
 		$fields = array(
-			'carrier'                   => __( 'Enabled Carrier APIs', 'fk-usps-optimizer' ),
-			'shipengine_api_key'        => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
-			'shipengine_carrier_id'     => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
-			'shipengine_service_code'   => __( 'ShipEngine Service Code', 'fk-usps-optimizer' ),
-			'shipstation_api_key'       => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
-			'shipstation_api_secret'    => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
-			'shipstation_carrier_code'  => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
-			'shipstation_service_code'  => __( 'ShipStation Service Code', 'fk-usps-optimizer' ),
-			'shipstation_services_json' => __( 'ShipStation Additional Services', 'fk-usps-optimizer' ),
-			'sandbox_mode'              => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
-			'show_all_options'          => __( 'Show All Options', 'fk-usps-optimizer' ),
-			'show_package_count'        => __( 'Show Package Count', 'fk-usps-optimizer' ),
-			'add_package_note'          => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
-			'show_estimated_delivery'   => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
-			'use_default_transit_days'  => __( 'Use Default Transit Day Estimates', 'fk-usps-optimizer' ),
-			'transit_days_buffer'       => __( 'Additional Business Days', 'fk-usps-optimizer' ),
-			'ship_from_name'            => __( 'Ship From Name', 'fk-usps-optimizer' ),
-			'ship_from_company'         => __( 'Ship From Company', 'fk-usps-optimizer' ),
-			'ship_from_phone'           => __( 'Ship From Phone', 'fk-usps-optimizer' ),
-			'ship_from_address1'        => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
-			'ship_from_address2'        => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
-			'ship_from_city'            => __( 'Ship From City', 'fk-usps-optimizer' ),
-			'ship_from_state'           => __( 'Ship From State', 'fk-usps-optimizer' ),
-			'ship_from_postal_code'     => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
-			'ship_from_country'         => __( 'Ship From Country', 'fk-usps-optimizer' ),
-			'debug_logging'             => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
-			'boxes_table'               => __( 'Box Definitions', 'fk-usps-optimizer' ),
+			'carrier'                      => __( 'Enabled Carrier APIs', 'fk-usps-optimizer' ),
+			'shipengine_api_key'           => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
+			'shipengine_carrier_id'        => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
+			'shipengine_service_code'      => __( 'ShipEngine Service Code', 'fk-usps-optimizer' ),
+			'shipstation_api_key'          => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
+			'shipstation_api_secret'       => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
+			'shipstation_carrier_code'     => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
+			'shipstation_service_code'     => __( 'ShipStation Service Code', 'fk-usps-optimizer' ),
+			'shipstation_services_json'    => __( 'ShipStation Additional Services', 'fk-usps-optimizer' ),
+			'sandbox_mode'                 => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'show_all_options'             => __( 'Show All Options', 'fk-usps-optimizer' ),
+			'show_package_count'           => __( 'Show Package Count', 'fk-usps-optimizer' ),
+			'add_package_note'             => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
+			'add_packing_to_customer_note' => __( 'Send Packing Plan to PirateShip via Customer Note', 'fk-usps-optimizer' ),
+			'show_estimated_delivery'      => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
+			'use_default_transit_days'     => __( 'Use Default Transit Day Estimates', 'fk-usps-optimizer' ),
+			'transit_days_buffer'          => __( 'Additional Business Days', 'fk-usps-optimizer' ),
+			'ship_from_name'               => __( 'Ship From Name', 'fk-usps-optimizer' ),
+			'ship_from_company'            => __( 'Ship From Company', 'fk-usps-optimizer' ),
+			'ship_from_phone'              => __( 'Ship From Phone', 'fk-usps-optimizer' ),
+			'ship_from_address1'           => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
+			'ship_from_address2'           => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
+			'ship_from_city'               => __( 'Ship From City', 'fk-usps-optimizer' ),
+			'ship_from_state'              => __( 'Ship From State', 'fk-usps-optimizer' ),
+			'ship_from_postal_code'        => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
+			'ship_from_country'            => __( 'Ship From Country', 'fk-usps-optimizer' ),
+			'debug_logging'                => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
+			'boxes_table'                  => __( 'Box Definitions', 'fk-usps-optimizer' ),
 		);
 
 		// Fields that belong exclusively to one carrier — the settings page JS
@@ -180,13 +181,14 @@ class Settings {
 		}
 
 		$checkbox_fields = array(
-			'debug_logging'            => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
-			'sandbox_mode'             => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
-			'show_all_options'         => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
-			'show_package_count'       => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
-			'add_package_note'         => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
-			'show_estimated_delivery'  => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
-			'use_default_transit_days' => esc_html__( 'When the carrier API does not return delivery-date information, use built-in service-code estimates (e.g. Priority Mail = 3 days). When unchecked, shows "(No Estimate)".', 'fk-usps-optimizer' ),
+			'debug_logging'                => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
+			'sandbox_mode'                 => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
+			'show_all_options'             => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
+			'show_package_count'           => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
+			'add_package_note'             => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
+			'add_packing_to_customer_note' => esc_html__( 'Append the packing plan to the order\'s customer note so PirateShip can display it via the WooCommerce REST API. The plan is wrapped in hidden marker comments and stripped from customer-facing surfaces (emails, account pages, admin order screen) — only REST API consumers see the plan.', 'fk-usps-optimizer' ),
+			'show_estimated_delivery'      => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
+			'use_default_transit_days'     => esc_html__( 'When the carrier API does not return delivery-date information, use built-in service-code estimates (e.g. Priority Mail = 3 days). When unchecked, shows "(No Estimate)".', 'fk-usps-optimizer' ),
 		);
 
 		if ( isset( $checkbox_fields[ $key ] ) ) {
@@ -464,16 +466,17 @@ class Settings {
 			}
 		}
 
-		$output['carrier']                   = ! empty( $selected_carriers ) ? implode( ',', array_unique( $selected_carriers ) ) : 'shipengine';
-		$output['debug_logging']             = empty( $input['debug_logging'] ) ? '0' : '1';
-		$output['sandbox_mode']              = empty( $input['sandbox_mode'] ) ? '0' : '1';
-		$output['show_all_options']          = empty( $input['show_all_options'] ) ? '0' : '1';
-		$output['show_package_count']        = empty( $input['show_package_count'] ) ? '0' : '1';
-		$output['add_package_note']          = empty( $input['add_package_note'] ) ? '0' : '1';
-		$output['show_estimated_delivery']   = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
-		$output['use_default_transit_days']  = empty( $input['use_default_transit_days'] ) ? '0' : '1';
-		$output['transit_days_buffer']       = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
-		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
+		$output['carrier']                      = ! empty( $selected_carriers ) ? implode( ',', array_unique( $selected_carriers ) ) : 'shipengine';
+		$output['debug_logging']                = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']                 = empty( $input['sandbox_mode'] ) ? '0' : '1';
+		$output['show_all_options']             = empty( $input['show_all_options'] ) ? '0' : '1';
+		$output['show_package_count']           = empty( $input['show_package_count'] ) ? '0' : '1';
+		$output['add_package_note']             = empty( $input['add_package_note'] ) ? '0' : '1';
+		$output['add_packing_to_customer_note'] = empty( $input['add_packing_to_customer_note'] ) ? '0' : '1';
+		$output['show_estimated_delivery']      = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
+		$output['use_default_transit_days']     = empty( $input['use_default_transit_days'] ) ? '0' : '1';
+		$output['transit_days_buffer']          = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
+		$output['shipstation_services_json']    = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
 
 		// Accept boxes from the new table UI (array of rows) or fall back to
 		// the legacy JSON textarea value for backward compatibility.
@@ -631,34 +634,35 @@ class Settings {
 		return wp_parse_args(
 			$saved,
 			array(
-				'carrier'                   => 'shipengine',
-				'shipengine_api_key'        => '',
-				'shipengine_carrier_id'     => '',
-				'shipengine_service_code'   => 'usps_priority_mail',
-				'shipstation_api_key'       => '',
-				'shipstation_api_secret'    => '',
-				'shipstation_carrier_code'  => 'stamps_com',
-				'shipstation_service_code'  => 'usps_priority_mail',
-				'shipstation_services_json' => '',
-				'service_code'              => 'usps_priority_mail',
-				'sandbox_mode'              => '0',
-				'show_all_options'          => '0',
-				'show_package_count'        => '0',
-				'add_package_note'          => '0',
-				'show_estimated_delivery'   => '0',
-				'use_default_transit_days'  => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
-				'transit_days_buffer'       => 0,
-				'ship_from_name'            => '',
-				'ship_from_company'         => '',
-				'ship_from_phone'           => '',
-				'ship_from_address1'        => '',
-				'ship_from_address2'        => '',
-				'ship_from_city'            => '',
-				'ship_from_state'           => '',
-				'ship_from_postal_code'     => '',
-				'ship_from_country'         => 'US',
-				'debug_logging'             => '0',
-				'boxes_json'                => wp_json_encode( $this->get_default_boxes() ),
+				'carrier'                      => 'shipengine',
+				'shipengine_api_key'           => '',
+				'shipengine_carrier_id'        => '',
+				'shipengine_service_code'      => 'usps_priority_mail',
+				'shipstation_api_key'          => '',
+				'shipstation_api_secret'       => '',
+				'shipstation_carrier_code'     => 'stamps_com',
+				'shipstation_service_code'     => 'usps_priority_mail',
+				'shipstation_services_json'    => '',
+				'service_code'                 => 'usps_priority_mail',
+				'sandbox_mode'                 => '0',
+				'show_all_options'             => '0',
+				'show_package_count'           => '0',
+				'add_package_note'             => '0',
+				'add_packing_to_customer_note' => '0',
+				'show_estimated_delivery'      => '0',
+				'use_default_transit_days'     => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
+				'transit_days_buffer'          => 0,
+				'ship_from_name'               => '',
+				'ship_from_company'            => '',
+				'ship_from_phone'              => '',
+				'ship_from_address1'           => '',
+				'ship_from_address2'           => '',
+				'ship_from_city'               => '',
+				'ship_from_state'              => '',
+				'ship_from_postal_code'        => '',
+				'ship_from_country'            => 'US',
+				'debug_logging'                => '0',
+				'boxes_json'                   => wp_json_encode( $this->get_default_boxes() ),
 			)
 		);
 	}
@@ -880,6 +884,23 @@ class Settings {
 	public function is_add_package_note_enabled(): bool {
 		$settings = $this->get_settings();
 		return '1' === (string) $settings['add_package_note'];
+	}
+
+	/**
+	 * Check whether "Send Packing Plan to PirateShip via Customer Note" is enabled.
+	 *
+	 * When active, the packing plan is appended to the order's customer note
+	 * wrapped in hidden marker comments (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`)
+	 * so PirateShip can read it via the WooCommerce REST API. A filter on
+	 * `woocommerce_order_get_customer_note` strips the marker block on
+	 * non-REST reads so customers do not see the plan in emails or on
+	 * account pages.
+	 *
+	 * @return bool Whether the option is enabled.
+	 */
+	public function is_add_packing_to_customer_note_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) ( $settings['add_packing_to_customer_note'] ?? '0' );
 	}
 
 	/**
