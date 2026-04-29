@@ -162,6 +162,7 @@ These settings control how shipping rates appear in the WooCommerce cart and che
 | **Show Package Count** | Checkbox | Off | Append the package count to each shipping option label. Example: "USPS Priority (2 packages)". Uses proper singular/plural forms. |
 | **Show Estimated Delivery Date** | Checkbox | Off | Show the carrier-provided estimated delivery date on a **separate line** below each shipping option label. Example: "USPS Priority (1 package)" on the first line, "Est. delivery: Mon, Jan 15" on the second. For ShipEngine, the `estimated_delivery_date` field from the rate response is used directly. For ShipStation, the `transitDays` field is converted to a calendar date. The formatted date is also passed as WooCommerce rate metadata for themes and FunnelKit Checkout pages that render it. |
 | **Additional Business Days** | Number (0–30) | 0 | Extra business days (Monday–Friday) added to every estimated delivery date. Use this to account for order processing or handling time. Weekends are skipped, so a 2-business-day buffer applied on a Thursday pushes the estimate to the following Monday. Applies to both carrier-returned and default transit-day estimates. |
+| **PirateShip Notification Emails** | Text | _empty_ | Comma-separated list of email addresses (newlines and semicolons also accepted) to notify after every order. Each recipient receives the suggested packages, packing list, and a CSV attachment that can be imported directly into PirateShip. Invalid addresses are dropped on save and reported via an admin notice. Leave blank to disable. |
 
 ---
 
@@ -218,7 +219,7 @@ When **Enable Debug Logging** is checked, all API requests, responses, and packi
 
 Box definitions are managed via a compact visual table in the **Box Definitions** section of the settings page. Each row represents one physical box and can be added, edited, or removed directly in the UI. The table uses grouped column headers — "Outer (in)" and "Inner (in)" — with fixed-width columns and a horizontally scrollable wrapper so it fits within the standard WordPress admin layout without forcing the page wider.
 
-Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`).
+Each box has inner/outer dimensions (inches), empty weight (ounces), maximum payload weight (lbs), a type (`cubic` or `flat_rate`), and an optional **Carrier** restriction (`Any`, `USPS`, `UPS`, `FedEx`). The **Enabled** checkbox lets you temporarily exclude a box from packing/rating (for example, when a box is out of stock) without deleting its configuration — uncheck it to disable, re-check it when stock is replenished. Boxes saved before this setting existed are treated as enabled by default.
 
 See [Box Definition JSON Schema](#box-definition-json-schema) for the full field reference and a worked example.
 
@@ -371,6 +372,11 @@ All filters follow the naming convention `fk_usps_optimizer_{name}`.
 | `fk_usps_optimizer_shipstation_service_code` | `'usps_priority_mail'` | Override the ShipStation service code at runtime. |
 | `fk_usps_optimizer_shipstation_service_pairs` | _(primary + additional)_ | Override the array of ShipStation carrier+service pairs used for rate shopping. Each entry is an associative array with `carrier_code` and `service_code`. |
 | `fk_usps_optimizer_shipstation_api_url` | `'https://ssapi.shipstation.com'` | Override the ShipStation API base URL (useful for mocking in tests). |
+| `fk_usps_optimizer_api_timeout` | `8` | Per-request timeout (seconds) for ShipEngine/ShipStation HTTP calls. Receives the carrier slug (`'shipengine'` or `'shipstation'`). |
+| `fk_usps_optimizer_max_candidates` | `3` | Maximum number of rated candidate boxes per packed package. Receives the full candidate array as context. Lower values trade rate variety for fewer API calls. |
+| `fk_usps_optimizer_rate_cache_ttl` | `300` | TTL (seconds) for the rate-response transient cache. Set to `0` to disable caching. Sandbox endpoints bypass the cache regardless of this value. |
+| `fk_usps_optimizer_skip_rates` | `false` | When truthy, `Shipping_Method::calculate_shipping()` returns immediately. Receives the WooCommerce shipping package as context. Useful as a feature flag or debug toggle. |
+| `fk_usps_optimizer_min_postcode_length` | US/PR = `5`, CA = `3`, default = `3` | Minimum postcode length below which rate calculation is skipped (prevents API churn during partial-checkout typing). Receives the default int and the uppercased country code. Return `0` to disable the gate. |
 
 **Example — load credentials from environment variables:**
 
@@ -428,6 +434,7 @@ Box definitions are stored in the plugin settings as a JSON array. Each element 
 | `empty_weight` | number | Empty box weight in **ounces** (decimals supported). Added to item weight when calculating shipment weight. |
 | `max_weight` | number | Maximum payload weight in **pounds** (decimals supported). |
 | `carrier_restriction` | string | Restrict this box to a specific carrier: `"usps"`, `"ups"`, `"fedex"`, or `""` (empty = available to all carriers). |
+| `enabled` | boolean | Whether this box participates in packing/rating. Defaults to `true` when omitted (so legacy box definitions remain enabled). Set to `false` to temporarily disable a box (e.g. when stock is depleted) without removing it from the list. |
 
 **USPS Cubic Eligibility Rules (enforced automatically for USPS carriers only):**
 
@@ -592,6 +599,46 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.3.5
+
+- **Changed:** **Send Packing Plan to PirateShip via Customer Note** no longer writes the plan into the order's stored customer-note column. The plan is now persisted as private order meta (`_fk_packing_plan_note`), rendered in the existing admin-only **USPS Priority Shipping Plan** metabox on the order edit screen, and injected into the `customer_note` field of WooCommerce REST API responses (via the `woocommerce_rest_prepare_shop_order_object` filter) so PirateShip continues to receive it. The previous hidden-marker (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`) approach and the `woocommerce_order_get_customer_note` strip filter have been removed, eliminating the risk of the plan leaking through any admin path that bypasses the strip filter (custom metaboxes, third-party plugins, raw `$context = 'edit'` reads, direct DB queries). Orders processed by earlier versions are migrated lazily: on the next re-process the legacy marker block is removed from the persisted customer note and the plan is re-stored as meta.
+- **New:** `Plugin::PACKING_NOTE_META_KEY` constant identifying the order-meta key (`_fk_packing_plan_note`) that stores the rendered plan text.
+- **New:** `Plugin::inject_packing_plan_into_rest_response()` filter callback hooked on `woocommerce_rest_prepare_shop_order_object` that appends the stored plan to the REST response's `customer_note` field when the setting is enabled.
+- **Removed:** `Plugin::filter_customer_note_for_display()` and the `woocommerce_order_get_customer_note` filter registration — no longer needed because the plan never enters the customer-note column.
+
+### 1.3.4
+
+- **New:** **PirateShip Notification Emails** setting — comma-separated list of email addresses (newlines and semicolons are also accepted as separators) to notify after every order. The plugin sends each recipient a plain-text email containing the order's shipping address, the suggested packages with dimensions/weights/packing list, and a CSV file attachment that can be imported directly into [PirateShip](https://www.pirateship.com) without first opening the order in WordPress. Invalid email addresses are dropped on save and reported back via an admin notice.
+- **New:** `Settings::get_pirateship_notification_emails()` accessor returning the validated, deduplicated recipient list.
+- **New:** `PirateShip_Export::send_order_notification()`, `PirateShip_Export::build_csv_string()`, and `PirateShip_Export::build_email_body()` — used internally by `Plugin::process_order()` to build the CSV in memory, format the human-readable email body, and send the notification via `wp_mail()`.
+- **New:** `fk_usps_optimizer_pirateship_notification_emails` filter to override the recipient list at runtime, and `fk_usps_optimizer_pirateship_notification_email_args` filter to customise the subject, body, headers, or attachments before the email is sent.
+
+### 1.3.3
+
+- **New:** **Send Packing Plan to PirateShip via Customer Note** setting — when enabled, the per-package packing plan is appended to the order's customer note wrapped in hidden HTML comment markers (`<!-- fk-pack-start -->` ... `<!-- fk-pack-end -->`). PirateShip and other WooCommerce REST API consumers receive the full note (including the plan) so it can be displayed alongside the shipment, while a `woocommerce_order_get_customer_note` filter strips the marker block on every non-REST read so it stays out of customer emails, the My Account page, the admin order screen and invoices. Re-processing an order replaces any existing plan block in-place; pre-existing customer-entered note text is preserved.
+- **New:** `Plugin::PACKING_NOTE_START_MARKER` / `PACKING_NOTE_END_MARKER` class constants delimit the plan block so external tooling can locate and parse it deterministically.
+- **New:** `Settings::is_add_packing_to_customer_note_enabled()` accessor for the new setting.
+- **New:** **Enabled** checkbox per box definition in the Box Management Table UI — temporarily exclude a box from packing and rate candidates (e.g. when out of stock) without deleting its configuration. `Settings::get_boxes()` and `Settings::get_boxes_for_carrier()` now filter out boxes whose `enabled` flag is `false`. Boxes saved before this setting existed are treated as enabled by default for backward compatibility.
+
+### 1.3.2
+
+- **New:** Selected shipping service label (e.g. "USPS Priority Mail", "USPS Ground Advantage", "UPS Ground", "UPS 2nd Day Air", "UPS Next Day Air") is now surfaced in three human-readable views of the shipping plan:
+  - The **order note** added by `Plugin::build_package_note()` — a `Service: <label>` line directly under each `Package N:` header.
+  - The **admin order meta box** rendered by `Admin_UI::render_meta_box()` — a `Service: <label>` line between the `package_name (mode)` and `Rate:` lines.
+  - The **rate-tester admin tool** (`Admin_Test_UI::render_page()`) — the per-package "Service" row now prefers the friendly `service_label` over the raw `service_code`, with a graceful fallback to `service_code` for legacy plans without a label.
+- **Note:** Plan data already carried `service_label` per package since 1.2.6; this release just makes it visible in the surfaces above. No data-shape changes.
+
+### 1.3.1
+
+- **Improved:** **Checkout shipping rate latency** reduced significantly. ShipStation carrier-list calls are now deduplicated across configured service pairs (Phase 1), all rate HTTP requests are batched and dispatched in parallel through WordPress's `Requests::request_multiple()` with a sequential fallback (Phase 2), and rate-bearing candidate boxes per package are now capped (default 3, filterable).
+- **New:** Short-TTL transient cache around carrier rate calls (default 5 minutes). Sandbox endpoints are auto-bypassed. Filterable via `fk_usps_optimizer_rate_cache_ttl`.
+- **Changed:** Carrier API timeout reduced from 30s to 8s. Filterable per-carrier via `fk_usps_optimizer_api_timeout( int $seconds, string $carrier )`.
+- **New:** `fk_usps_optimizer_max_candidates` filter — caps the number of candidate boxes rated per package (default 3, receives the candidate array).
+- **New:** `fk_usps_optimizer_skip_rates` filter — boolean short-circuit on `Shipping_Method::calculate_shipping()`. Receives the WooCommerce shipping package as context. Returning `true` bypasses all rate work — useful as a feature flag or quick debug toggle.
+- **New:** Per-country minimum postcode length gate prevents API calls during partial-checkout keystrokes. Defaults: US/PR = 5, CA = 3, others = 3. Filterable via `fk_usps_optimizer_min_postcode_length( int $default, string $country )`; return `0` to disable.
+- **New:** Optional debug timing log — when WooCommerce debug logging is enabled, every `calculate_shipping()` call writes `elapsed_ms`, `rate_count`, `package_count`, and the destination postal/country to the `fk-usps-optimizer` logger source. Zero overhead when debug is off.
+- **Changed:** Destination country code is normalised to upper-case before the per-country postcode-length defaults are looked up, so `'us'` and `'US'` behave identically.
 
 ### 1.3.0
 

@@ -82,33 +82,35 @@ class Settings {
 		);
 
 		$fields = array(
-			'carrier'                   => __( 'Enabled Carrier APIs', 'fk-usps-optimizer' ),
-			'shipengine_api_key'        => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
-			'shipengine_carrier_id'     => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
-			'shipengine_service_code'   => __( 'ShipEngine Service Code', 'fk-usps-optimizer' ),
-			'shipstation_api_key'       => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
-			'shipstation_api_secret'    => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
-			'shipstation_carrier_code'  => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
-			'shipstation_service_code'  => __( 'ShipStation Service Code', 'fk-usps-optimizer' ),
-			'shipstation_services_json' => __( 'ShipStation Additional Services', 'fk-usps-optimizer' ),
-			'sandbox_mode'              => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
-			'show_all_options'          => __( 'Show All Options', 'fk-usps-optimizer' ),
-			'show_package_count'        => __( 'Show Package Count', 'fk-usps-optimizer' ),
-			'add_package_note'          => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
-			'show_estimated_delivery'   => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
-			'use_default_transit_days'  => __( 'Use Default Transit Day Estimates', 'fk-usps-optimizer' ),
-			'transit_days_buffer'       => __( 'Additional Business Days', 'fk-usps-optimizer' ),
-			'ship_from_name'            => __( 'Ship From Name', 'fk-usps-optimizer' ),
-			'ship_from_company'         => __( 'Ship From Company', 'fk-usps-optimizer' ),
-			'ship_from_phone'           => __( 'Ship From Phone', 'fk-usps-optimizer' ),
-			'ship_from_address1'        => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
-			'ship_from_address2'        => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
-			'ship_from_city'            => __( 'Ship From City', 'fk-usps-optimizer' ),
-			'ship_from_state'           => __( 'Ship From State', 'fk-usps-optimizer' ),
-			'ship_from_postal_code'     => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
-			'ship_from_country'         => __( 'Ship From Country', 'fk-usps-optimizer' ),
-			'debug_logging'             => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
-			'boxes_table'               => __( 'Box Definitions', 'fk-usps-optimizer' ),
+			'carrier'                        => __( 'Enabled Carrier APIs', 'fk-usps-optimizer' ),
+			'shipengine_api_key'             => __( 'ShipEngine API Key', 'fk-usps-optimizer' ),
+			'shipengine_carrier_id'          => __( 'ShipEngine Carrier ID', 'fk-usps-optimizer' ),
+			'shipengine_service_code'        => __( 'ShipEngine Service Code', 'fk-usps-optimizer' ),
+			'shipstation_api_key'            => __( 'ShipStation API Key', 'fk-usps-optimizer' ),
+			'shipstation_api_secret'         => __( 'ShipStation API Secret', 'fk-usps-optimizer' ),
+			'shipstation_carrier_code'       => __( 'ShipStation Carrier Code', 'fk-usps-optimizer' ),
+			'shipstation_service_code'       => __( 'ShipStation Service Code', 'fk-usps-optimizer' ),
+			'shipstation_services_json'      => __( 'ShipStation Additional Services', 'fk-usps-optimizer' ),
+			'sandbox_mode'                   => __( 'Enable Sandbox Mode', 'fk-usps-optimizer' ),
+			'show_all_options'               => __( 'Show All Options', 'fk-usps-optimizer' ),
+			'show_package_count'             => __( 'Show Package Count', 'fk-usps-optimizer' ),
+			'add_package_note'               => __( 'Add Package Suggestion to Order Notes', 'fk-usps-optimizer' ),
+			'add_packing_to_customer_note'   => __( 'Send Packing Plan to PirateShip via Customer Note', 'fk-usps-optimizer' ),
+			'pirateship_notification_emails' => __( 'PirateShip Notification Emails', 'fk-usps-optimizer' ),
+			'show_estimated_delivery'        => __( 'Show Estimated Delivery Date', 'fk-usps-optimizer' ),
+			'use_default_transit_days'       => __( 'Use Default Transit Day Estimates', 'fk-usps-optimizer' ),
+			'transit_days_buffer'            => __( 'Additional Business Days', 'fk-usps-optimizer' ),
+			'ship_from_name'                 => __( 'Ship From Name', 'fk-usps-optimizer' ),
+			'ship_from_company'              => __( 'Ship From Company', 'fk-usps-optimizer' ),
+			'ship_from_phone'                => __( 'Ship From Phone', 'fk-usps-optimizer' ),
+			'ship_from_address1'             => __( 'Ship From Address 1', 'fk-usps-optimizer' ),
+			'ship_from_address2'             => __( 'Ship From Address 2', 'fk-usps-optimizer' ),
+			'ship_from_city'                 => __( 'Ship From City', 'fk-usps-optimizer' ),
+			'ship_from_state'                => __( 'Ship From State', 'fk-usps-optimizer' ),
+			'ship_from_postal_code'          => __( 'Ship From Postal Code', 'fk-usps-optimizer' ),
+			'ship_from_country'              => __( 'Ship From Country', 'fk-usps-optimizer' ),
+			'debug_logging'                  => __( 'Enable Debug Logging', 'fk-usps-optimizer' ),
+			'boxes_table'                    => __( 'Box Definitions', 'fk-usps-optimizer' ),
 		);
 
 		// Fields that belong exclusively to one carrier — the settings page JS
@@ -180,13 +182,14 @@ class Settings {
 		}
 
 		$checkbox_fields = array(
-			'debug_logging'            => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
-			'sandbox_mode'             => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
-			'show_all_options'         => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
-			'show_package_count'       => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
-			'add_package_note'         => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
-			'show_estimated_delivery'  => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
-			'use_default_transit_days' => esc_html__( 'When the carrier API does not return delivery-date information, use built-in service-code estimates (e.g. Priority Mail = 3 days). When unchecked, shows "(No Estimate)".', 'fk-usps-optimizer' ),
+			'debug_logging'                => esc_html__( 'Write API and packing errors to WooCommerce logger.', 'fk-usps-optimizer' ),
+			'sandbox_mode'                 => esc_html__( 'Use sandbox / test credentials. Enter a TEST_-prefixed ShipEngine API key to route requests to the sandbox environment.', 'fk-usps-optimizer' ),
+			'show_all_options'             => esc_html__( 'Display all rated box candidates as separate shipping options (cartesian product of packages).', 'fk-usps-optimizer' ),
+			'show_package_count'           => esc_html__( 'Append the package count to each shipping option label.', 'fk-usps-optimizer' ),
+			'add_package_note'             => esc_html__( 'Add the suggested package plan to the WooCommerce order notes after checkout.', 'fk-usps-optimizer' ),
+			'add_packing_to_customer_note' => esc_html__( 'Send the packing plan to PirateShip by injecting it into the order\'s customer-note field of the WooCommerce REST API response. The plan is stored as private order meta and is never written to the order\'s customer-note column, so it does not appear in customer emails, the My Account page, or invoices. The admin order edit screen shows the plan in the "USPS Priority Shipping Plan" metabox.', 'fk-usps-optimizer' ),
+			'show_estimated_delivery'      => esc_html__( 'Display the carrier-provided estimated delivery date on the checkout shipping options (including FunnelKit Checkout).', 'fk-usps-optimizer' ),
+			'use_default_transit_days'     => esc_html__( 'When the carrier API does not return delivery-date information, use built-in service-code estimates (e.g. Priority Mail = 3 days). When unchecked, shows "(No Estimate)".', 'fk-usps-optimizer' ),
 		);
 
 		if ( isset( $checkbox_fields[ $key ] ) ) {
@@ -269,6 +272,19 @@ class Settings {
 			return;
 		}
 
+		if ( 'pirateship_notification_emails' === $key ) {
+			printf(
+				'<textarea class="large-text" rows="2" name="%1$s[%2$s]" placeholder="%3$s">%4$s</textarea>' .
+				'<p class="description">%5$s</p>',
+				esc_attr( self::OPTION_KEY ),
+				esc_attr( $key ),
+				esc_attr( __( 'shipping@example.com, manager@example.com', 'fk-usps-optimizer' ) ),
+				esc_textarea( $value ),
+				esc_html__( 'Comma-separated list of email addresses to notify after each order with the suggested packages, packing list, and a PirateShip-ready CSV attachment that can be imported directly into PirateShip. Leave blank to disable.', 'fk-usps-optimizer' )
+			);
+			return;
+		}
+
 		if ( 'boxes_table' === $key ) {
 			// The UI key is 'boxes_table' but data is stored as 'boxes_json'.
 			$json  = $settings['boxes_json'] ?? '';
@@ -286,7 +302,7 @@ class Settings {
 						<th colspan="3"><?php esc_html_e( 'Outer (in)', 'fk-usps-optimizer' ); ?></th>
 						<th colspan="3"><?php esc_html_e( 'Inner (in)', 'fk-usps-optimizer' ); ?></th>
 						<th colspan="2"><?php esc_html_e( 'Weight', 'fk-usps-optimizer' ); ?></th>
-						<th colspan="2"></th>
+						<th colspan="3"></th>
 					</tr>
 					<tr>
 						<th class="col-ref"><?php esc_html_e( 'Reference', 'fk-usps-optimizer' ); ?></th>
@@ -302,12 +318,14 @@ class Settings {
 						<th class="col-dim"><?php esc_html_e( 'Tare oz', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-dim"><?php esc_html_e( 'Max lb', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-carrier"><?php esc_html_e( 'Carrier', 'fk-usps-optimizer' ); ?></th>
+						<th class="col-enabled"><?php esc_html_e( 'Enabled', 'fk-usps-optimizer' ); ?></th>
 						<th class="col-actions"></th>
 					</tr>
 				</thead>
 				<tbody>
 			<?php foreach ( $boxes as $i => $box ) : ?>
-					<tr>
+				<?php $is_enabled = ! array_key_exists( 'enabled', $box ) || (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN ); ?>
+					<tr class="<?php echo $is_enabled ? '' : 'fk-box-disabled'; ?>">
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][reference]" value="<?php echo esc_attr( $box['reference'] ?? '' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_code]" value="<?php echo esc_attr( $box['package_code'] ?? 'package' ); ?>" /></td>
 						<td><input type="text" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][package_name]" value="<?php echo esc_attr( $box['package_name'] ?? '' ); ?>" /></td>
@@ -333,20 +351,27 @@ class Settings {
 								<option value="fedex" <?php selected( $box['carrier_restriction'] ?? '', 'fedex' ); ?>>FedEx</option>
 							</select>
 						</td>
+						<td class="col-enabled">
+							<input type="hidden" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][enabled]" value="0" />
+							<label class="fk-enabled-label">
+								<input type="checkbox" class="fk-box-enabled" name="<?php echo esc_attr( $opt_key ); ?>[boxes][<?php echo (int) $i; ?>][enabled]" value="1" <?php checked( $is_enabled, true ); ?> />
+								<span class="screen-reader-text"><?php esc_html_e( 'Enabled', 'fk-usps-optimizer' ); ?></span>
+							</label>
+						</td>
 						<td><button type="button" class="button fk-remove-box">&times;</button></td>
 					</tr>
 			<?php endforeach; ?>
 				</tbody>
 				<tfoot>
 					<tr>
-						<td colspan="14">
+						<td colspan="15">
 							<button type="button" class="button button-secondary" id="fk-add-box"><?php esc_html_e( 'Add Box', 'fk-usps-optimizer' ); ?></button>
 						</td>
 					</tr>
 				</tfoot>
 			</table>
 			</div>
-			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes).', 'fk-usps-optimizer' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Add, edit or remove box definitions. Dimensions are in inches, tare weight in ounces, max weight in pounds. Use the Carrier column to restrict a box to a specific carrier (e.g. USPS Flat Rate boxes). Uncheck Enabled to temporarily exclude a box from rating without deleting it (e.g. when stock runs out).', 'fk-usps-optimizer' ); ?></p>
 			<?php
 			return;
 		}
@@ -464,16 +489,18 @@ class Settings {
 			}
 		}
 
-		$output['carrier']                   = ! empty( $selected_carriers ) ? implode( ',', array_unique( $selected_carriers ) ) : 'shipengine';
-		$output['debug_logging']             = empty( $input['debug_logging'] ) ? '0' : '1';
-		$output['sandbox_mode']              = empty( $input['sandbox_mode'] ) ? '0' : '1';
-		$output['show_all_options']          = empty( $input['show_all_options'] ) ? '0' : '1';
-		$output['show_package_count']        = empty( $input['show_package_count'] ) ? '0' : '1';
-		$output['add_package_note']          = empty( $input['add_package_note'] ) ? '0' : '1';
-		$output['show_estimated_delivery']   = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
-		$output['use_default_transit_days']  = empty( $input['use_default_transit_days'] ) ? '0' : '1';
-		$output['transit_days_buffer']       = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
-		$output['shipstation_services_json'] = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
+		$output['carrier']                        = ! empty( $selected_carriers ) ? implode( ',', array_unique( $selected_carriers ) ) : 'shipengine';
+		$output['debug_logging']                  = empty( $input['debug_logging'] ) ? '0' : '1';
+		$output['sandbox_mode']                   = empty( $input['sandbox_mode'] ) ? '0' : '1';
+		$output['show_all_options']               = empty( $input['show_all_options'] ) ? '0' : '1';
+		$output['show_package_count']             = empty( $input['show_package_count'] ) ? '0' : '1';
+		$output['add_package_note']               = empty( $input['add_package_note'] ) ? '0' : '1';
+		$output['add_packing_to_customer_note']   = empty( $input['add_packing_to_customer_note'] ) ? '0' : '1';
+		$output['show_estimated_delivery']        = empty( $input['show_estimated_delivery'] ) ? '0' : '1';
+		$output['use_default_transit_days']       = empty( $input['use_default_transit_days'] ) ? '0' : '1';
+		$output['transit_days_buffer']            = max( 0, min( 30, (int) ( $input['transit_days_buffer'] ?? 0 ) ) );
+		$output['shipstation_services_json']      = $this->sanitize_shipstation_services_json( $input['shipstation_services_json'] ?? '' );
+		$output['pirateship_notification_emails'] = $this->sanitize_email_list( (string) ( $input['pirateship_notification_emails'] ?? '' ) );
 
 		// Accept boxes from the new table UI (array of rows) or fall back to
 		// the legacy JSON textarea value for backward compatibility.
@@ -521,10 +548,30 @@ class Settings {
 				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
 				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
 				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
+				'enabled'             => $this->normalize_enabled_flag( $box ),
 			);
 		}
 
 		return wp_json_encode( $boxes );
+	}
+
+	/**
+	 * Normalise the `enabled` flag from a raw box array.
+	 *
+	 * Backward compatible: when the key is missing, defaults to true so that
+	 * previously-saved box definitions remain enabled until the admin
+	 * explicitly disables them.  Recognises common truthy/falsy
+	 * representations ('1'/'0', true/false, 'true'/'false', etc.).
+	 *
+	 * @param array $box Raw box record.
+	 * @return bool Whether the box is enabled.
+	 */
+	protected function normalize_enabled_flag( array $box ): bool {
+		if ( ! array_key_exists( 'enabled', $box ) ) {
+			return true;
+		}
+
+		return (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN );
 	}
 
 	/**
@@ -564,6 +611,7 @@ class Settings {
 				'empty_weight'        => abs( (float) ( $box['empty_weight'] ?? 0 ) ),
 				'max_weight'          => abs( (float) ( $box['max_weight'] ?? 0 ) ),
 				'carrier_restriction' => sanitize_text_field( (string) ( $box['carrier_restriction'] ?? '' ) ),
+				'enabled'             => $this->normalize_enabled_flag( $box ),
 			);
 		}
 
@@ -621,6 +669,63 @@ class Settings {
 	}
 
 	/**
+	 * Sanitize a comma-separated email list.
+	 *
+	 * Splits the input on commas, trims each address, validates with
+	 * `is_email()`, deduplicates and re-joins them as a comma-separated
+	 * string suitable for storage. Invalid entries are silently dropped
+	 * and an admin notice is emitted listing them so the user can correct
+	 * the input.
+	 *
+	 * @param string $raw Raw comma-separated email list.
+	 * @return string Sanitized comma-separated email list (may be empty).
+	 */
+	protected function sanitize_email_list( string $raw ): string {
+		$raw = trim( wp_unslash( $raw ) );
+
+		if ( '' === $raw ) {
+			return '';
+		}
+
+		$valid   = array();
+		$invalid = array();
+
+		// Allow both commas and newlines as separators for ease of entry.
+		$candidates = preg_split( '/[\s,;]+/', $raw );
+		if ( ! is_array( $candidates ) ) {
+			$candidates = array();
+		}
+
+		foreach ( $candidates as $candidate ) {
+			$candidate = sanitize_text_field( $candidate );
+
+			if ( '' === $candidate ) {
+				continue;
+			}
+
+			if ( is_email( $candidate ) ) {
+				$valid[] = $candidate;
+			} else {
+				$invalid[] = $candidate;
+			}
+		}
+
+		if ( ! empty( $invalid ) ) {
+			add_settings_error(
+				self::OPTION_KEY,
+				'invalid_pirateship_notification_emails',
+				sprintf(
+					/* translators: %s: comma-separated list of invalid email addresses. */
+					__( 'The following PirateShip notification email address(es) were invalid and have been removed: %s', 'fk-usps-optimizer' ),
+					implode( ', ', $invalid )
+				)
+			);
+		}
+
+		return implode( ',', array_unique( $valid ) );
+	}
+
+	/**
 	 * Get plugin settings merged with defaults.
 	 *
 	 * @return array Plugin settings merged with defaults.
@@ -631,34 +736,36 @@ class Settings {
 		return wp_parse_args(
 			$saved,
 			array(
-				'carrier'                   => 'shipengine',
-				'shipengine_api_key'        => '',
-				'shipengine_carrier_id'     => '',
-				'shipengine_service_code'   => 'usps_priority_mail',
-				'shipstation_api_key'       => '',
-				'shipstation_api_secret'    => '',
-				'shipstation_carrier_code'  => 'stamps_com',
-				'shipstation_service_code'  => 'usps_priority_mail',
-				'shipstation_services_json' => '',
-				'service_code'              => 'usps_priority_mail',
-				'sandbox_mode'              => '0',
-				'show_all_options'          => '0',
-				'show_package_count'        => '0',
-				'add_package_note'          => '0',
-				'show_estimated_delivery'   => '0',
-				'use_default_transit_days'  => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
-				'transit_days_buffer'       => 0,
-				'ship_from_name'            => '',
-				'ship_from_company'         => '',
-				'ship_from_phone'           => '',
-				'ship_from_address1'        => '',
-				'ship_from_address2'        => '',
-				'ship_from_city'            => '',
-				'ship_from_state'           => '',
-				'ship_from_postal_code'     => '',
-				'ship_from_country'         => 'US',
-				'debug_logging'             => '0',
-				'boxes_json'                => wp_json_encode( $this->get_default_boxes() ),
+				'carrier'                        => 'shipengine',
+				'shipengine_api_key'             => '',
+				'shipengine_carrier_id'          => '',
+				'shipengine_service_code'        => 'usps_priority_mail',
+				'shipstation_api_key'            => '',
+				'shipstation_api_secret'         => '',
+				'shipstation_carrier_code'       => 'stamps_com',
+				'shipstation_service_code'       => 'usps_priority_mail',
+				'shipstation_services_json'      => '',
+				'service_code'                   => 'usps_priority_mail',
+				'sandbox_mode'                   => '0',
+				'show_all_options'               => '0',
+				'show_package_count'             => '0',
+				'add_package_note'               => '0',
+				'add_packing_to_customer_note'   => '0',
+				'pirateship_notification_emails' => '',
+				'show_estimated_delivery'        => '0',
+				'use_default_transit_days'       => '1', // ON by default — preserves existing behaviour of falling back to built-in transit-day estimates.
+				'transit_days_buffer'            => 0,
+				'ship_from_name'                 => '',
+				'ship_from_company'              => '',
+				'ship_from_phone'                => '',
+				'ship_from_address1'             => '',
+				'ship_from_address2'             => '',
+				'ship_from_city'                 => '',
+				'ship_from_state'                => '',
+				'ship_from_postal_code'          => '',
+				'ship_from_country'              => 'US',
+				'debug_logging'                  => '0',
+				'boxes_json'                     => wp_json_encode( $this->get_default_boxes() ),
 			)
 		);
 	}
@@ -686,7 +793,7 @@ class Settings {
 	 * @return array Filtered array of box definitions.
 	 */
 	public function get_boxes_for_carrier( string $carrier ): array {
-		$boxes   = $this->get_boxes();
+		$boxes   = $this->get_enabled_boxes();
 		$carrier = strtolower( trim( $carrier ) );
 
 		if ( '' === $carrier ) {
@@ -704,6 +811,32 @@ class Settings {
 		}
 
 		return $filtered;
+	}
+
+	/**
+	 * Get only the box definitions that are currently enabled.
+	 *
+	 * Boxes can be temporarily disabled (e.g. when out of stock) without being
+	 * deleted.  A missing `enabled` key on a stored box is treated as enabled
+	 * for backward compatibility with previously-saved settings.
+	 *
+	 * @return array Array of enabled box definitions, re-indexed.
+	 */
+	public function get_enabled_boxes(): array {
+		$enabled = array();
+
+		foreach ( $this->get_boxes() as $box ) {
+			if ( ! is_array( $box ) ) {
+				continue;
+			}
+
+			// Default to enabled when the flag is missing (backward compatibility).
+			if ( ! array_key_exists( 'enabled', $box ) || (bool) filter_var( $box['enabled'], FILTER_VALIDATE_BOOLEAN ) ) {
+				$enabled[] = $box;
+			}
+		}
+
+		return $enabled;
 	}
 
 	/**
@@ -883,6 +1016,59 @@ class Settings {
 	}
 
 	/**
+	 * Check whether "Send Packing Plan to PirateShip via Customer Note" is enabled.
+	 *
+	 * When active, the packing plan is stored as private order meta and
+	 * injected into the `customer_note` field of WooCommerce REST API
+	 * responses so PirateShip can display it. The order's persisted
+	 * customer-note column is left untouched, so the plan never appears in
+	 * customer-facing surfaces (emails, My Account, invoices). The admin
+	 * order edit screen shows the plan in the existing
+	 * "USPS Priority Shipping Plan" metabox.
+	 *
+	 * @return bool Whether the option is enabled.
+	 */
+	public function is_add_packing_to_customer_note_enabled(): bool {
+		$settings = $this->get_settings();
+		return '1' === (string) ( $settings['add_packing_to_customer_note'] ?? '0' );
+	}
+
+	/**
+	 * Get the configured PirateShip notification email recipients.
+	 *
+	 * Returns the validated, deduplicated list of email addresses that
+	 * should receive the post-checkout PirateShip notification email.
+	 * Returns an empty array when no valid addresses are configured, in
+	 * which case the notification email should be skipped.
+	 *
+	 * @return string[] Array of valid recipient email addresses.
+	 */
+	public function get_pirateship_notification_emails(): array {
+		$settings = $this->get_settings();
+		$raw      = (string) ( $settings['pirateship_notification_emails'] ?? '' );
+
+		if ( '' === trim( $raw ) ) {
+			return (array) apply_filters( 'fk_usps_optimizer_pirateship_notification_emails', array() );
+		}
+
+		$emails     = array();
+		$candidates = preg_split( '/[\s,;]+/', $raw );
+		if ( ! is_array( $candidates ) ) {
+			$candidates = array();
+		}
+
+		foreach ( $candidates as $candidate ) {
+			$candidate = trim( $candidate );
+
+			if ( '' !== $candidate && is_email( $candidate ) ) {
+				$emails[] = $candidate;
+			}
+		}
+
+		return (array) apply_filters( 'fk_usps_optimizer_pirateship_notification_emails', array_values( array_unique( $emails ) ) );
+	}
+
+	/**
 	 * Check whether "Show Estimated Delivery Date" is enabled.
 	 *
 	 * When active, the carrier-provided estimated delivery date is appended
@@ -1050,6 +1236,7 @@ class Settings {
 				'empty_weight'        => 3,
 				'max_weight'          => 5,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '2 Bag',
@@ -1065,6 +1252,7 @@ class Settings {
 				'empty_weight'        => 5,
 				'max_weight'          => 9,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '3 Bag',
@@ -1080,6 +1268,7 @@ class Settings {
 				'empty_weight'        => 7,
 				'max_weight'          => 13,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => '4 Bag',
@@ -1095,6 +1284,7 @@ class Settings {
 				'empty_weight'        => 5,
 				'max_weight'          => 17,
 				'carrier_restriction' => '',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => 'USPS Medium Flat Rate',
@@ -1110,6 +1300,7 @@ class Settings {
 				'empty_weight'        => 6,
 				'max_weight'          => 70,
 				'carrier_restriction' => 'usps',
+				'enabled'             => true,
 			),
 			array(
 				'reference'           => 'USPS Large Flat Rate',
@@ -1125,6 +1316,7 @@ class Settings {
 				'empty_weight'        => 8,
 				'max_weight'          => 70,
 				'carrier_restriction' => 'usps',
+				'enabled'             => true,
 			),
 		);
 	}

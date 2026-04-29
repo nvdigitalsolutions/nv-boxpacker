@@ -2,7 +2,7 @@
 /**
  * Plugin Name: FunnelKit USPS Priority Shipping Optimizer
  * Description: Optimizes WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat rate boxes.
- * Version: 1.3.0
+ * Version: 1.3.5
  * Author: NV Digital Solutions
  * Author URI: https://nvdigitalsolutions.com
  * Requires at least: 6.0
@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'FK_USPS_OPTIMIZER_VERSION', '1.3.0' );
+define( 'FK_USPS_OPTIMIZER_VERSION', '1.3.5' );
 define( 'FK_USPS_OPTIMIZER_FILE', __FILE__ );
 define( 'FK_USPS_OPTIMIZER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FK_USPS_OPTIMIZER_URL', plugin_dir_url( __FILE__ ) );

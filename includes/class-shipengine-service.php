@@ -164,18 +164,24 @@ class ShipEngine_Service {
 	 * @return array[] All successful plans sorted by rate_amount ascending.
 	 */
 	protected function build_all_plans_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
-		$candidates   = $this->build_candidates( $package );
+		$candidates = $this->build_candidates( $package );
+
+		if ( empty( $candidates ) ) {
+			return array();
+		}
+
 		$service_code = $this->settings->get_shipengine_service_code();
+		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id );
 		$plans        = array();
 
-		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
+		foreach ( $candidates as $idx => $candidate ) {
+			$result = $results[ $idx ] ?? array( 'success' => false );
 
-			if ( ! $response['success'] ) {
+			if ( ! $result['success'] || empty( $result['rate'] ) ) {
 				continue;
 			}
 
-			$rate       = $response['rate'];
+			$rate       = $result['rate'];
 			$dimensions = $candidate['dimensions'];
 			$plans[]    = array(
 				'package_number'          => $package_number,
@@ -243,7 +249,38 @@ class ShipEngine_Service {
 			);
 		}
 
-		return $candidates;
+		return $this->cap_candidates( $candidates );
+	}
+
+	/**
+	 * Limit the candidate shipments to the smallest-volume N boxes.
+	 *
+	 * Larger boxes virtually never produce the cheapest rate, so rating
+	 * every fitting box wastes API calls and checkout latency.  Keeping
+	 * only the smallest fitting boxes preserves cheapest-rate selection
+	 * while drastically cutting roundtrips.  Filterable via
+	 * `fk_usps_optimizer_max_candidates` (default 3, 0 disables the cap).
+	 *
+	 * @param array $candidates Candidate shipments.
+	 * @return array Capped candidate list.
+	 */
+	protected function cap_candidates( array $candidates ): array {
+		$max = (int) apply_filters( 'fk_usps_optimizer_max_candidates', 3, $candidates );
+
+		if ( $max <= 0 || count( $candidates ) <= $max ) {
+			return $candidates;
+		}
+
+		usort(
+			$candidates,
+			static function ( array $a, array $b ): int {
+				$va = (float) $a['dimensions']['length'] * (float) $a['dimensions']['width'] * (float) $a['dimensions']['height'];
+				$vb = (float) $b['dimensions']['length'] * (float) $b['dimensions']['width'] * (float) $b['dimensions']['height'];
+				return $va <=> $vb;
+			}
+		);
+
+		return array_slice( $candidates, 0, $max );
 	}
 
 	/**
@@ -286,12 +323,59 @@ class ShipEngine_Service {
 	 * @return array Result with 'success' key and optionally 'rate'.
 	 */
 	protected function request_rate_for_address( array $ship_to, array $candidate, int $order_id = 0 ): array {
+		$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+
+		if ( null === $descriptor ) {
+			return array( 'success' => false );
+		}
+
+		if ( $descriptor['use_cache'] ) {
+			$cached = get_transient( $descriptor['cache_key'] );
+			if ( is_array( $cached ) && ! empty( $cached ) ) {
+				return array(
+					'success' => true,
+					'rate'    => $cached,
+				);
+			}
+		}
+
+		$response = wp_remote_post(
+			$descriptor['endpoint'],
+			array(
+				'timeout' => $descriptor['timeout'],
+				'headers' => $descriptor['headers'],
+				'body'    => wp_json_encode( $descriptor['payload'] ),
+			)
+		);
+
+		$result = $this->parse_rate_response( $response, $order_id );
+
+		if ( $result['success'] && $descriptor['use_cache'] ) {
+			$this->cache_rate_response( $descriptor['cache_key'], $result['rate'] );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Build a rate-request descriptor for a single ShipEngine candidate.
+	 *
+	 * Returns null when credentials are missing so the caller can short-
+	 * circuit without dispatching an HTTP request.  The returned descriptor
+	 * is consumed by both the single-call path and the parallel batch path.
+	 *
+	 * @param array $ship_to   ShipEngine-formatted destination address.
+	 * @param array $candidate Candidate shipment.
+	 * @param int   $order_id  Order ID for log context.
+	 * @return array|null Descriptor or null when the request cannot be built.
+	 */
+	protected function build_rate_request_descriptor( array $ship_to, array $candidate, int $order_id = 0 ): ?array {
 		$api_key    = $this->settings->get_shipengine_api_key();
 		$carrier_id = $this->settings->get_shipengine_carrier_id();
 
 		if ( '' === $api_key || '' === $carrier_id ) {
 			$this->log( 'Missing ShipEngine credentials.', array( 'order_id' => $order_id ) );
-			return array( 'success' => false );
+			return null;
 		}
 
 		$payload = array(
@@ -321,18 +405,36 @@ class ShipEngine_Service {
 			),
 		);
 
-		$response = wp_remote_post(
-			'https://api.shipengine.com/v1/rates',
-			array(
-				'timeout' => 30,
-				'headers' => array(
-					'API-Key'      => $api_key,
-					'Content-Type' => 'application/json',
-				),
-				'body'    => wp_json_encode( $payload ),
-			)
-		);
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
 
+		return array(
+			'payload'   => $payload,
+			'cache_key' => $this->build_rate_cache_key( $payload ),
+			'use_cache' => ! $this->settings->is_sandbox_mode_enabled(),
+			'endpoint'  => 'https://api.shipengine.com/v1/rates',
+			'headers'   => array(
+				'API-Key'      => $api_key,
+				'Content-Type' => 'application/json',
+			),
+			'timeout'   => $timeout,
+		);
+	}
+
+	/**
+	 * Parse a ShipEngine rate-call HTTP response into the cheapest rate.
+	 *
+	 * Logs and returns `['success' => false]` for transport errors, non-2xx
+	 * statuses, and empty rate lists.  On success, returns the cheapest rate
+	 * object.
+	 *
+	 * @param array|\WP_Error $response WordPress HTTP response.
+	 * @param int             $order_id Order ID for log context.
+	 * @return array ['success' => bool, 'rate' => array].
+	 */
+	protected function parse_rate_response( $response, int $order_id ): array {
 		if ( is_wp_error( $response ) ) {
 			$this->log(
 				'ShipEngine request failed.',
@@ -386,6 +488,196 @@ class ShipEngine_Service {
 			'success' => true,
 			'rate'    => $rates[0],
 		);
+	}
+
+	/**
+	 * Persist a successful cheapest-rate response into the transient cache.
+	 *
+	 * @param string $cache_key Transient key.
+	 * @param array  $rate      Cheapest rate object.
+	 * @return void
+	 */
+	protected function cache_rate_response( string $cache_key, array $rate ): void {
+		$ttl = (int) apply_filters( 'fk_usps_optimizer_rate_cache_ttl', 5 * MINUTE_IN_SECONDS );
+		if ( $ttl > 0 ) {
+			set_transient( $cache_key, $rate, $ttl );
+		}
+	}
+
+	/**
+	 * Fetch rates for many candidates using a single concurrent HTTP batch.
+	 *
+	 * Cache hits short-circuit the batch; only candidates that miss the
+	 * transient cache are dispatched.  When more than one candidate misses,
+	 * all misses fire concurrently via {@see dispatch_requests_multi()}.
+	 *
+	 * @param array $ship_to    Destination address.
+	 * @param array $candidates Candidate shipments.
+	 * @param int   $order_id   Order ID for log context.
+	 * @return array Map of candidate index ⇒ ['success' => bool, 'rate' => array].
+	 */
+	protected function fetch_rates_for_candidates( array $ship_to, array $candidates, int $order_id = 0 ): array {
+		$results   = array();
+		$pending   = array();
+		$req_specs = array();
+
+		foreach ( $candidates as $idx => $candidate ) {
+			$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+			if ( null === $descriptor ) {
+				$results[ $idx ] = array( 'success' => false );
+				continue;
+			}
+
+			if ( $descriptor['use_cache'] ) {
+				$cached = get_transient( $descriptor['cache_key'] );
+				if ( is_array( $cached ) && ! empty( $cached ) ) {
+					$results[ $idx ] = array(
+						'success' => true,
+						'rate'    => $cached,
+					);
+					continue;
+				}
+			}
+
+			$pending[ $idx ]   = $descriptor;
+			$req_specs[ $idx ] = array(
+				'url'     => $descriptor['endpoint'],
+				'headers' => $descriptor['headers'],
+				'data'    => wp_json_encode( $descriptor['payload'] ),
+				'timeout' => $descriptor['timeout'],
+			);
+		}
+
+		if ( ! empty( $req_specs ) ) {
+			$responses = $this->dispatch_requests_multi( $req_specs );
+			foreach ( $pending as $idx => $descriptor ) {
+				$response = $responses[ $idx ] ?? new \WP_Error( 'fk_usps_optimizer_no_response', 'No response from parallel dispatch.' );
+				$result   = $this->parse_rate_response( $response, $order_id );
+
+				$results[ $idx ] = $result;
+
+				if ( $result['success'] && $descriptor['use_cache'] ) {
+					$this->cache_rate_response( $descriptor['cache_key'], $result['rate'] );
+				}
+			}
+		}
+
+		ksort( $results );
+		return $results;
+	}
+
+	/**
+	 * Dispatch multiple HTTP POST requests concurrently.
+	 *
+	 * In production this uses `WpOrg\Requests\Requests::request_multiple()`
+	 * (bundled with WordPress 6.2+) to fire all requests on one wall-clock
+	 * roundtrip.  In unit tests the `_test_wp_requests_multiple` global stub
+	 * is honored when set; otherwise the implementation falls back to a
+	 * sequential loop of `wp_remote_post()` so existing tests keep working.
+	 *
+	 * @param array $requests Map of key ⇒ ['url'=>string, 'headers'=>array, 'data'=>string, 'timeout'=>int].
+	 * @return array Map of key ⇒ wp_remote_post()-shaped response or WP_Error.
+	 */
+	protected function dispatch_requests_multi( array $requests ): array {
+		if ( isset( $GLOBALS['_test_wp_requests_multiple'] ) && is_callable( $GLOBALS['_test_wp_requests_multiple'] ) ) {
+			$out = ( $GLOBALS['_test_wp_requests_multiple'] )( $requests );
+			if ( is_array( $out ) ) {
+				return $out;
+			}
+		}
+
+		if ( class_exists( '\WpOrg\Requests\Requests' ) ) {
+			$multi = array();
+			foreach ( $requests as $key => $req ) {
+				$multi[ $key ] = array(
+					'url'     => (string) ( $req['url'] ?? '' ),
+					'headers' => (array) ( $req['headers'] ?? array() ),
+					'data'    => (string) ( $req['data'] ?? '' ),
+					'type'    => \WpOrg\Requests\Requests::POST,
+					'options' => array(
+						'timeout' => (int) ( $req['timeout'] ?? 8 ),
+					),
+				);
+			}
+
+			try {
+				$raw = \WpOrg\Requests\Requests::request_multiple( $multi );
+			} catch ( \Throwable $e ) {
+				$raw = null;
+			}
+
+			if ( is_array( $raw ) ) {
+				$out = array();
+				foreach ( $raw as $key => $resp ) {
+					if ( $resp instanceof \Throwable ) {
+						$out[ $key ] = new \WP_Error( 'http_request_failed', $resp->getMessage() );
+					} elseif ( is_object( $resp ) && property_exists( $resp, 'status_code' ) ) {
+						$out[ $key ] = array(
+							'response' => array( 'code' => (int) $resp->status_code ),
+							'body'     => isset( $resp->body ) ? (string) $resp->body : '',
+						);
+					} else {
+						$out[ $key ] = new \WP_Error( 'http_request_failed', 'Unexpected parallel response shape.' );
+					}
+				}
+				return $out;
+			}
+		}
+
+		// Sequential fallback.
+		$out = array();
+		foreach ( $requests as $key => $req ) {
+			$out[ $key ] = wp_remote_post(
+				(string) ( $req['url'] ?? '' ),
+				array(
+					'timeout' => (int) ( $req['timeout'] ?? 8 ),
+					'headers' => (array) ( $req['headers'] ?? array() ),
+					'body'    => (string) ( $req['data'] ?? '' ),
+				)
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Build a deterministic transient cache key for a ShipEngine rate request.
+	 *
+	 * The key incorporates only the inputs that materially change the rate:
+	 * carrier id list, service code, package code, origin ZIP, destination
+	 * ZIP/state/country, dimensions, and weight.  Semantically identical
+	 * requests therefore share a cache entry across sessions and shoppers.
+	 *
+	 * @param array $payload ShipEngine /v1/rates payload.
+	 * @return string Transient key.
+	 */
+	protected function build_rate_cache_key( array $payload ): string {
+		$shipment    = $payload['shipment'] ?? array();
+		$ship_to     = $shipment['ship_to'] ?? array();
+		$ship_from   = $shipment['ship_from'] ?? array();
+		$package     = $shipment['packages'][0] ?? array();
+		$dimensions  = $package['dimensions'] ?? array();
+		$weight      = $package['weight'] ?? array();
+		$carrier_ids = $payload['rate_options']['carrier_ids'] ?? array();
+
+		$signature = implode(
+			'|',
+			array(
+				implode( ',', (array) $carrier_ids ),
+				(string) ( $shipment['service_code'] ?? '' ),
+				(string) ( $package['package_code'] ?? '' ),
+				(string) ( $ship_from['postal_code'] ?? '' ),
+				(string) ( $ship_to['country_code'] ?? '' ),
+				(string) ( $ship_to['state_province'] ?? '' ),
+				(string) ( $ship_to['postal_code'] ?? '' ),
+				(string) ( $dimensions['length'] ?? '' ),
+				(string) ( $dimensions['width'] ?? '' ),
+				(string) ( $dimensions['height'] ?? '' ),
+				(string) ( $weight['value'] ?? '' ),
+				(string) ( $weight['unit'] ?? '' ),
+			)
+		);
+
+		return 'fk_usps_opt_se_' . md5( $signature );
 	}
 
 	/**
@@ -619,10 +911,15 @@ class ShipEngine_Service {
 			);
 		}
 
+		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
+		if ( $timeout < 1 ) {
+			$timeout = 1;
+		}
+
 		$response = wp_remote_get(
 			'https://api.shipengine.com/v1/carriers',
 			array(
-				'timeout' => 30,
+				'timeout' => $timeout,
 				'headers' => array(
 					'API-Key'      => $api_key,
 					'Content-Type' => 'application/json',

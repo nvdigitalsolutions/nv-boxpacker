@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/fix-ups-service-display-bug',
-        'version' => 'dev-copilot/fix-ups-service-display-bug',
-        'reference' => 'fe9ce415f791ffaddbe9a83201e97f0157e80fa5',
+        'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+        'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+        'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/fix-ups-service-display-bug',
-            'version' => 'dev-copilot/fix-ups-service-display-bug',
-            'reference' => 'fe9ce415f791ffaddbe9a83201e97f0157e80fa5',
+            'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+            'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
+            'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

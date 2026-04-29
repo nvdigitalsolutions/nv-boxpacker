@@ -173,6 +173,7 @@ class AdminUiTest extends TestCase {
 		$this->assertStringContainsString( '8.50', $output );        // rate
 		$this->assertStringContainsString( '8', $output );           // dimension
 		$this->assertStringContainsString( 'oz', $output );          // weight unit
+		$this->assertStringContainsString( 'Service: USPS Priority Mail', $output );
 	}
 
 	public function test_render_meta_box_shows_cubic_tier_when_present(): void {
@@ -279,6 +280,7 @@ class AdminUiTest extends TestCase {
 				'package_code'   => 'package',
 				'package_name'   => 'Custom Cubic Small',
 				'service_code'   => 'usps_priority_mail',
+				'service_label'  => 'USPS Priority Mail',
 				'rate_amount'    => $per_pkg,
 				'currency'       => 'USD',
 				'weight_oz'      => 22.0,

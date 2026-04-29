@@ -31,11 +31,13 @@ class ShipEngineServiceTest extends TestCase {
 	private ShipEngine_Service $service;
 
 	protected function setUp(): void {
-		$GLOBALS['_test_wp_remote_post'] = null;
-		$GLOBALS['_test_wp_remote_get']  = null;
-		$GLOBALS['_test_wc_logger']      = new \WC_Test_Logger();
-		$GLOBALS['_test_wp_filters']     = array();
-		$GLOBALS['_test_wp_options']     = array();
+		$GLOBALS['_test_wp_remote_post']       = null;
+		$GLOBALS['_test_wp_remote_get']        = null;
+		$GLOBALS['_test_wc_logger']            = new \WC_Test_Logger();
+		$GLOBALS['_test_wp_filters']           = array();
+		$GLOBALS['_test_wp_options']           = array();
+		$GLOBALS['_test_wp_transients']        = array();
+		$GLOBALS['_test_wp_requests_multiple'] = null;
 
 		$this->settings = $this->createMock( Settings::class );
 		$this->service  = new ShipEngine_Service( $this->settings );
@@ -1161,5 +1163,220 @@ class ShipEngineServiceTest extends TestCase {
 		// 3 transit calendar days → Thu Jan 4; + 2 business days (Fri, Mon) → 2024-01-08.
 		$result = $this->call_protected( 'compute_delivery_date', array( 3 ) );
 		$this->assertSame( '2024-01-08', $result );
+	}
+
+	// -------------------------------------------------------------------------
+	// Phase 2 optimizations: parallel HTTP dispatch via Requests::request_multiple.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Build N boxes with distinct package_codes / dimensions so each yields
+	 * a separate cache key and a separate parallel request.
+	 *
+	 * @param int $count Number of boxes to build.
+	 * @return array[]
+	 */
+	private function make_distinct_boxes( int $count ): array {
+		$boxes = array();
+		for ( $i = 0; $i < $count; $i++ ) {
+			$dim     = 6 + $i;
+			$boxes[] = $this->make_box(
+				array(
+					'reference'    => 'Box ' . $i,
+					'package_code' => 'package_' . $i,
+					'package_name' => 'Box ' . $i,
+					'outer_width'  => (float) $dim,
+					'outer_length' => (float) $dim,
+					'outer_depth'  => (float) $dim,
+					'inner_width'  => (float) $dim,
+					'inner_length' => (float) $dim,
+					'inner_depth'  => (float) $dim,
+				)
+			);
+		}
+		return $boxes;
+	}
+
+	private function make_phase2_settings( array $boxes ): Settings {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'get_boxes_for_carrier' )->willReturn( $boxes );
+		$settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+		$settings->method( 'get_ship_from_address' )->willReturn(
+			array(
+				'address_line1'  => '1 From St',
+				'city_locality'  => 'City',
+				'state_province' => 'CA',
+				'postal_code'    => '90210',
+				'country_code'   => 'US',
+			)
+		);
+		return $settings;
+	}
+
+	private function make_se_ship_to(): array {
+		return array( 'postal_code' => '78701', 'country_code' => 'US' );
+	}
+
+	public function test_se_build_all_plans_dispatches_a_single_parallel_batch(): void {
+		$service = new ShipEngine_Service( $this->make_phase2_settings( $this->make_distinct_boxes( 3 ) ) );
+
+		$batch_calls    = 0;
+		$last_batch_size = 0;
+
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) use ( &$batch_calls, &$last_batch_size ) {
+			++$batch_calls;
+			$last_batch_size = count( $requests );
+
+			$responses = array();
+			$amount    = 5.00;
+			foreach ( $requests as $key => $req ) {
+				$responses[ $key ] = array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						'rate_response' => array(
+							'rates' => array(
+								array( 'shipping_amount' => array( 'amount' => $amount, 'currency' => 'USD' ) ),
+							),
+						),
+					) ),
+				);
+				$amount += 1.00;
+			}
+			return $responses;
+		};
+
+		// Anything that leaks to wp_remote_post should fail.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => '',
+		);
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_se_ship_to(), 1 );
+
+		$this->assertSame( 1, $batch_calls, 'Parallel dispatch should be invoked exactly once.' );
+		$this->assertSame( 3, $last_batch_size, 'Batch should contain one spec per candidate.' );
+		$this->assertCount( 3, $plans );
+		$this->assertSame( 5.00, $plans[0]['rate_amount'] );
+		$this->assertSame( 6.00, $plans[1]['rate_amount'] );
+		$this->assertSame( 7.00, $plans[2]['rate_amount'] );
+	}
+
+	public function test_se_build_all_plans_excludes_cache_hits_from_parallel_batch(): void {
+		$service = new ShipEngine_Service( $this->make_phase2_settings( $this->make_distinct_boxes( 3 ) ) );
+
+		$ship_to    = $this->make_se_ship_to();
+		$candidates = $this->call_protected_on( $service, 'build_candidates', array( $this->make_package() ) );
+		$this->assertCount( 3, $candidates );
+
+		// Pre-warm two of the three.
+		foreach ( array( 0, 2 ) as $idx ) {
+			$descriptor = $this->call_protected_on( $service, 'build_rate_request_descriptor', array( $ship_to, $candidates[ $idx ], 0 ) );
+			$this->assertNotNull( $descriptor );
+			set_transient(
+				$descriptor['cache_key'],
+				array( 'shipping_amount' => array( 'amount' => 1.23 + $idx, 'currency' => 'USD' ) ),
+				300
+			);
+		}
+
+		$batch_specs                          = array();
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) use ( &$batch_specs ) {
+			$batch_specs = $requests;
+			$out         = array();
+			foreach ( $requests as $key => $req ) {
+				$out[ $key ] = array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						'rate_response' => array(
+							'rates' => array(
+								array( 'shipping_amount' => array( 'amount' => 9.99, 'currency' => 'USD' ) ),
+							),
+						),
+					) ),
+				);
+			}
+			return $out;
+		};
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $batch_specs );
+		$this->assertSame( array( 1 ), array_keys( $batch_specs ) );
+		$this->assertCount( 3, $plans );
+
+		$rates = array_map( static fn( array $p ) => $p['rate_amount'], $plans );
+		sort( $rates );
+		$this->assertSame( array( 1.23, 3.23, 9.99 ), $rates );
+	}
+
+	public function test_se_build_all_plans_skips_failed_parallel_response(): void {
+		$service = new ShipEngine_Service( $this->make_phase2_settings( $this->make_distinct_boxes( 2 ) ) );
+
+		$GLOBALS['_test_wp_requests_multiple'] = function ( array $requests ) {
+			$out   = array();
+			$first = true;
+			foreach ( $requests as $key => $req ) {
+				if ( $first ) {
+					$out[ $key ] = new \WP_Error( 'http_request_failed', 'cURL error 28' );
+					$first       = false;
+				} else {
+					$out[ $key ] = array(
+						'response' => array( 'code' => 200 ),
+						'body'     => json_encode( array(
+							'rate_response' => array(
+								'rates' => array(
+									array( 'shipping_amount' => array( 'amount' => 4.50, 'currency' => 'USD' ) ),
+								),
+							),
+						) ),
+					);
+				}
+			}
+			return $out;
+		};
+
+		$plans = $service->build_all_test_package_plans( $this->make_package(), $this->make_se_ship_to(), 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 4.50, $plans[0]['rate_amount'] );
+	}
+
+	public function test_se_dispatch_requests_multi_falls_back_to_sequential_wp_remote_post(): void {
+		$call_count                       = 0;
+		$urls                             = array();
+		$GLOBALS['_test_wp_remote_post'] = function ( string $url ) use ( &$call_count, &$urls ) {
+			++$call_count;
+			$urls[] = $url;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '{}',
+			);
+		};
+
+		$out = $this->call_protected(
+			'dispatch_requests_multi',
+			array(
+				array(
+					'a' => array( 'url' => 'https://a.example/x', 'headers' => array(), 'data' => '{}', 'timeout' => 8 ),
+					'b' => array( 'url' => 'https://b.example/y', 'headers' => array(), 'data' => '{}', 'timeout' => 8 ),
+				),
+			)
+		);
+
+		$this->assertSame( 2, $call_count );
+		$this->assertSame( array( 'https://a.example/x', 'https://b.example/y' ), $urls );
+		$this->assertArrayHasKey( 'a', $out );
+		$this->assertArrayHasKey( 'b', $out );
+	}
+
+	private function call_protected_on( object $instance, string $method, array $args = array() ) {
+		$ref = new \ReflectionMethod( $instance, $method );
+		$ref->setAccessible( true );
+		return $ref->invokeArgs( $instance, $args );
 	}
 }

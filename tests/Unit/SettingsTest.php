@@ -633,6 +633,133 @@ class SettingsTest extends TestCase {
 		$this->assertSame( 'usps', $decoded[0]['carrier_restriction'] );
 	}
 
+	// -------------------------------------------------------------------------
+	// enabled flag (sanitizers)
+	// -------------------------------------------------------------------------
+
+	public function test_sanitize_boxes_array_defaults_enabled_to_true_when_missing(): void {
+		$rows = array(
+			array(
+				'reference'    => 'Box A',
+				'package_code' => 'package',
+				'max_weight'   => '5',
+			),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertTrue( $decoded[0]['enabled'] );
+	}
+
+	public function test_sanitize_boxes_array_persists_disabled_when_zero_string(): void {
+		$rows = array(
+			array(
+				'reference'    => 'Box A',
+				'package_code' => 'package',
+				'max_weight'   => '5',
+				'enabled'      => '0',
+			),
+			array(
+				'reference'    => 'Box B',
+				'package_code' => 'package',
+				'max_weight'   => '5',
+				'enabled'      => '1',
+			),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertFalse( $decoded[0]['enabled'] );
+		$this->assertTrue( $decoded[1]['enabled'] );
+	}
+
+	public function test_sanitize_boxes_array_accepts_boolean_enabled(): void {
+		$rows = array(
+			array( 'reference' => 'A', 'package_code' => 'package', 'max_weight' => '5', 'enabled' => true ),
+			array( 'reference' => 'B', 'package_code' => 'package', 'max_weight' => '5', 'enabled' => false ),
+		);
+
+		$result  = $this->call_protected( 'sanitize_boxes_array', array( $rows ) );
+		$decoded = json_decode( $result, true );
+
+		$this->assertTrue( $decoded[0]['enabled'] );
+		$this->assertFalse( $decoded[1]['enabled'] );
+	}
+
+	public function test_sanitize_boxes_json_defaults_enabled_to_true_when_missing(): void {
+		$boxes  = array( array( 'reference' => 'X', 'package_code' => 'package', 'package_name' => 'X', 'box_type' => 'cubic', 'outer_width' => 8, 'outer_length' => 8, 'outer_depth' => 6, 'inner_width' => 8, 'inner_length' => 8, 'inner_depth' => 6, 'empty_weight' => 3, 'max_weight' => 20 ) );
+		$result = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+
+		$decoded = json_decode( $result, true );
+		$this->assertTrue( $decoded[0]['enabled'] );
+	}
+
+	public function test_sanitize_boxes_json_persists_disabled_flag(): void {
+		$boxes  = array( array( 'reference' => 'X', 'package_code' => 'package', 'package_name' => 'X', 'box_type' => 'cubic', 'outer_width' => 8, 'outer_length' => 8, 'outer_depth' => 6, 'inner_width' => 8, 'inner_length' => 8, 'inner_depth' => 6, 'empty_weight' => 3, 'max_weight' => 20, 'enabled' => false ) );
+		$result = $this->call_protected( 'sanitize_boxes_json', array( json_encode( $boxes ) ) );
+
+		$decoded = json_decode( $result, true );
+		$this->assertFalse( $decoded[0]['enabled'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// get_enabled_boxes
+	// -------------------------------------------------------------------------
+
+	public function test_get_enabled_boxes_excludes_disabled_entries(): void {
+		$boxes = array(
+			array( 'reference' => 'On',  'enabled' => true ),
+			array( 'reference' => 'Off', 'enabled' => false ),
+			array( 'reference' => 'Default' ), // missing -> treated as enabled.
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_enabled_boxes();
+		$refs   = array_column( $result, 'reference' );
+
+		$this->assertContains( 'On', $refs );
+		$this->assertContains( 'Default', $refs );
+		$this->assertNotContains( 'Off', $refs );
+	}
+
+	public function test_get_boxes_for_carrier_excludes_disabled_boxes(): void {
+		$boxes = array(
+			array( 'reference' => 'USPS On',  'carrier_restriction' => 'usps', 'enabled' => true ),
+			array( 'reference' => 'USPS Off', 'carrier_restriction' => 'usps', 'enabled' => false ),
+			array( 'reference' => 'Any On',   'carrier_restriction' => '',     'enabled' => true ),
+			array( 'reference' => 'Any Off',  'carrier_restriction' => '',     'enabled' => false ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes_for_carrier( 'usps' );
+		$refs   = array_column( $result, 'reference' );
+
+		$this->assertContains( 'USPS On', $refs );
+		$this->assertContains( 'Any On', $refs );
+		$this->assertNotContains( 'USPS Off', $refs );
+		$this->assertNotContains( 'Any Off', $refs );
+	}
+
+	public function test_get_boxes_includes_disabled_boxes_for_admin_listing(): void {
+		// The admin UI must still see all rows (so they can be re-enabled).
+		$boxes = array(
+			array( 'reference' => 'On',  'enabled' => true ),
+			array( 'reference' => 'Off', 'enabled' => false ),
+		);
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'boxes_json' => json_encode( $boxes ),
+		);
+
+		$result = $this->settings->get_boxes();
+		$this->assertCount( 2, $result );
+	}
+
 	public function test_sanitize_settings_accepts_boxes_array_from_table_ui(): void {
 		$input = array(
 			'boxes' => array(
@@ -680,13 +807,20 @@ class SettingsTest extends TestCase {
 	}
 
 	public function test_get_default_boxes_each_entry_has_required_keys(): void {
-		$required = array( 'reference', 'package_code', 'package_name', 'box_type', 'outer_width', 'outer_length', 'outer_depth', 'inner_width', 'inner_length', 'inner_depth', 'empty_weight', 'max_weight', 'carrier_restriction' );
+		$required = array( 'reference', 'package_code', 'package_name', 'box_type', 'outer_width', 'outer_length', 'outer_depth', 'inner_width', 'inner_length', 'inner_depth', 'empty_weight', 'max_weight', 'carrier_restriction', 'enabled' );
 		$defaults = $this->call_protected( 'get_default_boxes' );
 
 		foreach ( $defaults as $box ) {
 			foreach ( $required as $key ) {
 				$this->assertArrayHasKey( $key, $box, "Default box missing key: $key" );
 			}
+		}
+	}
+
+	public function test_get_default_boxes_are_enabled_by_default(): void {
+		$defaults = $this->call_protected( 'get_default_boxes' );
+		foreach ( $defaults as $box ) {
+			$this->assertTrue( $box['enabled'], 'Default boxes should ship enabled.' );
 		}
 	}
 
@@ -1254,6 +1388,67 @@ class SettingsTest extends TestCase {
 
 		$this->assertStringContainsString( '<textarea', $output );
 		$this->assertStringContainsString( 'shipstation_services_json', $output );
+	}
+
+	// -------------------------------------------------------------------------
+	// pirateship_notification_emails — sanitize, accessor, render
+	// -------------------------------------------------------------------------
+
+	public function test_sanitize_settings_keeps_valid_emails_comma_separated(): void {
+		$input  = array( 'pirateship_notification_emails' => 'a@example.com, b@example.com' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'a@example.com,b@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_accepts_newlines_and_semicolons_as_separators(): void {
+		$input  = array( 'pirateship_notification_emails' => "a@example.com\nb@example.com;c@example.com" ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'a@example.com,b@example.com,c@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_drops_invalid_emails_and_records_setting_error(): void {
+		$input  = array( 'pirateship_notification_emails' => 'good@example.com, not-an-email, also-bad@' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+
+		$this->assertSame( 'good@example.com', $result['pirateship_notification_emails'] );
+		$found = false;
+		foreach ( $GLOBALS['_test_settings_errors'] as $err ) {
+			if ( 'invalid_pirateship_notification_emails' === ( $err['code'] ?? '' ) ) {
+				$found = true;
+				break;
+			}
+		}
+		$this->assertTrue( $found, 'Expected a settings error for invalid email entries.' );
+	}
+
+	public function test_sanitize_settings_deduplicates_emails(): void {
+		$input  = array( 'pirateship_notification_emails' => 'x@example.com, x@example.com, y@example.com' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( 'x@example.com,y@example.com', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_sanitize_settings_pirateship_emails_empty_when_blank(): void {
+		$input  = array( 'pirateship_notification_emails' => '   ' ) + $this->empty_settings_input();
+		$result = $this->settings->sanitize_settings( $input );
+		$this->assertSame( '', $result['pirateship_notification_emails'] );
+	}
+
+	public function test_get_pirateship_notification_emails_returns_array(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array( 'pirateship_notification_emails' => 'a@example.com,b@example.com' );
+		$this->assertSame( array( 'a@example.com', 'b@example.com' ), $this->settings->get_pirateship_notification_emails() );
+	}
+
+	public function test_get_pirateship_notification_emails_returns_empty_array_when_unset(): void {
+		$this->assertSame( array(), $this->settings->get_pirateship_notification_emails() );
+	}
+
+	public function test_render_field_outputs_textarea_for_pirateship_notification_emails(): void {
+		ob_start();
+		$this->settings->render_field( array( 'key' => 'pirateship_notification_emails' ) );
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( '<textarea', $output );
+		$this->assertStringContainsString( 'pirateship_notification_emails', $output );
 	}
 
 	// -------------------------------------------------------------------------

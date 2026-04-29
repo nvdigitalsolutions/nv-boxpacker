@@ -247,4 +247,143 @@ class PirateShipExportTest extends TestCase {
 		$this->export->register();
 		$this->assertTrue( true );
 	}
+
+	// -------------------------------------------------------------------------
+	// build_csv_string
+	// -------------------------------------------------------------------------
+
+	public function test_build_csv_string_includes_header_and_row_for_each_pirateship_row(): void {
+		$order = $this->make_order( 555 );
+		$plan  = array(
+			'pirateship_rows' => array(
+				$this->export->build_row( $order, $this->make_package_plan( array( 'package_number' => 1 ) ) ),
+				$this->export->build_row( $order, $this->make_package_plan( array( 'package_number' => 2 ) ) ),
+			),
+		);
+
+		$csv = $this->export->build_csv_string( $order, $plan );
+		$lines = array_values( array_filter( explode( "\n", trim( $csv ) ) ) );
+
+		$this->assertCount( 3, $lines, 'Expected header + 2 data rows.' );
+		$this->assertStringContainsString( 'order_number', $lines[0] );
+		$this->assertStringContainsString( '555', $lines[1] );
+	}
+
+	public function test_build_csv_string_falls_back_to_packages_when_no_rows_present(): void {
+		$order = $this->make_order( 777 );
+		$plan  = array(
+			'packages' => array( $this->make_package_plan() ),
+		);
+
+		$csv = $this->export->build_csv_string( $order, $plan );
+
+		$this->assertStringContainsString( '777', $csv );
+		$this->assertStringContainsString( 'order_number', $csv );
+	}
+
+	// -------------------------------------------------------------------------
+	// build_email_body
+	// -------------------------------------------------------------------------
+
+	public function test_build_email_body_contains_order_number_and_address(): void {
+		$order = $this->make_order( 909 );
+		$plan  = array(
+			'total_package_count' => 1,
+			'total_rate_amount'   => 8.99,
+			'packages'            => array( $this->make_package_plan() ),
+		);
+
+		$body = $this->export->build_email_body( $order, $plan );
+
+		$this->assertStringContainsString( '909', $body );
+		$this->assertStringContainsString( 'Jane Doe', $body );
+		$this->assertStringContainsString( '123 Main St', $body );
+		$this->assertStringContainsString( 'Tucson', $body );
+		$this->assertStringContainsString( 'Custom Cubic Small', $body );
+	}
+
+	// -------------------------------------------------------------------------
+	// send_order_notification
+	// -------------------------------------------------------------------------
+
+	public function test_send_order_notification_returns_false_when_no_recipients(): void {
+		$this->settings->method( 'get_pirateship_notification_emails' )->willReturn( array() );
+
+		$order = $this->make_order();
+		$plan  = array( 'packages' => array( $this->make_package_plan() ) );
+
+		$GLOBALS['_test_wp_mail'] = array();
+
+		$this->assertFalse( $this->export->send_order_notification( $order, $plan ) );
+		$this->assertEmpty( $GLOBALS['_test_wp_mail'] );
+	}
+
+	public function test_send_order_notification_returns_false_when_plan_has_no_packages(): void {
+		$this->settings->method( 'get_pirateship_notification_emails' )->willReturn( array( 'a@example.com' ) );
+
+		$GLOBALS['_test_wp_mail'] = array();
+
+		$this->assertFalse( $this->export->send_order_notification( $this->make_order(), array() ) );
+		$this->assertEmpty( $GLOBALS['_test_wp_mail'] );
+	}
+
+	public function test_send_order_notification_calls_wp_mail_with_csv_attachment(): void {
+		$this->settings->method( 'get_pirateship_notification_emails' )->willReturn( array( 'shipping@example.com' ) );
+
+		$order = $this->make_order( 321 );
+		$plan  = array(
+			'total_package_count' => 1,
+			'total_rate_amount'   => 8.99,
+			'packages'            => array( $this->make_package_plan() ),
+			'pirateship_rows'     => array( $this->export->build_row( $this->make_order( 321 ), $this->make_package_plan() ) ),
+		);
+
+		$GLOBALS['_test_wp_mail']        = array();
+		$GLOBALS['_test_wp_mail_return'] = true;
+
+		$result = $this->export->send_order_notification( $order, $plan );
+
+		$this->assertTrue( $result );
+		$this->assertCount( 1, $GLOBALS['_test_wp_mail'] );
+
+		$call = $GLOBALS['_test_wp_mail'][0];
+		$this->assertSame( array( 'shipping@example.com' ), $call['to'] );
+		$this->assertStringContainsString( '321', $call['subject'] );
+		$this->assertStringContainsString( '321', $call['message'] );
+		$this->assertNotEmpty( $call['attachments'] );
+
+		$attachment_path = $call['attachments'][0];
+		// The file is removed after wp_mail returns, so the test only
+		// verifies that the attachment argument was a non-empty string
+		// pointing at the temp file the export wrote.
+		$this->assertIsString( $attachment_path );
+		$this->assertNotSame( '', $attachment_path );
+
+		// The attachment must be sent with a `.csv` extension so the
+		// recipient sees a real CSV file, not the `.tmp` file produced
+		// by `wp_tempnam()`.
+		$this->assertStringEndsWith( '.csv', $attachment_path );
+		$this->assertStringContainsString( 'pirateship-order-321', basename( $attachment_path ) );
+
+		// Cleanup any stray temp file the stub may have left behind.
+		if ( file_exists( $attachment_path ) ) {
+			@unlink( $attachment_path );
+		}
+	}
+
+	public function test_send_order_notification_returns_false_when_wp_mail_fails(): void {
+		$this->settings->method( 'get_pirateship_notification_emails' )->willReturn( array( 'shipping@example.com' ) );
+
+		$plan = array(
+			'packages'        => array( $this->make_package_plan() ),
+			'pirateship_rows' => array( $this->export->build_row( $this->make_order(), $this->make_package_plan() ) ),
+		);
+
+		$GLOBALS['_test_wp_mail']        = array();
+		$GLOBALS['_test_wp_mail_return'] = false;
+
+		$this->assertFalse( $this->export->send_order_notification( $this->make_order(), $plan ) );
+
+		$GLOBALS['_test_wp_mail_return'] = true;
+	}
 }

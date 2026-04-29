@@ -28,6 +28,35 @@ require_once FK_USPS_OPTIMIZER_PATH . 'includes/class-admin-test-ui.php';
  */
 class Plugin {
 	/**
+	 * Order meta key under which the rendered packing-plan note text is
+	 * stored. This is the canonical home for the plan; it is rendered in
+	 * the admin "USPS Priority Shipping Plan" metabox and injected into
+	 * the `customer_note` field of WooCommerce REST API responses so
+	 * PirateShip continues to receive it without the value ever being
+	 * persisted in the order's customer-note column.
+	 *
+	 * @var string
+	 */
+	const PACKING_NOTE_META_KEY = '_fk_packing_plan_note';
+
+	/**
+	 * Legacy opening marker that previous versions wrote into the order's
+	 * customer note. Kept only so we can clean any pre-upgrade orders by
+	 * stripping the marker block on first re-process. Not written by new
+	 * code.
+	 *
+	 * @var string
+	 */
+	const PACKING_NOTE_START_MARKER = '<!-- fk-pack-start -->';
+
+	/**
+	 * Legacy closing marker (see PACKING_NOTE_START_MARKER).
+	 *
+	 * @var string
+	 */
+	const PACKING_NOTE_END_MARKER = '<!-- fk-pack-end -->';
+
+	/**
 	 * Singleton plugin instance.
 	 *
 	 * @var Plugin|null
@@ -144,6 +173,14 @@ class Plugin {
 
 		add_action( 'woocommerce_checkout_order_processed', array( $this, 'process_order' ), 20, 3 );
 		add_action( 'wp_ajax_fk_usps_test_connection', array( $this, 'handle_test_connection_ajax' ) );
+
+		// Inject the stored packing-plan text into the `customer_note` field
+		// of WooCommerce REST API order responses so PirateShip (and other
+		// REST consumers) receive the plan alongside the order. The plan is
+		// never written into the order's stored customer-note column, so it
+		// cannot leak into customer emails, the My Account page, the admin
+		// order screen or invoices.
+		add_filter( 'woocommerce_rest_prepare_shop_order_object', array( $this, 'inject_packing_plan_into_rest_response' ), 10, 3 );
 	}
 
 	/**
@@ -236,6 +273,27 @@ class Plugin {
 
 		if ( $this->settings->is_add_package_note_enabled() && ! empty( $plan['packages'] ) ) {
 			$order->add_order_note( $this->build_package_note( $plan ) );
+		}
+
+		if ( $this->settings->is_add_packing_to_customer_note_enabled() && ! empty( $plan['packages'] ) ) {
+			$this->store_packing_plan_note( $order, $plan );
+		}
+
+		// Email the packing plan + PirateShip CSV to the configured
+		// recipients (if any) so shipping staff can import the CSV
+		// directly into PirateShip without first opening the order.
+		if ( ! empty( $plan['packages'] ) && ! empty( $this->settings->get_pirateship_notification_emails() ) ) {
+			try {
+				$this->export_service->send_order_notification( $order, $plan );
+			} catch ( \Throwable $throwable ) {
+				$this->log(
+					'PirateShip notification email failed',
+					array(
+						'order_id' => $order->get_id(),
+						'error'    => $throwable->getMessage(),
+					)
+				);
+			}
 		}
 	}
 
@@ -375,14 +433,82 @@ class Plugin {
 				if ( empty( $pairs ) ) {
 					// No pairs configured; use the default singleton.
 					$services[] = $this->shipstation_service;
+					continue;
 				}
 
-				// Create one instance per pair with explicit overrides.
+				// Group pairs by carrier_code so we can issue one API call per
+				// carrier instead of one per (carrier, service) pair.  When a
+				// carrier has multiple configured services we ask the API for
+				// "all services" (empty service_code) and filter the response
+				// to the configured services via the allow-list.
+				$grouped = array();
 				foreach ( $pairs as $pair ) {
+					$carrier_code = (string) ( $pair['carrier_code'] ?? '' );
+					$service_code = (string) ( $pair['service_code'] ?? '' );
+
+					if ( '' === $carrier_code ) {
+						continue;
+					}
+
+					if ( ! isset( $grouped[ $carrier_code ] ) ) {
+						$grouped[ $carrier_code ] = array();
+					}
+
+					if ( ! in_array( $service_code, $grouped[ $carrier_code ], true ) ) {
+						$grouped[ $carrier_code ][] = $service_code;
+					}
+				}
+
+				$is_primary_used = false;
+
+				foreach ( $grouped as $carrier_code => $service_codes ) {
+					$has_all_services = in_array( '', $service_codes, true );
+					$specific_codes   = array_values(
+						array_filter(
+							$service_codes,
+							static function ( string $code ): bool {
+								return '' !== $code;
+							}
+						)
+					);
+
+					// If the admin configured "all services" for this carrier,
+					// drop any specific codes — the wildcard supersedes them.
+					if ( $has_all_services ) {
+						$effective_service_code = '';
+						$allow_list             = null;
+					} elseif ( count( $specific_codes ) === 1 ) {
+						// Single specific service: keep the explicit code so
+						// the API request is as narrow as possible.
+						$effective_service_code = $specific_codes[0];
+						$allow_list             = null;
+					} else {
+						// Multiple specific services: ask for all and filter.
+						$effective_service_code = '';
+						$allow_list             = $specific_codes;
+					}
+
+					// Reuse the singleton for the first carrier that matches
+					// its configured carrier code; spin up new instances for
+					// the rest.  This keeps existing test/mock seams working.
+					$primary_carrier = $this->settings->get_shipstation_carrier_code();
+					$primary_service = $this->settings->get_shipstation_service_code();
+
+					if ( ! $is_primary_used
+						&& $carrier_code === $primary_carrier
+						&& $effective_service_code === $primary_service
+						&& null === $allow_list
+					) {
+						$services[]      = $this->shipstation_service;
+						$is_primary_used = true;
+						continue;
+					}
+
 					$services[] = new ShipStation_Service(
 						$this->settings,
-						$pair['carrier_code'],
-						$pair['service_code']
+						$carrier_code,
+						$effective_service_code,
+						$allow_list
 					);
 				}
 			}
@@ -417,6 +543,15 @@ class Plugin {
 				$package['package_name'],
 				$package['mode']
 			);
+
+			if ( ! empty( $package['service_label'] ) ) {
+				$lines[] = sprintf(
+					/* translators: %s shipping service label (e.g., "USPS Priority Mail", "UPS Ground"). */
+					__( 'Service: %s', 'fk-usps-optimizer' ),
+					$package['service_label']
+				);
+			}
+
 			$lines[] = sprintf(
 				/* translators: %s rate amount. */
 				__( 'Rate: $%s', 'fk-usps-optimizer' ),
@@ -449,6 +584,118 @@ class Plugin {
 		}
 
 		return implode( "\n", $lines );
+	}
+
+	/**
+	 * Store the rendered packing-plan note text on the order as private
+	 * meta so it can be displayed in the admin metabox and injected into
+	 * the WooCommerce REST API response (which is how PirateShip receives
+	 * it). The order's stored `customer_note` column is intentionally left
+	 * untouched so the plan cannot leak into customer-facing surfaces.
+	 *
+	 * Idempotent: each call overwrites any previously stored value.
+	 *
+	 * As a one-time migration for orders processed by earlier versions of
+	 * this plugin, any legacy `<!-- fk-pack-start --> ... <!-- fk-pack-end -->`
+	 * block found in the existing customer note is stripped and the
+	 * cleaned customer note is written back.
+	 *
+	 * @param \WC_Order $order Order to update.
+	 * @param array     $plan  Shipping plan data.
+	 * @return void
+	 */
+	protected function store_packing_plan_note( \WC_Order $order, array $plan ): void {
+		$note_text = $this->build_package_note( $plan );
+
+		$order->update_meta_data( self::PACKING_NOTE_META_KEY, $note_text );
+
+		// Migrate legacy data: if a previous version persisted the plan
+		// inside the customer-note column wrapped in marker comments,
+		// strip it now so the column holds only the customer-entered text.
+		$existing = (string) $order->get_customer_note( 'edit' );
+		if ( '' !== $existing && false !== strpos( $existing, self::PACKING_NOTE_START_MARKER ) ) {
+			$cleaned = $this->strip_packing_plan_block( $existing );
+			if ( $cleaned !== $existing ) {
+				$order->set_customer_note( $cleaned );
+			}
+		}
+
+		$order->save();
+	}
+
+	/**
+	 * Filter callback for `woocommerce_rest_prepare_shop_order_object` that
+	 * appends the stored packing-plan note text to the response's
+	 * `customer_note` field so PirateShip and other REST consumers receive
+	 * the plan alongside the order.
+	 *
+	 * The plan is appended to (not substituted for) any customer-entered
+	 * note. If the setting is disabled or no plan is stored, the response
+	 * is returned unchanged.
+	 *
+	 * @param mixed           $response Response object (typically
+	 *                                  \WP_REST_Response).
+	 * @param \WC_Order|mixed $order    Order object being serialised.
+	 * @param mixed           $request  Originating REST request
+	 *                                  (unused).
+	 * @return mixed The (possibly modified) response.
+	 */
+	public function inject_packing_plan_into_rest_response( $response, $order, $request = null ) {
+		unset( $request );
+
+		if ( ! $this->settings->is_add_packing_to_customer_note_enabled() ) {
+			return $response;
+		}
+
+		if ( ! $order instanceof \WC_Order ) {
+			return $response;
+		}
+
+		if ( ! is_object( $response ) || ! isset( $response->data ) || ! is_array( $response->data ) ) {
+			return $response;
+		}
+
+		$note_text = (string) $order->get_meta( self::PACKING_NOTE_META_KEY, true );
+		if ( '' === trim( $note_text ) ) {
+			return $response;
+		}
+
+		$existing_note = isset( $response->data['customer_note'] ) ? (string) $response->data['customer_note'] : '';
+
+		$response->data['customer_note'] = '' === trim( $existing_note )
+			? $note_text
+			: rtrim( $existing_note ) . "\n\n" . $note_text;
+
+		return $response;
+	}
+
+	/**
+	 * Remove a legacy `<!-- fk-pack-start --> ... <!-- fk-pack-end -->`
+	 * block from a string and tidy up the surrounding whitespace.
+	 *
+	 * Retained so we can clean customer-note values written by earlier
+	 * versions of the plugin; new code does not produce these markers.
+	 *
+	 * @param string $value Source string.
+	 * @return string String with the block removed.
+	 */
+	protected function strip_packing_plan_block( string $value ): string {
+		if ( '' === $value || false === strpos( $value, self::PACKING_NOTE_START_MARKER ) ) {
+			return $value;
+		}
+
+		$pattern = '/\s*' . preg_quote( self::PACKING_NOTE_START_MARKER, '/' )
+			. '.*?' . preg_quote( self::PACKING_NOTE_END_MARKER, '/' ) . '\s*/s';
+
+		$stripped = preg_replace( $pattern, '', $value );
+
+		if ( null === $stripped ) {
+			// On regex failure, fall back to the original value rather than
+			// nuking the customer note.
+			return $value;
+		}
+
+		return trim( $stripped );
 	}
 
 	/**

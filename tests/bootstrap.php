@@ -169,6 +169,72 @@ function sanitize_text_field( string $str ): string {
 }
 
 /**
+ * Validate an email address (test stub mirroring WP behaviour for typical inputs).
+ *
+ * @param string $email Email to validate.
+ * @return string|false The valid email when it passes filter_var, otherwise false.
+ */
+function is_email( string $email ) {
+	$email = trim( $email );
+	if ( '' === $email ) {
+		return false;
+	}
+	return false === filter_var( $email, FILTER_VALIDATE_EMAIL ) ? false : $email;
+}
+
+/**
+ * Send an email (test stub).
+ *
+ * Records each call in $GLOBALS['_test_wp_mail'] and returns the value of
+ * $GLOBALS['_test_wp_mail_return'] (defaults to true) so tests can assert
+ * the arguments passed and simulate failures.
+ *
+ * @param string|string[] $to          Recipient(s).
+ * @param string          $subject     Subject line.
+ * @param string          $message     Body.
+ * @param string|string[] $headers     Headers.
+ * @param string|string[] $attachments Attachments.
+ * @return bool
+ */
+function wp_mail( $to, string $subject, string $message, $headers = '', $attachments = array() ): bool {
+	if ( ! isset( $GLOBALS['_test_wp_mail'] ) || ! is_array( $GLOBALS['_test_wp_mail'] ) ) {
+		$GLOBALS['_test_wp_mail'] = array();
+	}
+	$GLOBALS['_test_wp_mail'][] = array(
+		'to'          => $to,
+		'subject'     => $subject,
+		'message'     => $message,
+		'headers'     => $headers,
+		'attachments' => $attachments,
+	);
+	return array_key_exists( '_test_wp_mail_return', $GLOBALS ) ? (bool) $GLOBALS['_test_wp_mail_return'] : true;
+}
+
+/**
+ * Generate a unique temp file name (test stub).
+ *
+ * @param string $filename Suggested filename.
+ * @param string $dir      Optional directory.
+ * @return string|false Path to the created temp file.
+ */
+function wp_tempnam( string $filename = '', string $dir = '' ) {
+	if ( '' === $dir ) {
+		$dir = sys_get_temp_dir();
+	}
+	return tempnam( $dir, 'fk_test_' );
+}
+
+/**
+ * Get information about the site (test stub).
+ *
+ * @param string $show Field to fetch.
+ * @return string
+ */
+function get_bloginfo( string $show = '' ): string {
+	return $GLOBALS['_test_bloginfo'][ $show ] ?? 'Test Site';
+}
+
+/**
  * Convert a value to a non-negative integer.
  *
  * @param mixed $maybeint Value to convert.
@@ -531,6 +597,35 @@ function trailingslashit( string $string ): string {
 }
 
 /**
+ * Generate a unique filename in the given directory (test stub).
+ *
+ * Mirrors WordPress core's `wp_unique_filename()` just well enough for
+ * tests: if the file already exists, append `-{n}` before the extension
+ * until an unused name is found.
+ *
+ * @param string $dir      Directory to check.
+ * @param string $filename Desired filename.
+ * @return string Unique filename within $dir.
+ */
+function wp_unique_filename( string $dir, string $filename ): string {
+	$dir       = rtrim( $dir, '/\\' ) . '/';
+	$ext       = '';
+	$dot_pos   = strrpos( $filename, '.' );
+	$base_name = $filename;
+	if ( false !== $dot_pos ) {
+		$ext       = substr( $filename, $dot_pos );
+		$base_name = substr( $filename, 0, $dot_pos );
+	}
+	$candidate = $base_name . $ext;
+	$i         = 1;
+	while ( file_exists( $dir . $candidate ) ) {
+		$candidate = $base_name . '-' . $i . $ext;
+		++$i;
+	}
+	return $candidate;
+}
+
+/**
  * Escape a string for use in JavaScript.
  *
  * Uses json_encode() with JSON_UNESCAPED_UNICODE and JSON_HEX_TAG so that
@@ -882,6 +977,22 @@ class WC_Order {
 	public function update_meta_data( string $key, $value ): void {}
 	public function save(): int { return 0; }
 	public function add_order_note( string $note, int $is_customer_note = 0, bool $added_by_user = false ): int { return 0; }
+
+	/**
+	 * Get the order's customer-provided note.
+	 *
+	 * @param string $context Context: "view" applies filters, "edit" returns raw.
+	 * @return string Customer note.
+	 */
+	public function get_customer_note( string $context = 'view' ): string { return ''; }
+
+	/**
+	 * Set the order's customer-provided note.
+	 *
+	 * @param string $note Note value.
+	 * @return void
+	 */
+	public function set_customer_note( string $note ): void {}
 
 	/**
 	 * Get order meta data.

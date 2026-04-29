@@ -860,4 +860,93 @@ class PackingServiceTest extends TestCase {
 		// Without the flag, items go to BoxPacker and should fit in 1 box.
 		$this->assertCount( 1, $result, 'Four tiny items without has_dimensions flag should optimise into 1 box.' );
 	}
+
+	// -------------------------------------------------------------------------
+	// pack_items — disabled boxes are filtered out
+	// -------------------------------------------------------------------------
+
+	public function test_pack_items_skips_disabled_boxes(): void {
+		// "Small" is disabled and the only one large enough to be relevant for
+		// our tiny item; "Medium" is enabled.  After filtering, BoxPacker must
+		// fall back to "Medium" instead of using the disabled "Small" box.
+		$boxes = array(
+			array(
+				'reference'    => 'Small',
+				'package_code' => 'package',
+				'package_name' => 'Small Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 8,
+				'outer_length' => 8,
+				'outer_depth'  => 6,
+				'inner_width'  => 8,
+				'inner_length' => 8,
+				'inner_depth'  => 6,
+				'empty_weight' => 3,
+				'max_weight'   => 20,
+				'enabled'      => false,
+			),
+			array(
+				'reference'    => 'Medium',
+				'package_code' => 'package',
+				'package_name' => 'Medium Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 12,
+				'outer_length' => 12,
+				'outer_depth'  => 10,
+				'inner_width'  => 12,
+				'inner_length' => 12,
+				'inner_depth'  => 10,
+				'empty_weight' => 5,
+				'max_weight'   => 20,
+				'enabled'      => true,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array(
+				'product_id' => 1,
+				'name'       => 'Widget',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 4.0,
+				'weight_oz'  => 5.0,
+				'sku'        => 'W',
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 1, $result );
+		$this->assertSame( 'Medium', $result[0]['packed_box']['reference'], 'Disabled boxes must not be considered by the packer.' );
+	}
+
+	public function test_pack_items_treats_missing_enabled_flag_as_enabled(): void {
+		// Backward compatibility: legacy stored boxes without the `enabled`
+		// key must continue to participate in packing.
+		$boxes = $this->make_boxes();
+		// Strip any enabled key just to be explicit about this case.
+		foreach ( $boxes as &$box ) {
+			unset( $box['enabled'] );
+		}
+		unset( $box );
+
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array(
+				'product_id' => 1,
+				'name'       => 'Widget',
+				'length'     => 4.0,
+				'width'      => 4.0,
+				'height'     => 4.0,
+				'weight_oz'  => 5.0,
+				'sku'        => 'W',
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 1, $result );
+	}
 }
