@@ -287,6 +287,28 @@ class PirateShip_Export {
 		$tmp_path     = wp_tempnam( $filename );
 		$has_tmp_file = false;
 
+		// `wp_tempnam()` always returns a path ending in `.tmp` (e.g.
+		// `/tmp/wp-pirateship-order-123abcd.tmp`). If we passed that path
+		// straight to `wp_mail()` the recipient would see the attachment
+		// named with a `.tmp` extension instead of `.csv`. Rename the
+		// temp file to the desired CSV filename in the same directory so
+		// the email attachment uses the correct extension.
+		if ( $tmp_path ) {
+			$dir          = trailingslashit( dirname( $tmp_path ) );
+			$desired_path = $dir . $filename;
+
+			// Avoid clobbering an existing file (e.g. concurrent retry
+			// for the same order number) — fall back to a unique name
+			// in the same directory.
+			if ( file_exists( $desired_path ) ) {
+				$desired_path = $dir . wp_unique_filename( dirname( $tmp_path ), $filename );
+			}
+
+			if ( @rename( $tmp_path, $desired_path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort rename; fall back to original `.tmp` path on failure.
+				$tmp_path = $desired_path;
+			}
+		}
+
 		if ( $tmp_path && false !== file_put_contents( $tmp_path, $csv ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Writing temp attachment for wp_mail().
 			$attachment   = $tmp_path;
 			$has_tmp_file = true;
