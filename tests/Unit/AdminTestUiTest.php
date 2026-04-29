@@ -213,6 +213,7 @@ class AdminTestUiTest extends TestCase {
 					'package_code'   => 'package',
 					'package_name'   => 'Small Box',
 					'service_code'   => 'usps_priority_mail',
+					'service_label'  => 'USPS Priority Mail',
 					'rate_amount'    => 8.99,
 					'currency'       => 'USD',
 					'weight_oz'      => 11.0,
@@ -238,6 +239,8 @@ class AdminTestUiTest extends TestCase {
 		$this->assertStringContainsString( 'Test Pricing Results', $output );
 		$this->assertStringContainsString( 'Small Box', $output );
 		$this->assertStringContainsString( '1x Widget', $output );
+		$this->assertStringContainsString( 'USPS Priority Mail', $output );
+		$this->assertStringNotContainsString( '<td>usps_priority_mail</td>', $output );
 	}
 
 	public function test_render_page_shows_warnings_from_result(): void {

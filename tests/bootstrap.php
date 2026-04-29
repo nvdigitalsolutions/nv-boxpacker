@@ -884,6 +884,22 @@ class WC_Order {
 	public function add_order_note( string $note, int $is_customer_note = 0, bool $added_by_user = false ): int { return 0; }
 
 	/**
+	 * Get the order's customer-provided note.
+	 *
+	 * @param string $context Context: "view" applies filters, "edit" returns raw.
+	 * @return string Customer note.
+	 */
+	public function get_customer_note( string $context = 'view' ): string { return ''; }
+
+	/**
+	 * Set the order's customer-provided note.
+	 *
+	 * @param string $note Note value.
+	 * @return void
+	 */
+	public function set_customer_note( string $note ): void {}
+
+	/**
 	 * Get order meta data.
 	 *
 	 * @param string $key     Meta key.
