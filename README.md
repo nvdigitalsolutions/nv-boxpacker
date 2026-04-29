@@ -598,6 +598,14 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.3.2
+
+- **New:** Selected shipping service label (e.g. "USPS Priority Mail", "USPS Ground Advantage", "UPS Ground", "UPS 2nd Day Air", "UPS Next Day Air") is now surfaced in three human-readable views of the shipping plan:
+  - The **order note** added by `Plugin::build_package_note()` — a `Service: <label>` line directly under each `Package N:` header.
+  - The **admin order meta box** rendered by `Admin_UI::render_meta_box()` — a `Service: <label>` line between the `package_name (mode)` and `Rate:` lines.
+  - The **rate-tester admin tool** (`Admin_Test_UI::render_page()`) — the per-package "Service" row now prefers the friendly `service_label` over the raw `service_code`, with a graceful fallback to `service_code` for legacy plans without a label.
+- **Note:** Plan data already carried `service_label` per package since 1.2.6; this release just makes it visible in the surfaces above. No data-shape changes.
+
 ### 1.3.1
 
 - **Improved:** **Checkout shipping rate latency** reduced significantly. ShipStation carrier-list calls are now deduplicated across configured service pairs (Phase 1), all rate HTTP requests are batched and dispatched in parallel through WordPress's `Requests::request_multiple()` with a sequential fallback (Phase 2), and rate-bearing candidate boxes per package are now capped (default 3, filterable).
