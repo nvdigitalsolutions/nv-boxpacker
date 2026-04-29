@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'nvdigitalsolutions/fk-usps-optimizer',
-        'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-        'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-        'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
+        'pretty_version' => 'dev-copilot/check-plugin-pricing-accuracy',
+        'version' => 'dev-copilot/check-plugin-pricing-accuracy',
+        'reference' => '983e033a5e9dfa473060f7ac7bb9d031d6541c31',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -56,9 +56,9 @@
             'dev_requirement' => true,
         ),
         'nvdigitalsolutions/fk-usps-optimizer' => array(
-            'pretty_version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-            'version' => 'dev-copilot/fix-cvs-file-sending-as-tmp',
-            'reference' => '6e0f3b64bc1a22366d3a386055c077c514e30b27',
+            'pretty_version' => 'dev-copilot/check-plugin-pricing-accuracy',
+            'version' => 'dev-copilot/check-plugin-pricing-accuracy',
+            'reference' => '983e033a5e9dfa473060f7ac7bb9d031d6541c31',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
