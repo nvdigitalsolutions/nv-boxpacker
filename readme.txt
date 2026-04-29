@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.3
+Stable tag: 1.3.4
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,12 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.4 =
+* New: **PirateShip Notification Emails** setting — comma-separated list of email addresses (newlines and semicolons also accepted as separators) to notify after every order. Each recipient receives a plain-text summary of the order's shipping address, the suggested packages with dimensions/weights/packing list, and a CSV file attachment that can be imported directly into PirateShip without first opening the order in WordPress. Invalid addresses are dropped on save and reported back via an admin notice.
+* New: `Settings::get_pirateship_notification_emails()` accessor returning the validated, deduplicated recipient list.
+* New: `PirateShip_Export::send_order_notification()`, `build_csv_string()`, and `build_email_body()` — used internally by `Plugin::process_order()` to build the CSV in memory, format the human-readable email body, and send the notification via `wp_mail()`.
+* New: `fk_usps_optimizer_pirateship_notification_emails` filter to override the recipient list at runtime, and `fk_usps_optimizer_pirateship_notification_email_args` filter to customise the subject, body, headers, or attachments before the email is sent.
 
 = 1.3.3 =
 * New: **Send Packing Plan to PirateShip via Customer Note** setting — when enabled, the per-package packing plan is appended to the order's customer note wrapped in hidden HTML comment markers (`<!-- fk-pack-start -->` ... `<!-- fk-pack-end -->`). PirateShip and other WooCommerce REST API consumers receive the full note (including the plan) so it can be displayed alongside the shipment, while a `woocommerce_order_get_customer_note` filter strips the marker block on every non-REST read so it stays out of customer emails, the My Account page, the admin order screen and invoices. Re-processing an order replaces any existing plan block in-place; pre-existing customer-entered note text is preserved.
