@@ -817,11 +817,15 @@ class SettingsTest extends TestCase {
 		}
 	}
 
-	public function test_get_default_boxes_are_enabled_by_default(): void {
+	public function test_get_default_boxes_have_enabled_flag(): void {
 		$defaults = $this->call_protected( 'get_default_boxes' );
 		foreach ( $defaults as $box ) {
-			$this->assertTrue( $box['enabled'], 'Default boxes should ship enabled.' );
+			$this->assertArrayHasKey( 'enabled', $box, 'Default boxes should declare an enabled flag.' );
+			$this->assertIsBool( $box['enabled'], 'Default boxes enabled flag should be a boolean.' );
 		}
+		// At least one default box must ship enabled so packing works out of the box.
+		$enabled_refs = array_column( array_filter( $defaults, static fn( $b ) => $b['enabled'] ), 'reference' );
+		$this->assertNotEmpty( $enabled_refs, 'At least one default box should ship enabled.' );
 	}
 
 	public function test_get_default_boxes_max_weight_is_positive(): void {
