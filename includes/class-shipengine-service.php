@@ -214,15 +214,27 @@ class ShipEngine_Service {
 	/**
 	 * Build candidate shipments from available boxes for a package.
 	 *
+	 * Candidates strictly smaller than the originally chosen box are
+	 * verified with a single-box re-pack to ensure all items physically
+	 * combine into that smaller box.  Same-or-larger boxes skip the re-pack
+	 * because their fit is already implied by the initial packing.
+	 *
 	 * @param array $package Packed package data.
 	 * @return array Candidate shipments.
 	 */
 	protected function build_candidates( array $package ): array {
-		$candidates = array();
+		$candidates      = array();
+		$original_volume = $this->get_packed_box_volume( $package );
 
 		foreach ( $this->settings->get_boxes_for_carrier( 'usps' ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
+			}
+
+			if ( $original_volume > 0 && $this->box_volume( $box ) < $original_volume ) {
+				if ( ! $this->candidate_box_fits_via_repack( $package, $box ) ) {
+					continue;
+				}
 			}
 
 			$dimensions = array(
@@ -253,13 +265,87 @@ class ShipEngine_Service {
 	}
 
 	/**
+	 * Compute the outer volume of the box BoxPacker originally chose for a
+	 * package, or 0 when no `packed_box` reference is available.
+	 *
+	 * @param array $package Packed package.
+	 * @return float Outer volume in cubic inches.
+	 */
+	protected function get_packed_box_volume( array $package ): float {
+		$box = $package['packed_box'] ?? null;
+		if ( ! is_array( $box ) ) {
+			return 0.0;
+		}
+		return $this->box_volume( $box );
+	}
+
+	/**
+	 * Compute the outer volume of a box definition.
+	 *
+	 * @param array $box Box definition.
+	 * @return float Outer volume in cubic inches.
+	 */
+	protected function box_volume( array $box ): float {
+		return (float) ( $box['outer_length'] ?? 0 )
+			* (float) ( $box['outer_width'] ?? 0 )
+			* (float) ( $box['outer_depth'] ?? 0 );
+	}
+
+	/**
+	 * Verify a candidate box can physically hold all items via a single-box
+	 * re-pack through the Packing_Service.  See the equivalent ShipStation
+	 * implementation for full rationale.
+	 *
+	 * @param array $package Packed package.
+	 * @param array $box     Candidate box definition.
+	 * @return bool True when the items pack into a single instance of the box.
+	 */
+	protected function candidate_box_fits_via_repack( array $package, array $box ): bool {
+		$items = $package['items'] ?? array();
+		if ( ! is_array( $items ) || empty( $items ) ) {
+			return false;
+		}
+
+		foreach ( $items as $item ) {
+			if ( isset( $item['has_dimensions'] ) && false === $item['has_dimensions'] ) {
+				return false;
+			}
+		}
+
+		if ( ! class_exists( '\DVDoug\BoxPacker\Packer' ) ) {
+			return true;
+		}
+
+		$packing  = new Packing_Service( $this->settings );
+		$packages = $packing->pack_items( $items, array( $box ) );
+
+		if ( 1 !== count( $packages ) ) {
+			return false;
+		}
+
+		$first = $packages[0];
+		if ( count( $first['items'] ?? array() ) !== count( $items ) ) {
+			return false;
+		}
+
+		$packed_ref = $first['packed_box']['reference'] ?? null;
+		return null === $packed_ref || ! isset( $box['reference'] ) || $packed_ref === $box['reference'];
+	}
+
+	/**
 	 * Limit the candidate shipments to the smallest-volume N boxes.
 	 *
-	 * Larger boxes virtually never produce the cheapest rate, so rating
-	 * every fitting box wastes API calls and checkout latency.  Keeping
-	 * only the smallest fitting boxes preserves cheapest-rate selection
-	 * while drastically cutting roundtrips.  Filterable via
-	 * `fk_usps_optimizer_max_candidates` (default 3, 0 disables the cap).
+	 * Larger boxes virtually never produce the cheapest rate when smaller
+	 * ones can hold the contents, so rating every fitting box wastes API
+	 * calls and checkout latency.  Keeping only the smallest fitting boxes
+	 * preserves cheapest-rate selection while drastically cutting roundtrips.
+	 *
+	 * For this cap to work as intended the candidate set must include boxes
+	 * smaller than the one BoxPacker initially selected — see
+	 * {@see build_candidates()}, which uses content-bounding-box filtering
+	 * plus a single-box re-pack guard to reach those smaller boxes.
+	 *
+	 * Filterable via `fk_usps_optimizer_max_candidates` (default 3, 0 disables the cap).
 	 *
 	 * @param array $candidates Candidate shipments.
 	 * @return array Capped candidate list.
@@ -286,12 +372,20 @@ class ShipEngine_Service {
 	/**
 	 * Check whether the package fits in the given box.
 	 *
+	 * Prefers the per-axis bounding box of the actual packed contents
+	 * (`content_dimensions`, written by Packing_Service) over the chosen
+	 * box's inner dimensions (`dimensions`).  See the equivalent ShipStation
+	 * implementation for why: without this preference, once BoxPacker
+	 * selects a box, rate-shopping can never consider any smaller box.
+	 *
 	 * @param array $package Package data.
 	 * @param array $box     Box definition.
 	 * @return bool True if the package fits.
 	 */
 	protected function package_fits_box( array $package, array $box ): bool {
-		$dimensions = $package['dimensions'];
+		$dimensions = isset( $package['content_dimensions'] ) && is_array( $package['content_dimensions'] )
+			? $package['content_dimensions']
+			: $package['dimensions'];
 
 		return (float) $dimensions['length'] <= (float) $box['inner_length'] &&
 			(float) $dimensions['width'] <= (float) $box['inner_width'] &&
@@ -348,7 +442,7 @@ class ShipEngine_Service {
 			)
 		);
 
-		$result = $this->parse_rate_response( $response, $order_id );
+		$result = $this->parse_rate_response( $response, $order_id, $descriptor['payload'] );
 
 		if ( $result['success'] && $descriptor['use_cache'] ) {
 			$this->cache_rate_response( $descriptor['cache_key'], $result['rate'] );
@@ -430,17 +524,29 @@ class ShipEngine_Service {
 	 * statuses, and empty rate lists.  On success, returns the cheapest rate
 	 * object.
 	 *
+	 * The optional $payload argument lets callers thread the rate-request
+	 * payload through so the error log entry includes the exact
+	 * (service_code, package_code, dimensions, weight) combination that
+	 * ShipEngine rejected.  Errors surface the API's `errors[*].message`
+	 * string instead of dumping the entire response body, which keeps logs
+	 * actionable when a configured service code isn't supported by the
+	 * configured carrier.
+	 *
 	 * @param array|\WP_Error $response WordPress HTTP response.
 	 * @param int             $order_id Order ID for log context.
+	 * @param array           $payload  Original request payload (sanitized for logs).
 	 * @return array ['success' => bool, 'rate' => array].
 	 */
-	protected function parse_rate_response( $response, int $order_id ): array {
+	protected function parse_rate_response( $response, int $order_id, array $payload = array() ): array {
+		$payload_summary = $this->summarize_payload_for_log( $payload );
+
 		if ( is_wp_error( $response ) ) {
 			$this->log(
 				'ShipEngine request failed.',
 				array(
 					'order_id' => $order_id,
 					'error'    => $response->get_error_message(),
+					'request'  => $payload_summary,
 				)
 			);
 
@@ -454,9 +560,10 @@ class ShipEngine_Service {
 			$this->log(
 				'ShipEngine returned a non-success response.',
 				array(
-					'order_id' => $order_id,
-					'status'   => $code,
-					'body'     => $body,
+					'order_id'    => $order_id,
+					'status'      => $code,
+					'api_message' => $this->extract_api_error_message( $body ),
+					'request'     => $payload_summary,
 				)
 			);
 
@@ -466,11 +573,16 @@ class ShipEngine_Service {
 		$rates = $body['rate_response']['rates'] ?? array();
 
 		if ( empty( $rates ) ) {
+			// `rate_response.errors` is the canonical place ShipEngine reports
+			// per-rate failures even on a 200.  Surface those for diagnostics.
+			$rate_errors = $body['rate_response']['errors'] ?? array();
+
 			$this->log(
 				'ShipEngine returned no rates.',
 				array(
-					'order_id' => $order_id,
-					'body'     => $body,
+					'order_id'    => $order_id,
+					'request'     => $payload_summary,
+					'api_message' => $this->extract_api_error_message( array( 'errors' => $rate_errors ) ),
 				)
 			);
 
@@ -488,6 +600,89 @@ class ShipEngine_Service {
 			'success' => true,
 			'rate'    => $rates[0],
 		);
+	}
+
+	/**
+	 * Build a compact, log-friendly summary of a ShipEngine rate-request payload.
+	 *
+	 * Includes only the rate-shaping inputs that help a human diagnose a
+	 * carrier/service rejection.
+	 *
+	 * @param array $payload ShipEngine /v1/rates payload.
+	 * @return array Sanitized subset suitable for logging.
+	 */
+	protected function summarize_payload_for_log( array $payload ): array {
+		if ( empty( $payload ) ) {
+			return array();
+		}
+
+		$shipment    = is_array( $payload['shipment'] ?? null ) ? $payload['shipment'] : array();
+		$package     = is_array( $shipment['packages'][0] ?? null ) ? $shipment['packages'][0] : array();
+		$dimensions  = is_array( $package['dimensions'] ?? null ) ? $package['dimensions'] : array();
+		$weight      = is_array( $package['weight'] ?? null ) ? $package['weight'] : array();
+		$carrier_ids = $payload['rate_options']['carrier_ids'] ?? array();
+		$ship_to     = is_array( $shipment['ship_to'] ?? null ) ? $shipment['ship_to'] : array();
+
+		return array(
+			'carrier_ids'  => array_values( (array) $carrier_ids ),
+			'service_code' => (string) ( $shipment['service_code'] ?? '' ),
+			'package_code' => (string) ( $package['package_code'] ?? '' ),
+			'toCountry'    => (string) ( $ship_to['country_code'] ?? '' ),
+			'toPostalCode' => (string) ( $ship_to['postal_code'] ?? '' ),
+			'weight'       => array(
+				'value' => $weight['value'] ?? null,
+				'unit'  => (string) ( $weight['unit'] ?? '' ),
+			),
+			'dimensions'   => array(
+				'length' => $dimensions['length'] ?? null,
+				'width'  => $dimensions['width'] ?? null,
+				'height' => $dimensions['height'] ?? null,
+			),
+		);
+	}
+
+	/**
+	 * Extract a human-readable error message from a ShipEngine error body.
+	 *
+	 * ShipEngine error bodies typically use a top-level `errors` array of
+	 * objects with `{message, error_code}`, or a flat `message` string for
+	 * envelope errors.  Returns the first non-empty message(s) joined by
+	 * "; " so log lines are actionable instead of dumping the full body.
+	 *
+	 * @param mixed $body Decoded response body.
+	 * @return string Extracted message or empty string.
+	 */
+	protected function extract_api_error_message( $body ): string {
+		if ( is_string( $body ) ) {
+			return trim( $body );
+		}
+
+		if ( ! is_array( $body ) ) {
+			return '';
+		}
+
+		$parts = array();
+		foreach ( (array) ( $body['errors'] ?? array() ) as $entry ) {
+			if ( is_string( $entry ) && '' !== trim( $entry ) ) {
+				$parts[] = trim( $entry );
+			} elseif ( is_array( $entry ) ) {
+				$msg = (string) ( $entry['message'] ?? $entry['error_description'] ?? '' );
+				if ( '' !== trim( $msg ) ) {
+					$parts[] = trim( $msg );
+				}
+			}
+		}
+		if ( ! empty( $parts ) ) {
+			return implode( '; ', $parts );
+		}
+
+		foreach ( array( 'message', 'Message', 'error_description' ) as $key ) {
+			if ( isset( $body[ $key ] ) && is_string( $body[ $key ] ) && '' !== trim( $body[ $key ] ) ) {
+				return trim( $body[ $key ] );
+			}
+		}
+
+		return '';
 	}
 
 	/**
@@ -552,7 +747,7 @@ class ShipEngine_Service {
 			$responses = $this->dispatch_requests_multi( $req_specs );
 			foreach ( $pending as $idx => $descriptor ) {
 				$response = $responses[ $idx ] ?? new \WP_Error( 'fk_usps_optimizer_no_response', 'No response from parallel dispatch.' );
-				$result   = $this->parse_rate_response( $response, $order_id );
+				$result   = $this->parse_rate_response( $response, $order_id, $descriptor['payload'] );
 
 				$results[ $idx ] = $result;
 
