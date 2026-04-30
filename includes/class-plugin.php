@@ -236,11 +236,11 @@ class Plugin {
 			$chosen_plans = $this->extract_chosen_plan_packages( $order );
 
 			if ( ! empty( $chosen_plans ) ) {
-				foreach ( $chosen_plans as $best_plan ) {
-					$plan['packages'][]         = $best_plan;
-					$plan['total_rate_amount'] += (float) ( $best_plan['rate_amount'] ?? 0 );
-					$plan['currency']           = (string) ( $best_plan['currency'] ?? $plan['currency'] );
-					$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $best_plan );
+				foreach ( $chosen_plans as $chosen_plan ) {
+					$plan['packages'][]         = $chosen_plan;
+					$plan['total_rate_amount'] += (float) ( $chosen_plan['rate_amount'] ?? 0 );
+					$plan['currency']           = (string) ( $chosen_plan['currency'] ?? $plan['currency'] );
+					$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $chosen_plan );
 				}
 
 				$plan['total_package_count'] = count( $plan['packages'] );
@@ -371,7 +371,11 @@ class Plugin {
 					return $decoded;
 				}
 			} elseif ( is_array( $raw ) && ! empty( $raw ) ) {
-				// Some persistence paths return the value already unserialized.
+				// Defensive fallback: WC stores rate meta as serialized PHP and
+				// usually returns the JSON string we saved, but third-party
+				// extensions or future WC changes could return an already-
+				// decoded array here.  Accept either shape so the chosen-plan
+				// path keeps working.
 				return $raw;
 			}
 		}
