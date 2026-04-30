@@ -209,14 +209,15 @@ class Packing_Service {
 			}
 
 			$packages[] = array(
-				'packed_box' => $display_box,
-				'items'      => $packed_items,
-				'weight_oz'  => $item_weight,
-				'dimensions' => array(
+				'packed_box'         => $display_box,
+				'items'              => $packed_items,
+				'weight_oz'          => $item_weight,
+				'dimensions'         => array(
 					'length' => (float) ( $display_box['inner_length'] ?? 0 ),
 					'width'  => (float) ( $display_box['inner_width'] ?? 0 ),
 					'height' => (float) ( $display_box['inner_depth'] ?? 0 ),
 				),
+				'content_dimensions' => $this->compute_content_dimensions( $packed_items ),
 			);
 		}
 
@@ -237,18 +238,57 @@ class Packing_Service {
 			$selected_box = $this->match_item_to_box( $item, $boxes );
 
 			$packages[] = array(
-				'packed_box' => $selected_box,
-				'items'      => array( $item ),
-				'weight_oz'  => $item['weight_oz'],
-				'dimensions' => array(
+				'packed_box'         => $selected_box,
+				'items'              => array( $item ),
+				'weight_oz'          => $item['weight_oz'],
+				'dimensions'         => array(
 					'length' => (float) ( $selected_box['inner_length'] ?? $item['length'] ),
 					'width'  => (float) ( $selected_box['inner_width'] ?? $item['width'] ),
 					'height' => (float) ( $selected_box['inner_depth'] ?? $item['height'] ),
 				),
+				'content_dimensions' => $this->compute_content_dimensions( array( $item ) ),
 			);
 		}
 
 		return $packages;
+	}
+
+	/**
+	 * Compute the per-axis bounding-box of a list of packed items.
+	 *
+	 * Returns the maximum length, width, and height across all items — i.e.
+	 * a *lower bound* on the inner dimensions any candidate box must have to
+	 * physically hold the largest item along each axis.  This is used by the
+	 * carrier services to consider boxes smaller than the one BoxPacker
+	 * initially selected without re-running the full packer at the per-rate
+	 * level.
+	 *
+	 * For unmeasured or partially measured items the corresponding axis
+	 * defaults to 0, which causes downstream fit checks to behave as a
+	 * pass-through (any non-negative box dimension satisfies "≥ 0").
+	 *
+	 * @param array $items Packed items.
+	 * @return array { length: float, width: float, height: float }
+	 */
+	protected function compute_content_dimensions( array $items ): array {
+		$max_length = 0.0;
+		$max_width  = 0.0;
+		$max_height = 0.0;
+
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) {
+				continue;
+			}
+			$max_length = max( $max_length, (float) ( $item['length'] ?? 0 ) );
+			$max_width  = max( $max_width, (float) ( $item['width'] ?? 0 ) );
+			$max_height = max( $max_height, (float) ( $item['height'] ?? 0 ) );
+		}
+
+		return array(
+			'length' => $max_length,
+			'width'  => $max_width,
+			'height' => $max_height,
+		);
 	}
 
 	/**

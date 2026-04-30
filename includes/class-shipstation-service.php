@@ -70,6 +70,19 @@ class ShipStation_Service {
 	protected $allowed_service_codes;
 
 	/**
+	 * In-memory short-circuit set for (carrier, service) pairs that ShipStation
+	 * has rejected at the configuration level during the current request.
+	 *
+	 * Keyed by "carrierCode|serviceCode".  When a key is present, subsequent
+	 * candidate requests for that pair are skipped to avoid repeating the same
+	 * doomed call across every box candidate of every package.  Cleared at the
+	 * end of each PHP request because instance state is per-PHP-request.
+	 *
+	 * @var array<string, true>
+	 */
+	protected $bad_pairs_in_request = array();
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings      $settings              Plugin settings instance.
@@ -393,10 +406,135 @@ class ShipStation_Service {
 			}
 		}
 
+		// Validate every configured (carrier, service) pair against the
+		// account's available services.  Catches misconfigurations like
+		// `stamps_com` + `usps_ground_advantage` when the carrier doesn't
+		// have Ground Advantage enabled — the same misconfiguration that
+		// otherwise causes silent 500s on every checkout rate request.
+		$service_validation = $this->validate_service_pairs( $auth, $api_url, $timeout );
+		if ( ! empty( $service_validation ) ) {
+			return array(
+				'success' => false,
+				'message' => $service_validation,
+			);
+		}
+
 		return array(
 			'success' => true,
 			'message' => __( 'Connection successful! ShipStation credentials are valid.', 'fk-usps-optimizer' ),
 		);
+	}
+
+	/**
+	 * Validate every configured (carrier, service) pair against the live
+	 * ShipStation `/carriers/{carrierCode}/services` endpoint.
+	 *
+	 * Pairs with an empty service code (intentional "all services" fan-out)
+	 * are skipped.  Returns an empty string when every configured pair is
+	 * valid, or a translated, human-readable error string describing the
+	 * first invalid pair (with the list of valid service codes for that
+	 * carrier so admins can correct the configuration).
+	 *
+	 * Network errors during validation are non-fatal — they produce an
+	 * empty return so we don't block a save when the secondary endpoint
+	 * is briefly unavailable.
+	 *
+	 * @param string $auth     Pre-encoded Basic-Auth header value (without "Basic ").
+	 * @param string $api_url  Filtered ShipStation API base URL.
+	 * @param int    $timeout  HTTP timeout in seconds.
+	 * @return string Empty when valid, error message otherwise.
+	 */
+	protected function validate_service_pairs( string $auth, string $api_url, int $timeout ): string {
+		$pairs = $this->settings->get_shipstation_service_pairs();
+
+		// Group services by carrier so each carrier's /services endpoint is
+		// fetched at most once.
+		$by_carrier = array();
+		foreach ( $pairs as $pair ) {
+			$carrier_code = (string) ( $pair['carrier_code'] ?? '' );
+			$service_code = (string) ( $pair['service_code'] ?? '' );
+
+			if ( '' === $carrier_code || '' === $service_code ) {
+				continue;
+			}
+
+			if ( ! isset( $by_carrier[ $carrier_code ] ) ) {
+				$by_carrier[ $carrier_code ] = array();
+			}
+			if ( ! in_array( $service_code, $by_carrier[ $carrier_code ], true ) ) {
+				$by_carrier[ $carrier_code ][] = $service_code;
+			}
+		}
+
+		foreach ( $by_carrier as $carrier_code => $configured_services ) {
+			$endpoint = trailingslashit( $api_url ) . 'carriers/' . rawurlencode( $carrier_code ) . '/services';
+
+			$response = wp_remote_get(
+				$endpoint,
+				array(
+					'timeout' => $timeout,
+					'headers' => array(
+						'Authorization' => 'Basic ' . $auth,
+						'Content-Type'  => 'application/json',
+					),
+				)
+			);
+
+			// Treat transport / non-2xx errors here as non-fatal: log and
+			// skip so the connection test doesn't fail spuriously when only
+			// the secondary endpoint is unavailable.
+			if ( is_wp_error( $response ) ) {
+				$this->log(
+					'ShipStation service-code validation request failed.',
+					array( 'carrier_code' => $carrier_code, 'error' => $response->get_error_message() )
+				);
+				continue;
+			}
+
+			$code = (int) wp_remote_retrieve_response_code( $response );
+			if ( $code < 200 || $code >= 300 ) {
+				$this->log(
+					'ShipStation service-code validation returned non-success.',
+					array( 'carrier_code' => $carrier_code, 'status' => $code )
+				);
+				continue;
+			}
+
+			$body     = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+			$services = is_array( $body ) ? $body : array();
+
+			$valid_codes = array_values(
+				array_filter(
+					array_map(
+						static function ( $svc ) {
+							return is_array( $svc ) && isset( $svc['code'] ) ? (string) $svc['code'] : null;
+						},
+						$services
+					)
+				)
+			);
+
+			// If the API returned an empty service list, don't block — most
+			// likely a transient gap.  Do block when the list is non-empty
+			// and a configured service is missing from it.
+			if ( empty( $valid_codes ) ) {
+				continue;
+			}
+
+			foreach ( $configured_services as $service_code ) {
+				if ( ! in_array( $service_code, $valid_codes, true ) ) {
+					return sprintf(
+						/* translators: 1: configured service code, 2: carrier code, 3: list of valid service codes. */
+						__( 'Service code "%1$s" was not found for carrier "%2$s" in your ShipStation account. Available service codes: %3$s', 'fk-usps-optimizer' ),
+						$service_code,
+						$carrier_code,
+						implode( ', ', $valid_codes )
+					);
+				}
+			}
+		}
+
+		return '';
 	}
 
 	// -------------------------------------------------------------------------
@@ -540,17 +678,36 @@ class ShipStation_Service {
 	/**
 	 * Build candidate shipments from boxes that fit the packed package.
 	 *
+	 * Candidates strictly smaller than the originally chosen box (the one
+	 * BoxPacker selected during packing) are verified with a single-box
+	 * re-pack to ensure all items physically combine into that smaller box.
+	 * Boxes the same size or larger than the original skip the re-pack
+	 * because their fit is already implied by the initial packing.
+	 *
 	 * @param array $package Packed package data.
 	 * @return array Candidate shipment arrays.
 	 */
 	protected function build_candidates( array $package ): array {
-		$candidates      = array();
-		$carrier_keyword = $this->get_carrier_keyword();
-		$is_usps         = 'usps' === $carrier_keyword;
+		$candidates       = array();
+		$carrier_keyword  = $this->get_carrier_keyword();
+		$is_usps          = 'usps' === $carrier_keyword;
+		$original_volume  = $this->get_packed_box_volume( $package );
 
 		foreach ( $this->settings->get_boxes_for_carrier( $carrier_keyword ) as $box ) {
 			if ( ! $this->package_fits_box( $package, $box ) ) {
 				continue;
+			}
+
+			// Correctness guard: if the candidate is strictly smaller than the
+			// box BoxPacker originally selected, verify the items physically
+			// combine into the candidate via a single-box re-pack.  This
+			// catches cases where the bounding-box check passes but the
+			// items can't actually nest together (e.g. two long-thin items
+			// that don't share a common orientation).
+			if ( $original_volume > 0 && $this->box_volume( $box ) < $original_volume ) {
+				if ( ! $this->candidate_box_fits_via_repack( $package, $box ) ) {
+					continue;
+				}
 			}
 
 			$dimensions = array(
@@ -592,12 +749,95 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Compute the outer volume of the box BoxPacker originally selected for a
+	 * package, or 0 when no `packed_box` reference is available.
+	 *
+	 * @param array $package Packed package.
+	 * @return float Outer volume in cubic inches.
+	 */
+	protected function get_packed_box_volume( array $package ): float {
+		$box = $package['packed_box'] ?? null;
+		if ( ! is_array( $box ) ) {
+			return 0.0;
+		}
+		return $this->box_volume( $box );
+	}
+
+	/**
+	 * Compute the outer volume of a box definition.
+	 *
+	 * @param array $box Box definition.
+	 * @return float Outer volume in cubic inches.
+	 */
+	protected function box_volume( array $box ): float {
+		return (float) ( $box['outer_length'] ?? 0 )
+			* (float) ( $box['outer_width'] ?? 0 )
+			* (float) ( $box['outer_depth'] ?? 0 );
+	}
+
+	/**
+	 * Verify that a candidate box can physically hold all items via a
+	 * single-box re-pack through the Packing_Service.
+	 *
+	 * Used as a correctness guard for candidates strictly smaller than the
+	 * box BoxPacker originally selected.  Skipped for unmeasured items
+	 * (those without dimensions) since the fallback strategy doesn't run
+	 * BoxPacker and a smaller-box guarantee can't be derived.
+	 *
+	 * @param array $package Packed package containing `items`.
+	 * @param array $box     Candidate box definition.
+	 * @return bool True when the items pack into a single instance of the box.
+	 */
+	protected function candidate_box_fits_via_repack( array $package, array $box ): bool {
+		$items = $package['items'] ?? array();
+		if ( ! is_array( $items ) || empty( $items ) ) {
+			return false;
+		}
+
+		// Only attempt the re-pack for measured items; the fallback strategy
+		// is one-item-per-box and would always succeed regardless of fit.
+		foreach ( $items as $item ) {
+			if ( isset( $item['has_dimensions'] ) && false === $item['has_dimensions'] ) {
+				return false;
+			}
+		}
+
+		// BoxPacker availability guard — without it we can't verify fit, so
+		// fall back to trusting the bounding-box check.
+		if ( ! class_exists( '\DVDoug\BoxPacker\Packer' ) ) {
+			return true;
+		}
+
+		$packing  = new Packing_Service( $this->settings );
+		$packages = $packing->pack_items( $items, array( $box ) );
+
+		// The candidate fits when the re-pack produced exactly one package
+		// using the candidate box and contained every item.
+		if ( 1 !== count( $packages ) ) {
+			return false;
+		}
+
+		$first = $packages[0];
+		if ( count( $first['items'] ?? array() ) !== count( $items ) ) {
+			return false;
+		}
+
+		$packed_ref = $first['packed_box']['reference'] ?? null;
+		return null === $packed_ref || ! isset( $box['reference'] ) || $packed_ref === $box['reference'];
+	}
+
+	/**
 	 * Limit the candidate shipments to the smallest-volume N boxes.
 	 *
-	 * Larger boxes virtually never produce the cheapest rate, so rating
-	 * every fitting box wastes API calls and checkout latency.  Keeping
-	 * only the smallest fitting boxes preserves cheapest-rate selection
-	 * while drastically cutting roundtrips.
+	 * Larger boxes virtually never produce the cheapest rate when smaller
+	 * ones can hold the contents, so rating every fitting box wastes API
+	 * calls and checkout latency.  Keeping only the smallest fitting boxes
+	 * preserves cheapest-rate selection while drastically cutting roundtrips.
+	 *
+	 * For this cap to work as intended the candidate set must include boxes
+	 * smaller than the one BoxPacker initially selected — see
+	 * {@see build_candidates()}, which uses content-bounding-box filtering
+	 * plus a single-box re-pack guard to reach those smaller boxes.
 	 *
 	 * The cap defaults to 3 and is filterable via
 	 * `fk_usps_optimizer_max_candidates`.  A value <= 0 disables the cap.
@@ -627,12 +867,21 @@ class ShipStation_Service {
 	/**
 	 * Check whether a packed package fits inside a box.
 	 *
+	 * Prefers the per-axis bounding box of the actual packed contents
+	 * (`content_dimensions`, written by Packing_Service) over the chosen
+	 * box's inner dimensions (`dimensions`).  Without this preference, once
+	 * BoxPacker selects a box, `dimensions` equals that box's inner dims
+	 * and rate-shopping can never consider any smaller box, even when the
+	 * contents would fit comfortably in one.
+	 *
 	 * @param array $package Package data including dimensions and weight.
 	 * @param array $box     Box definition.
 	 * @return bool True if the package fits.
 	 */
 	protected function package_fits_box( array $package, array $box ): bool {
-		$dimensions = $package['dimensions'];
+		$dimensions = isset( $package['content_dimensions'] ) && is_array( $package['content_dimensions'] )
+			? $package['content_dimensions']
+			: $package['dimensions'];
 
 		return (float) $dimensions['length'] <= (float) $box['inner_length'] &&
 			(float) $dimensions['width'] <= (float) $box['inner_width'] &&
@@ -710,10 +959,12 @@ class ShipStation_Service {
 			)
 		);
 
-		$result = $this->parse_rate_response( $response, $order_id );
+		$result = $this->parse_rate_response( $response, $order_id, $descriptor['payload'] );
 
 		if ( $result['success'] && $descriptor['use_cache'] ) {
 			$this->cache_rate_response( $descriptor['cache_key'], $result['rates'] );
+		} elseif ( ! $result['success'] && ! empty( $result['pair_level_err'] ) ) {
+			$this->mark_pair_bad( $descriptor['payload'] );
 		}
 
 		return $result;
@@ -750,11 +1001,30 @@ class ShipStation_Service {
 			return null;
 		}
 
+		$service_code = $this->get_service_code();
+
+		// Short-circuit: skip the API call entirely when this (carrier, service)
+		// pair has already been rejected by ShipStation in the current PHP request
+		// or is sitting in the negative-cache transient (e.g. from a previous
+		// checkout in the last minute).  This protects checkout latency when an
+		// admin has misconfigured a serviceCode the carrier doesn't support.
+		if ( $this->is_pair_known_bad( $carrier_code, $service_code ) ) {
+			$this->log(
+				'Skipping ShipStation rate request for known-bad carrier/service pair.',
+				array(
+					'order_id'    => $order_id,
+					'carrierCode' => $carrier_code,
+					'serviceCode' => $service_code,
+				)
+			);
+			return null;
+		}
+
 		$ship_from = $this->settings->get_ship_from_address();
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => $this->get_service_code(),
+			'serviceCode'    => $service_code,
 			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',
@@ -804,17 +1074,33 @@ class ShipStation_Service {
 	 * statuses, and empty rate lists.  On success, returns the rates sorted
 	 * cheapest-first.
 	 *
+	 * The optional $payload argument lets callers pass the request payload
+	 * so error log entries include the exact `(carrierCode, serviceCode,
+	 * packageCode, weight, dimensions)` combination ShipStation rejected —
+	 * the most actionable diagnostic when a configured serviceCode isn't
+	 * supported by the account's carrier.
+	 *
 	 * @param array|\WP_Error $response WordPress HTTP response.
 	 * @param int             $order_id Order ID for log context.
-	 * @return array ['success' => bool, 'rates' => array[]].
+	 * @param array           $payload  Original request payload (sanitized for logs).
+	 * @return array {
+	 *   success:        bool,
+	 *   rates:          array[],  Present when success is true.
+	 *   pair_level_err: bool,     Present when success is false and the response
+	 *                             indicates a configuration-level (carrier/service)
+	 *                             error rather than a payload/transient error.
+	 * }
 	 */
-	protected function parse_rate_response( $response, int $order_id ): array {
+	protected function parse_rate_response( $response, int $order_id, array $payload = array() ): array {
+		$payload_summary = $this->summarize_payload_for_log( $payload );
+
 		if ( is_wp_error( $response ) ) {
 			$this->log(
 				'ShipStation request failed.',
 				array(
 					'order_id' => $order_id,
 					'error'    => $response->get_error_message(),
+					'request'  => $payload_summary,
 				)
 			);
 			return array( 'success' => false );
@@ -825,15 +1111,23 @@ class ShipStation_Service {
 		$rates = is_array( $body ) ? $body : array();
 
 		if ( $code < 200 || $code >= 300 ) {
+			$api_message    = $this->extract_api_error_message( $body );
+			$pair_level_err = $this->is_pair_level_error( $code, $api_message, $body );
+
 			$this->log(
 				'ShipStation returned a non-success response.',
 				array(
-					'order_id' => $order_id,
-					'status'   => $code,
-					'body'     => $body,
+					'order_id'       => $order_id,
+					'status'         => $code,
+					'api_message'    => $api_message,
+					'request'        => $payload_summary,
+					'pair_level_err' => $pair_level_err,
 				)
 			);
-			return array( 'success' => false );
+			return array(
+				'success'        => false,
+				'pair_level_err' => $pair_level_err,
+			);
 		}
 
 		if ( empty( $rates ) ) {
@@ -841,6 +1135,7 @@ class ShipStation_Service {
 				'ShipStation returned no rates.',
 				array(
 					'order_id' => $order_id,
+					'request'  => $payload_summary,
 					'body'     => $body,
 				)
 			);
@@ -861,6 +1156,248 @@ class ShipStation_Service {
 			'success' => true,
 			'rates'   => $rates,
 		);
+	}
+
+	/**
+	 * Build a compact, log-friendly summary of a rate-request payload.
+	 *
+	 * Includes only the rate-shaping inputs that help a human diagnose
+	 * carrier/service rejections.  Strings are kept short to avoid log spam.
+	 *
+	 * @param array $payload Rate request payload.
+	 * @return array Sanitized subset suitable for logging.
+	 */
+	protected function summarize_payload_for_log( array $payload ): array {
+		if ( empty( $payload ) ) {
+			return array();
+		}
+
+		$dim    = is_array( $payload['dimensions'] ?? null ) ? $payload['dimensions'] : array();
+		$weight = is_array( $payload['weight'] ?? null ) ? $payload['weight'] : array();
+
+		return array(
+			'carrierCode'    => (string) ( $payload['carrierCode'] ?? '' ),
+			'serviceCode'    => (string) ( $payload['serviceCode'] ?? '' ),
+			'packageCode'    => (string) ( $payload['packageCode'] ?? '' ),
+			'fromPostalCode' => (string) ( $payload['fromPostalCode'] ?? '' ),
+			'toPostalCode'   => (string) ( $payload['toPostalCode'] ?? '' ),
+			'toCountry'      => (string) ( $payload['toCountry'] ?? '' ),
+			'weight'         => array(
+				'value' => $weight['value'] ?? null,
+				'units' => (string) ( $weight['units'] ?? '' ),
+			),
+			'dimensions'     => array(
+				'length' => $dim['length'] ?? null,
+				'width'  => $dim['width'] ?? null,
+				'height' => $dim['height'] ?? null,
+			),
+		);
+	}
+
+	/**
+	 * Extract a human-readable error message from a ShipStation error body.
+	 *
+	 * ShipStation 4xx/5xx bodies typically contain `Message`, `ExceptionMessage`,
+	 * `errorCode`, or a flat string.  Returns the first non-empty value found
+	 * so log lines surface the actual cause (e.g. "service code 'usps_ground_advantage'
+	 * is not supported by carrier 'stamps_com'") instead of dumping the entire body.
+	 *
+	 * @param mixed $body Decoded response body.
+	 * @return string Extracted message, or empty string when none can be found.
+	 */
+	protected function extract_api_error_message( $body ): string {
+		if ( is_string( $body ) ) {
+			return trim( $body );
+		}
+
+		if ( ! is_array( $body ) ) {
+			return '';
+		}
+
+		foreach ( array( 'Message', 'message', 'ExceptionMessage', 'errorMessage', 'errors' ) as $key ) {
+			if ( ! isset( $body[ $key ] ) ) {
+				continue;
+			}
+			$value = $body[ $key ];
+			if ( is_string( $value ) && '' !== trim( $value ) ) {
+				return trim( $value );
+			}
+			if ( is_array( $value ) ) {
+				// `errors` is sometimes an array of strings or {message: ...} objects.
+				$parts = array();
+				foreach ( $value as $entry ) {
+					if ( is_string( $entry ) && '' !== trim( $entry ) ) {
+						$parts[] = trim( $entry );
+					} elseif ( is_array( $entry ) ) {
+						$msg = (string) ( $entry['message'] ?? $entry['Message'] ?? '' );
+						if ( '' !== trim( $msg ) ) {
+							$parts[] = trim( $msg );
+						}
+					}
+				}
+				if ( ! empty( $parts ) ) {
+					return implode( '; ', $parts );
+				}
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * Detect whether a non-success rate response represents a *pair-level*
+	 * configuration error (carrierCode/serviceCode the account doesn't
+	 * support) rather than a payload-specific or transient transport error.
+	 *
+	 * Pair-level signals include:
+	 *   - 400 Bad Request that mentions service/carrier code or "not supported"
+	 *   - 500 with the canonical "One or more providers reported an error"
+	 *     message ShipStation returns when the upstream carrier rejects the
+	 *     `(carrierCode, serviceCode)` combination.
+	 *
+	 * Conservative by design: when in doubt, returns false so the caller
+	 * keeps trying remaining candidates instead of incorrectly suppressing
+	 * a transient hiccup.
+	 *
+	 * @param int    $status      HTTP status code.
+	 * @param string $api_message Extracted error message string.
+	 * @param mixed  $body        Decoded response body (for status-only checks).
+	 * @return bool True when the error is pair-level.
+	 */
+	protected function is_pair_level_error( int $status, string $api_message, $body = null ): bool {
+		// Treat any 5xx that the request payload itself can't change as
+		// pair-level only when the body confirms a carrier/service issue.
+		if ( $status < 400 || $status >= 600 ) {
+			return false;
+		}
+
+		$haystack = strtolower( $api_message );
+
+		$signals = array(
+			'service code',
+			'servicecode',
+			'service is not',
+			'service not',
+			'carrier code',
+			'carriercode',
+			'not supported',
+			'is not supported',
+			'unsupported',
+			'one or more providers reported an error',
+			'invalid service',
+			'invalid carrier',
+		);
+
+		foreach ( $signals as $signal ) {
+			if ( '' !== $haystack && false !== strpos( $haystack, $signal ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Mark a (carrierCode, serviceCode) pair as known-bad so subsequent
+	 * candidates within the same PHP request — and other requests within the
+	 * negative-cache TTL — skip the API call entirely.
+	 *
+	 * The negative cache is bypassed when sandbox mode is enabled and the
+	 * TTL is filterable via `fk_usps_optimizer_bad_pair_ttl` (default 60s);
+	 * a non-positive value disables the persistent cache and keeps only the
+	 * in-memory short-circuit for the current request.
+	 *
+	 * @param array $payload Rate-request payload (or summary thereof).
+	 * @return void
+	 */
+	protected function mark_pair_bad( array $payload ): void {
+		$carrier_code = (string) ( $payload['carrierCode'] ?? '' );
+		$service_code = (string) ( $payload['serviceCode'] ?? '' );
+
+		if ( '' === $carrier_code ) {
+			return;
+		}
+
+		$key = $this->bad_pair_key( $carrier_code, $service_code );
+
+		$this->bad_pairs_in_request[ $key ] = true;
+
+		if ( $this->settings->is_sandbox_mode_enabled() ) {
+			return;
+		}
+
+		$ttl = (int) apply_filters( 'fk_usps_optimizer_bad_pair_ttl', 60, $carrier_code, $service_code );
+		if ( $ttl > 0 ) {
+			set_transient( $this->bad_pair_transient_key( $carrier_code, $service_code ), 1, $ttl );
+		}
+	}
+
+	/**
+	 * Check whether a (carrierCode, serviceCode) pair is currently flagged
+	 * as bad — either via the in-memory short-circuit set or the persistent
+	 * negative-cache transient.
+	 *
+	 * Sandbox mode bypasses the persistent transient so test flows always
+	 * exercise the live API path.
+	 *
+	 * @param string $carrier_code ShipStation carrier code.
+	 * @param string $service_code ShipStation service code (may be empty).
+	 * @return bool True when the pair should be skipped.
+	 */
+	protected function is_pair_known_bad( string $carrier_code, string $service_code ): bool {
+		if ( '' === $carrier_code ) {
+			return false;
+		}
+
+		$key = $this->bad_pair_key( $carrier_code, $service_code );
+		if ( isset( $this->bad_pairs_in_request[ $key ] ) ) {
+			return true;
+		}
+
+		if ( $this->settings->is_sandbox_mode_enabled() ) {
+			return false;
+		}
+
+		return false !== get_transient( $this->bad_pair_transient_key( $carrier_code, $service_code ) );
+	}
+
+	/**
+	 * Convenience wrapper that pulls the pair from a payload and defers to
+	 * {@see is_pair_known_bad()}.
+	 *
+	 * @param array $payload Rate-request payload.
+	 * @return bool
+	 */
+	protected function is_pair_known_bad_for_payload( array $payload ): bool {
+		return $this->is_pair_known_bad(
+			(string) ( $payload['carrierCode'] ?? '' ),
+			(string) ( $payload['serviceCode'] ?? '' )
+		);
+	}
+
+	/**
+	 * Build the in-memory short-circuit key for a pair.
+	 *
+	 * @param string $carrier_code Carrier code.
+	 * @param string $service_code Service code.
+	 * @return string
+	 */
+	protected function bad_pair_key( string $carrier_code, string $service_code ): string {
+		return $carrier_code . '|' . $service_code;
+	}
+
+	/**
+	 * Build the persistent negative-cache transient key for a pair.
+	 *
+	 * Hashed to stay under the 172-character WP transient name limit and
+	 * to avoid leaking serviceCode characters that might not be transient-safe.
+	 *
+	 * @param string $carrier_code Carrier code.
+	 * @param string $service_code Service code.
+	 * @return string
+	 */
+	protected function bad_pair_transient_key( string $carrier_code, string $service_code ): string {
+		return 'fk_usps_opt_ss_bad_' . md5( $carrier_code . '|' . $service_code );
 	}
 
 	/**
@@ -927,13 +1464,23 @@ class ShipStation_Service {
 		if ( ! empty( $req_specs ) ) {
 			$responses = $this->dispatch_requests_multi( $req_specs );
 			foreach ( $pending as $idx => $descriptor ) {
+				// If a previous candidate within this batch flagged the pair
+				// as bad, skip the remaining responses for the same pair so
+				// they don't add log spam or retry equivalent failures.
+				if ( $this->is_pair_known_bad_for_payload( $descriptor['payload'] ) ) {
+					$results[ $idx ] = array( 'success' => false );
+					continue;
+				}
+
 				$response = $responses[ $idx ] ?? new \WP_Error( 'fk_usps_optimizer_no_response', 'No response from parallel dispatch.' );
-				$result   = $this->parse_rate_response( $response, $order_id );
+				$result   = $this->parse_rate_response( $response, $order_id, $descriptor['payload'] );
 
 				$results[ $idx ] = $result;
 
 				if ( $result['success'] && $descriptor['use_cache'] ) {
 					$this->cache_rate_response( $descriptor['cache_key'], $result['rates'] );
+				} elseif ( ! $result['success'] && ! empty( $result['pair_level_err'] ) ) {
+					$this->mark_pair_bad( $descriptor['payload'] );
 				}
 			}
 		}

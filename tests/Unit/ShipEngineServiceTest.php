@@ -1379,4 +1379,73 @@ class ShipEngineServiceTest extends TestCase {
 		$ref->setAccessible( true );
 		return $ref->invokeArgs( $instance, $args );
 	}
+
+	// -------------------------------------------------------------------------
+	// B2 / B3 — package_fits_box uses content_dimensions; smaller box reachable
+	// -------------------------------------------------------------------------
+
+	public function test_package_fits_box_uses_content_dimensions_when_present(): void {
+		$package = array(
+			'dimensions'         => array( 'length' => 12.0, 'width' => 12.0, 'height' => 12.0 ),
+			'content_dimensions' => array( 'length' => 4.0, 'width' => 4.0, 'height' => 4.0 ),
+			'weight_oz'          => 16.0,
+			'items'              => array(),
+		);
+		$smaller_box = $this->make_box( array(
+			'inner_length' => 6.0, 'inner_width' => 6.0, 'inner_depth' => 6.0,
+		) );
+
+		$this->assertTrue( $this->call_protected( 'package_fits_box', array( $package, $smaller_box ) ) );
+	}
+
+	public function test_build_candidates_includes_smaller_box_when_content_fits(): void {
+		$big_box = $this->make_box( array(
+			'reference'    => 'Big',
+			'package_code' => 'pkg_big',
+			'package_name' => 'Big',
+			'box_type'     => 'package',
+			'outer_length' => 12.0, 'outer_width' => 12.0, 'outer_depth' => 12.0,
+			'inner_length' => 12.0, 'inner_width' => 12.0, 'inner_depth' => 12.0,
+		) );
+		$small_box = $this->make_box( array(
+			'reference'    => 'Small',
+			'package_code' => 'pkg_small',
+			'package_name' => 'Small',
+			'box_type'     => 'package',
+			'outer_length' => 6.0, 'outer_width' => 6.0, 'outer_depth' => 6.0,
+			'inner_length' => 6.0, 'inner_width' => 6.0, 'inner_depth' => 6.0,
+		) );
+
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $small_box, $big_box ) );
+
+		$package = array(
+			'packed_box'         => $big_box,
+			'dimensions'         => array( 'length' => 12.0, 'width' => 12.0, 'height' => 12.0 ),
+			'content_dimensions' => array( 'length' => 4.0, 'width' => 4.0, 'height' => 4.0 ),
+			'weight_oz'          => 16.0,
+			'items'              => array(
+				array(
+					'name'           => 'Widget',
+					'product_id'     => 1,
+					'length'         => 4.0,
+					'width'          => 4.0,
+					'height'         => 4.0,
+					'weight_oz'      => 16.0,
+					'has_dimensions' => true,
+				),
+			),
+		);
+
+		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
+
+		$package_codes = array_map(
+			static function ( array $c ): string {
+				return (string) $c['package_code'];
+			},
+			$candidates
+		);
+
+		$this->assertContains( 'pkg_small', $package_codes );
+		$this->assertContains( 'pkg_big', $package_codes );
+	}
 }
