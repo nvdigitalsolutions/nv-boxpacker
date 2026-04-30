@@ -2004,6 +2004,385 @@ class ShipStationServiceTest extends TestCase {
 	 * @param array  $args     Arguments.
 	 * @return mixed
 	 */
+	// -------------------------------------------------------------------------
+	// Pair-level error detection + bad-pair short-circuit (A1, A2, A3)
+	// -------------------------------------------------------------------------
+
+	public function test_parse_rate_response_logs_payload_and_api_message_on_500(): void {
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( true );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+
+		$payload  = array(
+			'carrierCode' => 'stamps_com',
+			'serviceCode' => 'usps_ground_advantage',
+			'packageCode' => 'package',
+			'weight'      => array( 'value' => 18, 'units' => 'ounces' ),
+			'dimensions'  => array( 'length' => 8, 'width' => 8, 'height' => 6 ),
+		);
+		$response = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => json_encode( array( 'Message' => 'One or more providers reported an error' ) ),
+		);
+
+		$result = $this->call_protected( 'parse_rate_response', array( $response, 0, $payload ) );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertTrue( ! empty( $result['pair_level_err'] ) );
+
+		$logged = $GLOBALS['_test_wc_logger']->logs[0]['message'] ?? '';
+		$this->assertStringContainsString( 'stamps_com', $logged );
+		$this->assertStringContainsString( 'usps_ground_advantage', $logged );
+		$this->assertStringContainsString( 'One or more providers reported an error', $logged );
+	}
+
+	public function test_is_pair_level_error_recognizes_unsupported_service(): void {
+		$result = $this->call_protected( 'is_pair_level_error', array( 400, "service code 'usps_ground_advantage' is not supported", null ) );
+		$this->assertTrue( $result );
+	}
+
+	public function test_is_pair_level_error_treats_generic_500_as_transient(): void {
+		$result = $this->call_protected( 'is_pair_level_error', array( 500, '', null ) );
+		$this->assertFalse( $result );
+	}
+
+	public function test_request_all_rates_short_circuits_after_pair_level_failure(): void {
+		$this->configure_credentials();
+
+		$call_count                      = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 500 ),
+				'body'     => json_encode( array( 'Message' => 'One or more providers reported an error' ) ),
+			);
+		};
+
+		$first  = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+		$second = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertFalse( $first['success'] );
+		$this->assertFalse( $second['success'] );
+		// First call hits the API; second is short-circuited by the bad-pair flag.
+		$this->assertSame( 1, $call_count );
+	}
+
+	public function test_request_all_rates_short_circuit_uses_negative_cache(): void {
+		$this->configure_credentials();
+
+		// Pre-populate the negative-cache transient as if a prior request had
+		// already flagged this pair as bad.
+		$transient_key = $this->call_protected( 'bad_pair_transient_key', array( 'stamps_com', 'usps_priority_mail' ) );
+		set_transient( $transient_key, 1, 60 );
+
+		$call_count                      = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array( array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 5.0, 'otherCost' => 0.0 ) ) ),
+			);
+		};
+
+		$result = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertSame( 0, $call_count, 'Negative-cache hit should bypass the API entirely.' );
+	}
+
+	public function test_negative_cache_bypassed_in_sandbox_mode(): void {
+		$this->settings->method( 'get_shipstation_api_key' )->willReturn( 'test_key' );
+		$this->settings->method( 'get_shipstation_api_secret' )->willReturn( 'test_secret' );
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$transient_key = $this->call_protected( 'bad_pair_transient_key', array( 'stamps_com', 'usps_priority_mail' ) );
+		set_transient( $transient_key, 1, 60 );
+
+		$call_count                      = 0;
+		$GLOBALS['_test_wp_remote_post'] = function () use ( &$call_count ) {
+			++$call_count;
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array( array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 5.0, 'otherCost' => 0.0 ) ) ),
+			);
+		};
+
+		$result = $this->call_protected( 'request_all_rates', array( $this->make_ship_to(), $this->make_candidate() ) );
+
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( 1, $call_count, 'Sandbox mode should bypass the negative cache.' );
+	}
+
+	public function test_extract_api_error_message_handles_errors_array(): void {
+		$body = array( 'errors' => array( array( 'message' => 'svc not allowed' ), 'flat-string-error' ) );
+		$msg  = $this->call_protected( 'extract_api_error_message', array( $body ) );
+		$this->assertStringContainsString( 'svc not allowed', $msg );
+		$this->assertStringContainsString( 'flat-string-error', $msg );
+	}
+
+	// -------------------------------------------------------------------------
+	// A5 — graceful per-pair failure (one bad pair doesn't break the others)
+	// -------------------------------------------------------------------------
+
+	public function test_one_pair_500_does_not_suppress_other_pair_via_plugin(): void {
+		// Two ShipStation_Service instances stand in for two configured pairs.
+		// The first instance always returns a pair-level 500; the second
+		// returns valid rates.  Verifies that calculate_all_options-style
+		// iteration in Plugin still surfaces the good pair's rates.
+		$bad_settings = $this->createMock( Settings::class );
+		$bad_settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$bad_settings->method( 'get_shipstation_api_key' )->willReturn( 'k' );
+		$bad_settings->method( 'get_shipstation_api_secret' )->willReturn( 's' );
+		$bad_settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$bad_settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_ground_advantage' );
+		$bad_settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$bad_settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$bad_settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$bad_settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$good_settings = $this->createMock( Settings::class );
+		$good_settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$good_settings->method( 'get_shipstation_api_key' )->willReturn( 'k' );
+		$good_settings->method( 'get_shipstation_api_secret' )->willReturn( 's' );
+		$good_settings->method( 'get_shipstation_carrier_code' )->willReturn( 'ups_walleted' );
+		$good_settings->method( 'get_shipstation_service_code' )->willReturn( 'ups_ground' );
+		$good_settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$good_settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$good_settings->method( 'is_sandbox_mode_enabled' )->willReturn( false );
+		$good_settings->method( 'is_use_default_transit_days_enabled' )->willReturn( false );
+
+		$bad_service  = new ShipStation_Service( $bad_settings );
+		$good_service = new ShipStation_Service( $good_settings );
+
+		$GLOBALS['_test_wp_remote_post'] = function ( string $url, array $args ) {
+			$body = json_decode( (string) ( $args['body'] ?? '' ), true );
+			if ( 'stamps_com' === ( $body['carrierCode'] ?? '' ) ) {
+				return array(
+					'response' => array( 'code' => 500 ),
+					'body'     => json_encode( array( 'Message' => 'One or more providers reported an error' ) ),
+				);
+			}
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 8.49, 'otherCost' => 0 ),
+				) ),
+			);
+		};
+
+		$bad_plans  = $bad_service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+		$good_plans = $good_service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertSame( array(), $bad_plans, 'Bad pair should produce no plans.' );
+		$this->assertNotEmpty( $good_plans, 'Good pair should still produce rates despite the bad pair failing.' );
+		$this->assertSame( 8.49, $good_plans[0]['rate_amount'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// A4 — test_connection validates configured service codes
+	// -------------------------------------------------------------------------
+
+	public function test_connection_flags_unknown_service_code_for_carrier(): void {
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_ground_advantage' );
+		$this->settings->method( 'get_shipstation_service_pairs' )->willReturn(
+			array(
+				array( 'carrier_code' => 'stamps_com', 'service_code' => 'usps_ground_advantage' ),
+			)
+		);
+
+		$GLOBALS['_test_wp_remote_get'] = function ( string $url ) {
+			if ( false !== strpos( $url, '/services' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array( 'code' => 'usps_priority_mail', 'name' => 'USPS Priority Mail' ),
+						array( 'code' => 'usps_first_class_mail', 'name' => 'USPS First Class Mail' ),
+					) ),
+				);
+			}
+			// /carriers
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'code' => 'stamps_com', 'name' => 'USPS' ),
+				) ),
+			);
+		};
+
+		$result = $this->service->test_connection( 'k', 's' );
+
+		$this->assertFalse( $result['success'] );
+		$this->assertStringContainsString( 'usps_ground_advantage', $result['message'] );
+		$this->assertStringContainsString( 'stamps_com', $result['message'] );
+		$this->assertStringContainsString( 'usps_priority_mail', $result['message'] );
+	}
+
+	public function test_connection_passes_when_all_configured_services_exist(): void {
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_shipstation_service_pairs' )->willReturn(
+			array(
+				array( 'carrier_code' => 'stamps_com',  'service_code' => 'usps_priority_mail' ),
+				array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+			)
+		);
+
+		$GLOBALS['_test_wp_remote_get'] = function ( string $url ) {
+			if ( false !== strpos( $url, 'carriers/stamps_com/services' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array( 'code' => 'usps_priority_mail' ),
+					) ),
+				);
+			}
+			if ( false !== strpos( $url, 'carriers/ups_walleted/services' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array( 'code' => 'ups_ground' ),
+					) ),
+				);
+			}
+			// /carriers
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'code' => 'stamps_com' ),
+					array( 'code' => 'ups_walleted' ),
+				) ),
+			);
+		};
+
+		$result = $this->service->test_connection( 'k', 's' );
+
+		$this->assertTrue( $result['success'], $result['message'] ?? '' );
+	}
+
+	public function test_connection_skips_service_validation_for_empty_service_code(): void {
+		// An empty service_code is a valid configuration meaning "all services
+		// for this carrier"; it must not trigger a "service not found" error.
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( '' );
+		$this->settings->method( 'get_shipstation_service_pairs' )->willReturn(
+			array(
+				array( 'carrier_code' => 'stamps_com', 'service_code' => '' ),
+			)
+		);
+
+		$GLOBALS['_test_wp_remote_get'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array( array( 'code' => 'stamps_com' ) ) ),
+		);
+
+		$result = $this->service->test_connection( 'k', 's' );
+
+		$this->assertTrue( $result['success'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// B2 / B3 — package_fits_box uses content_dimensions; smaller box reachable
+	// -------------------------------------------------------------------------
+
+	public function test_package_fits_box_uses_content_dimensions_when_present(): void {
+		// Even though `dimensions` matches a 12×12×12 box, content_dimensions
+		// of the actual item (4×4×4) lets a smaller 6×6×6 box be considered.
+		$package = array(
+			'dimensions'         => array( 'length' => 12.0, 'width' => 12.0, 'height' => 12.0 ),
+			'content_dimensions' => array( 'length' => 4.0, 'width' => 4.0, 'height' => 4.0 ),
+			'weight_oz'          => 16.0,
+			'items'              => array(),
+		);
+		$smaller_box = $this->make_box( array(
+			'inner_length' => 6.0,
+			'inner_width'  => 6.0,
+			'inner_depth'  => 6.0,
+		) );
+
+		$this->assertTrue( $this->call_protected( 'package_fits_box', array( $package, $smaller_box ) ) );
+	}
+
+	public function test_package_fits_box_falls_back_to_dimensions_without_content_dimensions(): void {
+		$package = array(
+			'dimensions' => array( 'length' => 12.0, 'width' => 12.0, 'height' => 12.0 ),
+			'weight_oz'  => 16.0,
+			'items'      => array(),
+		);
+		$smaller_box = $this->make_box( array(
+			'inner_length' => 6.0,
+			'inner_width'  => 6.0,
+			'inner_depth'  => 6.0,
+		) );
+
+		$this->assertFalse( $this->call_protected( 'package_fits_box', array( $package, $smaller_box ) ) );
+	}
+
+	public function test_build_candidates_includes_smaller_box_when_content_fits(): void {
+		// build_candidates should consider the smaller 6×6×6 box too.
+		$big_box = $this->make_box( array(
+			'reference'    => 'Big',
+			'package_code' => 'pkg_big',
+			'package_name' => 'Big',
+			'box_type'     => 'package',
+			'outer_length' => 12.0, 'outer_width' => 12.0, 'outer_depth' => 12.0,
+			'inner_length' => 12.0, 'inner_width' => 12.0, 'inner_depth' => 12.0,
+		) );
+		$small_box = $this->make_box( array(
+			'reference'    => 'Small',
+			'package_code' => 'pkg_small',
+			'package_name' => 'Small',
+			'box_type'     => 'package',
+			'outer_length' => 6.0, 'outer_width' => 6.0, 'outer_depth' => 6.0,
+			'inner_length' => 6.0, 'inner_width' => 6.0, 'inner_depth' => 6.0,
+		) );
+
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $small_box, $big_box ) );
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+
+		$package = array(
+			'packed_box'         => $big_box,
+			'dimensions'         => array( 'length' => 12.0, 'width' => 12.0, 'height' => 12.0 ),
+			'content_dimensions' => array( 'length' => 4.0, 'width' => 4.0, 'height' => 4.0 ),
+			'weight_oz'          => 16.0,
+			'items'              => array(
+				array(
+					'name'           => 'Widget',
+					'product_id'     => 1,
+					'length'         => 4.0,
+					'width'          => 4.0,
+					'height'         => 4.0,
+					'weight_oz'      => 16.0,
+					'has_dimensions' => true,
+				),
+			),
+		);
+
+		$candidates = $this->call_protected( 'build_candidates', array( $package ) );
+
+		$package_codes = array_map(
+			static function ( array $c ): string {
+				return (string) $c['package_code'];
+			},
+			$candidates
+		);
+
+		$this->assertContains( 'pkg_small', $package_codes, 'Smaller box should be a candidate.' );
+		$this->assertContains( 'pkg_big', $package_codes, 'Original box should still be a candidate.' );
+	}
+
+	/**
+	 * Invoke a protected method via reflection on a specific instance (rather than
+	 * on `$this->service`).
+	 *
+	 * @param object $instance Target instance.
+	 * @param string $method   Method name.
+	 * @param array  $args     Arguments.
+	 * @return mixed
+	 */
 	private function call_protected_on( object $instance, string $method, array $args = array() ) {
 		$ref = new \ReflectionMethod( $instance, $method );
 		$ref->setAccessible( true );

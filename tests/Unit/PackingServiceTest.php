@@ -949,4 +949,92 @@ class PackingServiceTest extends TestCase {
 
 		$this->assertCount( 1, $result );
 	}
+
+	// -------------------------------------------------------------------------
+	// content_dimensions (B1)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * The boxpacker path must record `content_dimensions` reflecting the
+	 * per-axis bounding box of the actual items, not the chosen box's inner
+	 * dimensions.  Without this, downstream rate-shopping can never consider
+	 * any box smaller than the one BoxPacker initially picked.
+	 */
+	public function test_pack_items_writes_content_dimensions_from_items_not_box(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'OnlyBox',
+				'package_code' => 'package',
+				'package_name' => 'Only Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 12.0,
+				'outer_length' => 12.0,
+				'outer_depth'  => 12.0,
+				'inner_width'  => 12.0,
+				'inner_length' => 12.0,
+				'inner_depth'  => 12.0,
+				'empty_weight' => 1.0,
+				'max_weight'   => 20.0,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array(
+				'product_id'     => 1,
+				'name'           => 'Widget',
+				'length'         => 4.0,
+				'width'          => 3.0,
+				'height'         => 2.0,
+				'weight_oz'      => 5.0,
+				'sku'            => 'W',
+				'has_dimensions' => true,
+			),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertCount( 1, $result );
+		$this->assertArrayHasKey( 'content_dimensions', $result[0] );
+		// Should be the item's bounding box, NOT the box's 12x12x12 inner dims.
+		$this->assertSame( 4.0, $result[0]['content_dimensions']['length'] );
+		$this->assertSame( 3.0, $result[0]['content_dimensions']['width'] );
+		$this->assertSame( 2.0, $result[0]['content_dimensions']['height'] );
+		// dimensions still equals the chosen box's inner dims for backward compat.
+		$this->assertSame( 12.0, $result[0]['dimensions']['length'] );
+	}
+
+	public function test_pack_items_content_dimensions_is_per_axis_max(): void {
+		$boxes = array(
+			array(
+				'reference'    => 'OnlyBox',
+				'package_code' => 'package',
+				'package_name' => 'Only Box',
+				'box_type'     => 'cubic',
+				'outer_width'  => 20.0,
+				'outer_length' => 20.0,
+				'outer_depth'  => 20.0,
+				'inner_width'  => 20.0,
+				'inner_length' => 20.0,
+				'inner_depth'  => 20.0,
+				'empty_weight' => 1.0,
+				'max_weight'   => 50.0,
+			),
+		);
+		$this->settings->method( 'get_boxes' )->willReturn( $boxes );
+
+		$items = array(
+			array( 'product_id' => 1, 'name' => 'A', 'length' => 8.0, 'width' => 2.0, 'height' => 2.0, 'weight_oz' => 4.0, 'sku' => 'A', 'has_dimensions' => true ),
+			array( 'product_id' => 2, 'name' => 'B', 'length' => 2.0, 'width' => 6.0, 'height' => 2.0, 'weight_oz' => 4.0, 'sku' => 'B', 'has_dimensions' => true ),
+			array( 'product_id' => 3, 'name' => 'C', 'length' => 2.0, 'width' => 2.0, 'height' => 7.0, 'weight_oz' => 4.0, 'sku' => 'C', 'has_dimensions' => true ),
+		);
+
+		$result = $this->service->pack_items( $items );
+
+		$this->assertNotEmpty( $result );
+		// Per-axis max across all packed items.
+		$this->assertSame( 8.0, $result[0]['content_dimensions']['length'] );
+		$this->assertSame( 6.0, $result[0]['content_dimensions']['width'] );
+		$this->assertSame( 7.0, $result[0]['content_dimensions']['height'] );
+	}
 }
