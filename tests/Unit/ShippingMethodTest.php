@@ -49,6 +49,34 @@ class ShippingMethodTest extends TestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// is_service_code_allowed
+	// -------------------------------------------------------------------------
+
+	public function test_media_mail_is_never_allowed(): void {
+		$this->assertFalse( Shipping_Method::is_service_code_allowed( 'usps_media_mail' ) );
+	}
+
+	public function test_other_service_codes_are_allowed_by_default(): void {
+		$this->assertTrue( Shipping_Method::is_service_code_allowed( 'usps_priority_mail' ) );
+		$this->assertTrue( Shipping_Method::is_service_code_allowed( 'usps_ground_advantage' ) );
+		$this->assertTrue( Shipping_Method::is_service_code_allowed( 'ups_ground' ) );
+	}
+
+	public function test_excluded_service_codes_filter_can_extend_disallow_list(): void {
+		add_filter(
+			'fk_usps_optimizer_excluded_service_codes',
+			static function ( array $codes ): array {
+				$codes[] = 'usps_priority_mail_express';
+				return $codes;
+			}
+		);
+
+		$this->assertFalse( Shipping_Method::is_service_code_allowed( 'usps_media_mail' ) );
+		$this->assertFalse( Shipping_Method::is_service_code_allowed( 'usps_priority_mail_express' ) );
+		$this->assertTrue( Shipping_Method::is_service_code_allowed( 'usps_priority_mail' ) );
+	}
+
+	// -------------------------------------------------------------------------
 	// build_ship_to
 	// -------------------------------------------------------------------------
 

@@ -225,35 +225,67 @@ class Plugin {
 				return;
 			}
 
-			foreach ( $packed_packages as $index => $package ) {
-				$best_plan = array();
-				$best_cost = PHP_FLOAT_MAX;
+			// Prefer the plan that was attached to the rate the customer
+			// actually selected at checkout.  Shipping_Method stores the
+			// per-package plan on each WC rate as hidden meta; WooCommerce
+			// copies that meta onto the order's shipping line item when the
+			// customer picks the rate.  Reusing it guarantees the stored
+			// plan matches the chosen carrier/service (e.g. UPS Ground)
+			// instead of being recomputed via "cheapest across all carriers"
+			// which can land on a different service such as Media Mail.
+			$chosen_plans = $this->extract_chosen_plan_packages( $order );
 
-				foreach ( $carrier_services as $carrier_svc ) {
-					$candidate_plan = $carrier_svc->build_package_plan( $order, $package, $index + 1 );
+			if ( ! empty( $chosen_plans ) ) {
+				foreach ( $chosen_plans as $chosen_plan ) {
+					$plan['packages'][]         = $chosen_plan;
+					$plan['total_rate_amount'] += (float) ( $chosen_plan['rate_amount'] ?? 0 );
+					$plan['currency']           = (string) ( $chosen_plan['currency'] ?? $plan['currency'] );
+					$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $chosen_plan );
+				}
 
-					if ( ! empty( $candidate_plan ) && (float) $candidate_plan['rate_amount'] < $best_cost ) {
-						$best_plan = $candidate_plan;
-						$best_cost = (float) $candidate_plan['rate_amount'];
+				$plan['total_package_count'] = count( $plan['packages'] );
+			} else {
+				foreach ( $packed_packages as $index => $package ) {
+					$best_plan = array();
+					$best_cost = PHP_FLOAT_MAX;
+
+					foreach ( $carrier_services as $carrier_svc ) {
+						$candidate_plan = $carrier_svc->build_package_plan( $order, $package, $index + 1 );
+
+						if ( empty( $candidate_plan ) ) {
+							continue;
+						}
+
+						// Never offer disallowed services (e.g. Media Mail) as the
+						// rate-shopping winner, even when they are the cheapest.
+						$candidate_service = (string) ( $candidate_plan['service_code'] ?? '' );
+						if ( ! Shipping_Method::is_service_code_allowed( $candidate_service ) ) {
+							continue;
+						}
+
+						if ( (float) $candidate_plan['rate_amount'] < $best_cost ) {
+							$best_plan = $candidate_plan;
+							$best_cost = (float) $candidate_plan['rate_amount'];
+						}
 					}
+
+					if ( empty( $best_plan ) ) {
+						$plan['warnings'][] = sprintf(
+							/* translators: %d package number. */
+							__( 'Unable to produce a shipping plan for package %d.', 'fk-usps-optimizer' ),
+							$index + 1
+						);
+						continue;
+					}
+
+					$plan['packages'][]         = $best_plan;
+					$plan['total_rate_amount'] += (float) $best_plan['rate_amount'];
+					$plan['currency']           = $best_plan['currency'];
+					$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $best_plan );
 				}
 
-				if ( empty( $best_plan ) ) {
-					$plan['warnings'][] = sprintf(
-						/* translators: %d package number. */
-						__( 'Unable to produce a shipping plan for package %d.', 'fk-usps-optimizer' ),
-						$index + 1
-					);
-					continue;
-				}
-
-				$plan['packages'][]         = $best_plan;
-				$plan['total_rate_amount'] += (float) $best_plan['rate_amount'];
-				$plan['currency']           = $best_plan['currency'];
-				$plan['pirateship_rows'][]  = $this->export_service->build_row( $order, $best_plan );
+				$plan['total_package_count'] = count( $plan['packages'] );
 			}
-
-			$plan['total_package_count'] = count( $plan['packages'] );
 
 			if ( 0 === $plan['total_package_count'] ) {
 				$plan['warnings'][] = __( 'All rate-shopping attempts failed. Review carrier API configuration and box setup.', 'fk-usps-optimizer' );
@@ -295,6 +327,60 @@ class Plugin {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Extract the per-package shipping plan persisted on the customer's
+	 * chosen shipping line item.
+	 *
+	 * Shipping_Method attaches the per-package plan behind each rate as
+	 * hidden meta (`_fk_plan_packages`).  WooCommerce copies a chosen rate's
+	 * meta_data onto the order's shipping line item, so reading it back
+	 * lets us build the order plan from the exact rate the customer paid
+	 * for — keeping the stored plan aligned with the carrier/service shown
+	 * at checkout.
+	 *
+	 * Returns an empty array when no plan is stored (e.g. the customer
+	 * picked a third-party shipping method that did not originate from
+	 * this plugin), in which case the caller should fall back to its own
+	 * rate-shopping logic.
+	 *
+	 * @param \WC_Order $order The WooCommerce order.
+	 * @return array Per-package shipping plans, or empty array.
+	 */
+	protected function extract_chosen_plan_packages( \WC_Order $order ): array {
+		if ( ! method_exists( $order, 'get_shipping_methods' ) ) {
+			return array();
+		}
+
+		$shipping_items = $order->get_shipping_methods();
+		if ( ! is_array( $shipping_items ) || empty( $shipping_items ) ) {
+			return array();
+		}
+
+		foreach ( $shipping_items as $shipping_item ) {
+			if ( ! is_object( $shipping_item ) || ! method_exists( $shipping_item, 'get_meta' ) ) {
+				continue;
+			}
+
+			$raw = $shipping_item->get_meta( '_fk_plan_packages', true );
+
+			if ( is_string( $raw ) && '' !== $raw ) {
+				$decoded = json_decode( $raw, true );
+				if ( is_array( $decoded ) && ! empty( $decoded ) ) {
+					return $decoded;
+				}
+			} elseif ( is_array( $raw ) && ! empty( $raw ) ) {
+				// Defensive fallback: WC stores rate meta as serialized PHP and
+				// usually returns the JSON string we saved, but third-party
+				// extensions or future WC changes could return an already-
+				// decoded array here.  Accept either shape so the chosen-plan
+				// path keeps working.
+				return $raw;
+			}
+		}
+
+		return array();
 	}
 
 	/**
