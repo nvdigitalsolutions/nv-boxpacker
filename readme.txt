@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,12 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.6 =
+* Improved: **ShipStation 500 resilience** — when ShipStation rejects a configured `(carrierCode, serviceCode)` pair (e.g. `stamps_com` + `usps_ground_advantage` on a USPS account without Ground Advantage), the plugin now logs the exact rejected pair (`carrierCode`, `serviceCode`, `packageCode`, dimensions, weight) along with the API's `Message`/`ExceptionMessage` string instead of dumping the entire response body. After a pair-level error (matched against patterns like `service code`, `not supported`, and `One or more providers reported an error`), remaining box candidates for the same pair are short-circuited within the current checkout request, and a brief negative-cache transient (default 60s, filterable via `fk_usps_optimizer_bad_pair_ttl`) prevents repeat API calls for the same bad pair across requests. Sandbox mode bypasses this cache. The same logging improvements apply to the ShipEngine integration.
+* New: **Test Connection now validates serviceCodes** — the settings-page Test Connection button (and `ShipStation_Service::test_connection()`) now also fetches `/carriers/{carrierCode}/services` for every unique carrier referenced by `Settings::get_shipstation_service_pairs()` and reports any unknown service code with the same actionable format used for unknown carrier codes (e.g. *"Service code 'usps_ground_advantage' was not found for carrier 'stamps_com' in your ShipStation account. Available service codes: …"*), surfacing misconfigurations at save time instead of silently at first checkout.
+* Fixed: **Rate-shopping now reconsiders smaller boxes.** Previously, `Packing_Service` wrote the chosen box's inner dimensions onto `$package['dimensions']`, which caused `package_fits_box()` to filter out any box smaller than the one BoxPacker initially selected — making rate-shopping structurally biased toward larger, more expensive boxes. Each packed package now also exposes `content_dimensions` (the per-axis bounding box of the actual items), and `ShipStation_Service::package_fits_box()` / `ShipEngine_Service::package_fits_box()` prefer this value, falling back to `dimensions` for backward compatibility. For candidates strictly smaller than the originally chosen box, `build_candidates()` runs a single-box re-pack via `Packing_Service::pack_items()` as a correctness guard and only keeps the candidate when all items physically combine into one instance of it. Same-or-larger candidates skip the re-check; unmeasured items (`has_dimensions === false`) preserve the existing one-item-per-box behavior.
+* New: `fk_usps_optimizer_bad_pair_ttl` filter to override the negative-cache TTL (in seconds) for known-bad ShipStation `(carrier, service)` pairs. A non-positive value disables the persistent transient and keeps only the in-memory short-circuit for the current request.
 
 = 1.3.5 =
 * Changed: **Send Packing Plan to PirateShip via Customer Note** no longer writes the plan into the order's stored customer-note column. The plan is now persisted as private order meta (`_fk_packing_plan_note`), rendered in the existing admin-only **USPS Priority Shipping Plan** metabox on the order edit screen, and injected into the `customer_note` field of WooCommerce REST API responses (via `woocommerce_rest_prepare_shop_order_object`) so PirateShip continues to receive it. The previous hidden-marker (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`) approach and the `woocommerce_order_get_customer_note` strip filter have been removed, eliminating the risk of the plan leaking through any admin path that bypasses the strip filter. Orders processed by earlier versions are migrated lazily on next re-process.
