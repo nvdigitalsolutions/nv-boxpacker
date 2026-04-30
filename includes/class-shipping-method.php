@@ -21,6 +21,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Shipping_Method extends \WC_Shipping_Method {
 
 	/**
+	 * Service codes that must never be offered to customers as a shipping
+	 * option for this plugin (e.g. Media Mail is a restricted-content service
+	 * unsuitable for general merchandise and must never appear as a suggested
+	 * plan).  The list is filterable so site owners can add additional codes.
+	 *
+	 * @var string[]
+	 */
+	const EXCLUDED_SERVICE_CODES = array( 'usps_media_mail' );
+
+	/**
+	 * Determine whether a service code is allowed as a customer-facing
+	 * shipping suggestion.
+	 *
+	 * @param string $service_code Service code (e.g. 'usps_media_mail').
+	 * @return bool True when the service may be offered.
+	 */
+	public static function is_service_code_allowed( string $service_code ): bool {
+		$excluded = (array) apply_filters(
+			'fk_usps_optimizer_excluded_service_codes',
+			self::EXCLUDED_SERVICE_CODES
+		);
+
+		return ! in_array( $service_code, $excluded, true );
+	}
+
+	/**
 	 * Constructor.
 	 *
 	 * @param int $instance_id Shipping method instance ID.
@@ -120,6 +146,17 @@ class Shipping_Method extends \WC_Shipping_Method {
 
 			if ( ! empty( $rate['meta_data'] ) ) {
 				$rate_args['meta_data'] = $rate['meta_data'];
+			}
+
+			// Persist the chosen plan on the rate as hidden meta so that
+			// Plugin::process_order() can rebuild the order's shipping plan
+			// from exactly what the customer selected at checkout, instead of
+			// re-rate-shopping (which can pick a different service such as
+			// Media Mail when it is the cheapest).  Keys are underscore-
+			// prefixed so WooCommerce treats them as hidden.
+			if ( ! empty( $rate['fk_plans'] ) && is_array( $rate['fk_plans'] ) ) {
+				$rate_args['meta_data']['_fk_service_code'] = (string) ( $rate['fk_service_code'] ?? '' );
+				$rate_args['meta_data']['_fk_plan_packages'] = wp_json_encode( $rate['fk_plans'] );
 			}
 
 			$this->add_rate( $rate_args );
@@ -253,6 +290,12 @@ class Shipping_Method extends \WC_Shipping_Method {
 				// Keep the cheapest plan per service_code for this package.
 				foreach ( $plans as $plan ) {
 					$sc = $plan['service_code'] ?? '';
+
+					// Exclude services that must never be offered (e.g. Media Mail).
+					if ( ! self::is_service_code_allowed( (string) $sc ) ) {
+						continue;
+					}
+
 					if ( ! isset( $per_package_service_best[ $sc ][ $index ] )
 						|| (float) $plan['rate_amount'] < (float) $per_package_service_best[ $sc ][ $index ]['rate_amount']
 					) {
@@ -323,9 +366,11 @@ class Shipping_Method extends \WC_Shipping_Method {
 				}
 
 				$rates[] = array(
-					'label'     => $label,
-					'cost'      => $total_cost,
-					'meta_data' => $meta_data,
+					'label'            => $label,
+					'cost'             => $total_cost,
+					'meta_data'        => $meta_data,
+					'fk_service_code'  => (string) $sc,
+					'fk_plans'         => array_values( $plans_by_index ),
 				);
 			}
 		}
@@ -383,7 +428,13 @@ class Shipping_Method extends \WC_Shipping_Method {
 			$all_service_codes = array();
 			foreach ( $per_package_plans as $plans ) {
 				foreach ( $plans as $plan ) {
-					$sc                       = $plan['service_code'] ?? '';
+					$sc = $plan['service_code'] ?? '';
+
+					// Exclude services that must never be offered (e.g. Media Mail).
+					if ( ! self::is_service_code_allowed( (string) $sc ) ) {
+						continue;
+					}
+
 					$all_service_codes[ $sc ] = true;
 				}
 			}
@@ -490,9 +541,11 @@ class Shipping_Method extends \WC_Shipping_Method {
 					$seen_labels[ $label ] = true;
 
 					$rates[] = array(
-						'label'     => $label,
-						'cost'      => $total,
-						'meta_data' => $meta_data,
+						'label'            => $label,
+						'cost'             => $total,
+						'meta_data'        => $meta_data,
+						'fk_service_code'  => (string) $sc,
+						'fk_plans'         => array_values( $combo ),
 					);
 				}
 			}

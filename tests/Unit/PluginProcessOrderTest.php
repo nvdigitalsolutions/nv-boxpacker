@@ -518,4 +518,135 @@ class PluginProcessOrderTest extends TestCase {
 
 		return $order;
 	}
+
+	// -------------------------------------------------------------------------
+	// process_order uses the chosen shipping line's stored plan
+	// -------------------------------------------------------------------------
+
+	public function test_process_order_uses_chosen_shipping_line_plan(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		// Stub a rate response that, if used, would produce a 7.99 plan.
+		// We expect process_order to NOT use it because the chosen plan is set.
+		$this->stub_successful_rate_response();
+
+		$chosen_plan = array(
+			'package_number' => 1,
+			'mode'           => 'cubic',
+			'package_code'   => 'package',
+			'package_name'   => '1 Bag (cubic)',
+			'service_code'   => 'ups_ground',
+			'service_label'  => 'UPS Ground',
+			'rate_amount'    => 12.34,
+			'currency'       => 'USD',
+			'weight_oz'      => 96,
+			'dimensions'     => array( 'length' => 12.25, 'width' => 12, 'height' => 7 ),
+			'cubic_tier'     => '0.2',
+			'packing_list'   => array( '1x Test Product' ),
+			'items'          => array(),
+			'estimated_delivery_date' => '',
+		);
+
+		$shipping_item = new \WC_Order_Item_Shipping();
+		$shipping_item->set_test_meta( '_fk_plan_packages', wp_json_encode( array( $chosen_plan ) ) );
+
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array( $shipping_item ) );
+
+		// Capture what the order plan service receives.
+		$captured_plan = null;
+		$order->method( 'update_meta_data' )->willReturnCallback(
+			static function ( string $key, $value ) use ( &$captured_plan ): void {
+				if ( Order_Plan_Service::META_KEY === $key ) {
+					$captured_plan = $value;
+				}
+			}
+		);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$this->assertIsArray( $captured_plan );
+		$this->assertSame( 1, $captured_plan['total_package_count'] );
+		$this->assertCount( 1, $captured_plan['packages'] );
+		$this->assertSame( 'ups_ground', $captured_plan['packages'][0]['service_code'] );
+		$this->assertSame( 'UPS Ground', $captured_plan['packages'][0]['service_label'] );
+		$this->assertSame( 12.34, (float) $captured_plan['total_rate_amount'] );
+	}
+
+	public function test_process_order_falls_back_to_rate_shopping_when_no_chosen_plan(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		$this->stub_successful_rate_response();
+
+		$order = $this->build_packable_order_mock();
+		// No shipping methods on the order — fall back to the existing path.
+		$order->method( 'get_shipping_methods' )->willReturn( array() );
+
+		$captured_plan = null;
+		$order->method( 'update_meta_data' )->willReturnCallback(
+			static function ( string $key, $value ) use ( &$captured_plan ): void {
+				if ( Order_Plan_Service::META_KEY === $key ) {
+					$captured_plan = $value;
+				}
+			}
+		);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$this->assertIsArray( $captured_plan );
+		$this->assertSame( 1, $captured_plan['total_package_count'] );
+		$this->assertSame( 'usps_priority_mail', $captured_plan['packages'][0]['service_code'] );
+	}
+
+	public function test_process_order_fallback_skips_media_mail_even_when_cheapest(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		// ShipEngine is configured (default carrier) and would return a Media
+		// Mail rate.  process_order's fallback rate-shopping path must reject
+		// it so the stored plan never contains a Media Mail service.
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ]['shipengine_service_code'] = 'usps_media_mail';
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => wp_json_encode(
+				array(
+					'rate_response' => array(
+						'rates' => array(
+							array(
+								'shipping_amount' => array( 'amount' => 1.00, 'currency' => 'USD' ),
+								'service_code'    => 'usps_media_mail',
+							),
+						),
+					),
+				)
+			),
+		);
+
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array() );
+
+		$captured_plan = null;
+		$order->method( 'update_meta_data' )->willReturnCallback(
+			static function ( string $key, $value ) use ( &$captured_plan ): void {
+				if ( Order_Plan_Service::META_KEY === $key ) {
+					$captured_plan = $value;
+				}
+			}
+		);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$this->assertIsArray( $captured_plan );
+		$this->assertSame( 0, $captured_plan['total_package_count'], 'Media Mail must never end up in the stored plan.' );
+		$this->assertEmpty( $captured_plan['packages'] );
+	}
 }

@@ -1003,6 +1003,49 @@ class WC_Order {
 	 * @return mixed Meta value.
 	 */
 	public function get_meta( string $key, bool $single = true, string $context = 'view' ) { return ''; }
+
+	/**
+	 * Get the order's shipping line items.
+	 *
+	 * @return array Array of shipping items keyed by item ID.
+	 */
+	public function get_shipping_methods(): array { return array(); }
+}
+
+/**
+ * WooCommerce order item shipping line stub.
+ */
+class WC_Order_Item_Shipping {
+
+	/**
+	 * Backing meta storage.
+	 *
+	 * @var array<string, mixed>
+	 */
+	private array $meta = array();
+
+	/**
+	 * Set a meta value (test helper).
+	 *
+	 * @param string $key   Meta key.
+	 * @param mixed  $value Meta value.
+	 * @return void
+	 */
+	public function set_test_meta( string $key, $value ): void {
+		$this->meta[ $key ] = $value;
+	}
+
+	/**
+	 * Get a meta value.
+	 *
+	 * @param string $key     Meta key.
+	 * @param bool   $single  Whether to return a single value.
+	 * @param string $context Context.
+	 * @return mixed Meta value.
+	 */
+	public function get_meta( string $key, bool $single = true, string $context = 'view' ) {
+		return $this->meta[ $key ] ?? '';
+	}
 }
 
 /**
