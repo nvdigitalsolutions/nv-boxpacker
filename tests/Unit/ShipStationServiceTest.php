@@ -2263,6 +2263,60 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertTrue( $result['success'], $result['message'] ?? '' );
 	}
 
+	public function test_connection_succeeds_with_four_specific_service_pairs(): void {
+		// Mirrors the real-world configuration described in the issue:
+		// [{"carrier_code":"stamps_com","service_code":"usps_ground_advantage"},
+		//  {"carrier_code":"ups_walleted","service_code":"ups_ground"},
+		//  {"carrier_code":"ups_walleted","service_code":"ups_2nd_day_air"},
+		//  {"carrier_code":"ups_walleted","service_code":"ups_next_day_air"}]
+		$this->settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$this->settings->method( 'get_shipstation_service_code' )->willReturn( 'usps_ground_advantage' );
+		$this->settings->method( 'get_shipstation_service_pairs' )->willReturn(
+			array(
+				array( 'carrier_code' => 'stamps_com',   'service_code' => 'usps_ground_advantage' ),
+				array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_ground' ),
+				array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_2nd_day_air' ),
+				array( 'carrier_code' => 'ups_walleted', 'service_code' => 'ups_next_day_air' ),
+			)
+		);
+
+		$GLOBALS['_test_wp_remote_get'] = function ( string $url ) {
+			if ( false !== strpos( $url, 'carriers/stamps_com/services' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array( 'code' => 'usps_ground_advantage' ),
+						array( 'code' => 'usps_priority_mail' ),
+					) ),
+				);
+			}
+			if ( false !== strpos( $url, 'carriers/ups_walleted/services' ) ) {
+				return array(
+					'response' => array( 'code' => 200 ),
+					'body'     => json_encode( array(
+						array( 'code' => 'ups_ground' ),
+						array( 'code' => 'ups_2nd_day_air' ),
+						array( 'code' => 'ups_next_day_air' ),
+					) ),
+				);
+			}
+			// /carriers endpoint — return both carriers as active.
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					array( 'code' => 'stamps_com' ),
+					array( 'code' => 'ups_walleted' ),
+				) ),
+			);
+		};
+
+		$result = $this->service->test_connection( 'k', 's' );
+
+		$this->assertTrue( $result['success'], $result['message'] ?? '' );
+		$this->assertStringContainsString( 'Connection successful', $result['message'] );
+		$this->assertStringContainsString( 'ShipStation credentials are valid', $result['message'] );
+	}
+
 	public function test_connection_skips_service_validation_for_empty_service_code(): void {
 		// An empty service_code is a valid configuration meaning "all services
 		// for this carrier"; it must not trigger a "service not found" error.
