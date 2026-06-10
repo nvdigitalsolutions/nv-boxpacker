@@ -600,6 +600,11 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.3.6
+
+- **Fixed:** BoxPacker heuristic could pick a suboptimal box size for a group of items even when a smaller box would fit. A post-processing optimisation (`Packing_Service::optimize_packed_boxes()`) now checks each packed package and downsizes to the smallest fitting box — single-item packages use a straightforward dimensional match, while multi-item packages are re-packed through BoxPacker with only the candidate box. This prevents cases such as a Half-Off Magic Bag (5×5.5×2.5 in, 2 lb) being placed in a 2 Bag when it fits in a 1 Bag, or two Organic All-In-One grow bags (10.25×5.5×5 in each) being placed in a 4 Bag when they fit in a 3 Bag.
+- **New:** `Packing_Service::optimize_packed_boxes()`, `Packing_Service::items_fit_in_box()`, and `Packing_Service::rebind_package_to_box()` methods that perform the post-packing downsizing pass.
+
 ### 1.3.5
 
 - **Changed:** **Send Packing Plan to PirateShip via Customer Note** no longer writes the plan into the order's stored customer-note column. The plan is now persisted as private order meta (`_fk_packing_plan_note`), rendered in the existing admin-only **USPS Priority Shipping Plan** metabox on the order edit screen, and injected into the `customer_note` field of WooCommerce REST API responses (via the `woocommerce_rest_prepare_shop_order_object` filter) so PirateShip continues to receive it. The previous hidden-marker (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`) approach and the `woocommerce_order_get_customer_note` strip filter have been removed, eliminating the risk of the plan leaking through any admin path that bypasses the strip filter (custom metaboxes, third-party plugins, raw `$context = 'edit'` reads, direct DB queries). Orders processed by earlier versions are migrated lazily: on the next re-process the legacy marker block is removed from the persisted customer note and the plan is re-stored as meta.

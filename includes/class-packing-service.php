@@ -220,7 +220,141 @@ class Packing_Service {
 			);
 		}
 
+		// Post-process: BoxPacker's heuristic search can miss optimal
+		// box assignments.  Try to downsize each package to the smallest
+		// box that can actually hold its items.
+		return $this->optimize_packed_boxes( $packages, $boxes );
+	}
+
+	/**
+	 * Post-process BoxPacker packages to use the smallest box that
+	 * fits each item group.
+	 *
+	 * BoxPacker's heuristic search minimises box count first, but
+	 * within that goal it can pick a larger box than necessary
+	 * (e.g. a 2 Bag for a single small item when a 1 Bag fits).
+	 * This pass checks each package and downsizes when possible.
+	 *
+	 * Single-item packages use the simple dimensional match
+	 * (match_item_to_box) which is guaranteed to find the smallest
+	 * fitting box.  Multi-item packages are re-packed via BoxPacker
+	 * against only the smaller candidate boxes.
+	 *
+	 * @param array $packages Packages produced by BoxPacker.
+	 * @param array $boxes    Available box definitions.
+	 * @return array Optimised packages.
+	 */
+	protected function optimize_packed_boxes( array $packages, array $boxes ): array {
+		// Pre-sort by inner volume ascending so we try smallest boxes first.
+		$sorted_boxes = $boxes;
+		usort(
+			$sorted_boxes,
+			static function ( array $a, array $b ): int {
+				$va = (float) $a['inner_length'] * (float) $a['inner_width'] * (float) $a['inner_depth'];
+				$vb = (float) $b['inner_length'] * (float) $b['inner_width'] * (float) $b['inner_depth'];
+				return $va <=> $vb;
+			}
+		);
+
+		foreach ( $packages as &$package ) {
+			$current_box = $package['packed_box'];
+			$current_vol = (float) $current_box['inner_length']
+				* (float) $current_box['inner_width']
+				* (float) $current_box['inner_depth'];
+
+			// Single item — exact dimensional match finds the smallest box.
+			if ( 1 === count( $package['items'] ) ) {
+				$best     = $this->match_item_to_box( $package['items'][0], $sorted_boxes );
+				$best_vol = (float) $best['inner_length']
+					* (float) $best['inner_width']
+					* (float) $best['inner_depth'];
+
+				if ( $best_vol < $current_vol ) {
+					$package = $this->rebind_package_to_box( $package, $best );
+				}
+				continue;
+			}
+
+			// Multiple items — try each successively larger candidate box.
+			foreach ( $sorted_boxes as $candidate ) {
+				$cand_vol = (float) $candidate['inner_length']
+					* (float) $candidate['inner_width']
+					* (float) $candidate['inner_depth'];
+
+				if ( $cand_vol >= $current_vol ) {
+					break; // No smaller boxes remain.
+				}
+
+				// Quick weight gate — skip boxes whose max weight is too low.
+				if ( $package['weight_oz'] > (float) $candidate['max_weight'] * 16 ) {
+					continue;
+				}
+
+				// Ask BoxPacker whether the items fit in this single candidate box.
+				if ( $this->items_fit_in_box( $package['items'], $candidate ) ) {
+					$package = $this->rebind_package_to_box( $package, $candidate );
+					break;
+				}
+			}
+		}
+		unset( $package );
+
 		return $packages;
+	}
+
+	/**
+	 * Check whether a group of items all fit into a single specific box.
+	 *
+	 * Creates a fresh BoxPacker instance with only the candidate box and
+	 * the given items.  Returns true when pack() succeeds with exactly
+	 * one packed box (all items placed).
+	 *
+	 * @param array $items Item data arrays.
+	 * @param array $box   Single box definition.
+	 * @return bool True when the items fit in the box.
+	 */
+	protected function items_fit_in_box( array $items, array $box ): bool {
+		try {
+			$packer = new \DVDoug\BoxPacker\Packer();
+			$packer->addBox( new BoxPacker_Box( $this->convert_box_to_boxpacker_units( $box ) ) );
+
+			foreach ( $items as $index => $item ) {
+				$packer->addItem(
+					new BoxPacker_Item(
+						(string) ( $item['product_id'] . '-' . $index ),
+						$item['name'],
+						$this->to_mm( $item['width'] ),
+						$this->to_mm( $item['length'] ),
+						$this->to_mm( $item['height'] ),
+						$this->to_g( $item['weight_oz'] ),
+						false,
+						$item
+					)
+				);
+			}
+
+			$result = $packer->pack();
+			return 1 === $result->count();
+		} catch ( \DVDoug\BoxPacker\ItemTooLargeException $e ) {
+			return false;
+		}
+	}
+
+	/**
+	 * Create a new package array bound to a different box definition.
+	 *
+	 * @param array $package Original package data.
+	 * @param array $box     New box definition to bind.
+	 * @return array Updated package data.
+	 */
+	protected function rebind_package_to_box( array $package, array $box ): array {
+		$package['packed_box'] = $box;
+		$package['dimensions'] = array(
+			'length' => (float) ( $box['inner_length'] ?? 0 ),
+			'width'  => (float) ( $box['inner_width'] ?? 0 ),
+			'height' => (float) ( $box['inner_depth'] ?? 0 ),
+		);
+		return $package;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.5
+Stable tag: 1.3.6
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -154,6 +154,9 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 
 == Changelog ==
 
+= 1.3.6 =
+* Fixed: BoxPacker heuristic could assign a larger box than necessary to small or medium items (e.g. a Half-Off Magic Bag fitting in a 1 Bag was placed in a 2 Bag, and two AIO grow bags that fit in a 3 Bag were placed in a 4 Bag). A post-processing pass now downsizes each packed package to the smallest box that can hold its items.
+
 = 1.3.5 =
 * Changed: **Send Packing Plan to PirateShip via Customer Note** no longer writes the plan into the order's stored customer-note column. The plan is now persisted as private order meta (`_fk_packing_plan_note`), rendered in the existing admin-only **USPS Priority Shipping Plan** metabox on the order edit screen, and injected into the `customer_note` field of WooCommerce REST API responses (via `woocommerce_rest_prepare_shop_order_object`) so PirateShip continues to receive it. The previous hidden-marker (`<!-- fk-pack-start --> ... <!-- fk-pack-end -->`) approach and the `woocommerce_order_get_customer_note` strip filter have been removed, eliminating the risk of the plan leaking through any admin path that bypasses the strip filter. Orders processed by earlier versions are migrated lazily on next re-process.
 * New: `Plugin::PACKING_NOTE_META_KEY` constant and `Plugin::inject_packing_plan_into_rest_response()` REST filter callback.
@@ -265,4 +268,3 @@ Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful fo
 
 = 1.0.0 =
 * Initial plugin scaffold with settings, ShipEngine rate-shopping, order planning, admin display, and PirateShip CSV export.
-
