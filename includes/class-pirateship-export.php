@@ -304,7 +304,7 @@ class PirateShip_Export {
 				$desired_path = $dir . wp_unique_filename( $dir, $filename );
 			}
 
-			if ( @rename( $tmp_path, $desired_path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort rename; fall back to original `.tmp` path on failure.
+			if ( @rename( $tmp_path, $desired_path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.rename_rename -- Best-effort rename; fall back to original `.tmp` path on failure.
 				$tmp_path = $desired_path;
 			}
 		}
