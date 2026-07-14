@@ -49,18 +49,70 @@ class ShipEngine_Service {
 		$service_code = '' !== $override_service_code ? $override_service_code : $this->settings->get_shipengine_service_code();
 
 		$service_names = array(
-			'usps_priority_mail'         => 'Priority',
-			'usps_priority_mail_express' => 'Priority Express',
-			'usps_first_class_mail'      => 'First Class',
-			'usps_ground_advantage'      => 'Ground Advantage',
-			'usps_parcel_select'         => 'Parcel Select',
-			'usps_media_mail'            => 'Media Mail',
+			'usps_priority_mail'                       => 'Priority',
+			'usps_priority_mail_express'               => 'Priority Express',
+			'usps_first_class_mail'                    => 'First Class',
+			'usps_ground_advantage'                    => 'Ground Advantage',
+			'usps_parcel_select'                       => 'Parcel Select',
+			'usps_media_mail'                          => 'Media Mail',
+			'usps_priority_mail_international'         => 'Priority Intl',
+			'usps_priority_mail_express_international' => 'Priority Express Intl',
+			'usps_first_class_mail_international'      => 'First Class Intl',
 		);
 
 		$service_name = $service_names[ $service_code ]
 			?? ucwords( str_replace( '_', ' ', $service_code ) );
 
 		return 'USPS ' . $service_name;
+	}
+
+	/**
+	 * Resolve the effective service code for a destination country.
+	 *
+	 * Domestic US/PR addresses use the configured service code directly.
+	 * International destinations (e.g. Canada) need international service
+	 * codes — e.g. usps_priority_mail_international instead of
+	 * usps_priority_mail.  When no international equivalent is known the
+	 * original service code is returned unchanged.
+	 *
+	 * @param array $ship_to Carrier-compatible destination address.
+	 * @return string Resolved service code.
+	 */
+	protected function resolve_service_code_for_destination( array $ship_to ): string {
+		$service_code = $this->settings->get_shipengine_service_code();
+		$country      = strtoupper( (string) ( $ship_to['country_code'] ?? 'US' ) );
+
+		if ( 'US' === $country || 'PR' === $country ) {
+			return $service_code;
+		}
+
+		// Map domestic carrier service codes to their international equivalents.
+		// Filterable so admins can tailor the mapping per carrier or destination.
+		$intl_map = (array) apply_filters(
+			'fk_usps_optimizer_intl_service_code_map',
+			array(
+				// USPS.
+				'usps_priority_mail'         => 'usps_priority_mail_international',
+				'usps_priority_mail_express' => 'usps_priority_mail_express_international',
+				'usps_first_class_mail'      => 'usps_first_class_mail_international',
+				// UPS.
+				'ups_ground'                 => 'ups_standard',
+				'ups_next_day_air'           => 'ups_worldwide_express',
+				'ups_next_day_air_saver'     => 'ups_worldwide_express',
+				'ups_2nd_day_air'            => 'ups_worldwide_expedited',
+				'ups_3_day_select'           => 'ups_worldwide_saver',
+				'ups_ground_saver'           => 'ups_standard',
+				// FedEx.
+				'fedex_ground'               => 'fedex_international_ground',
+				'fedex_home_delivery'        => 'fedex_international_economy',
+				'fedex_2day'                 => 'fedex_international_economy',
+				'fedex_express_saver'        => 'fedex_international_priority',
+			),
+			$service_code,
+			$country
+		);
+
+		return $intl_map[ $service_code ] ?? $service_code;
 	}
 
 	/**
@@ -123,7 +175,7 @@ class ShipEngine_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->settings->get_shipengine_service_code();
+		$service_code = $this->resolve_service_code_for_destination( $ship_to );
 		$best_plan    = array();
 		foreach ( $candidates as $candidate ) {
 			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
@@ -142,7 +194,7 @@ class ShipEngine_Service {
 					'package_code'            => $candidate['package_code'],
 					'package_name'            => $candidate['package_name'],
 					'service_code'            => $service_code,
-					'service_label'           => $this->get_service_label(),
+					'service_label'           => $this->get_service_label( $service_code ),
 					'rate_amount'             => (float) $rate['shipping_amount']['amount'],
 					'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 					'weight_oz'               => (float) $candidate['weight_oz'],
@@ -174,7 +226,7 @@ class ShipEngine_Service {
 			return array();
 		}
 
-		$service_code = $this->settings->get_shipengine_service_code();
+		$service_code = $this->resolve_service_code_for_destination( $ship_to );
 		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id );
 		$plans        = array();
 
@@ -193,7 +245,7 @@ class ShipEngine_Service {
 				'package_code'            => $candidate['package_code'],
 				'package_name'            => $candidate['package_name'],
 				'service_code'            => $service_code,
-				'service_label'           => $this->get_service_label(),
+				'service_label'           => $this->get_service_label( $service_code ),
 				'rate_amount'             => (float) $rate['shipping_amount']['amount'],
 				'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 				'weight_oz'               => (float) $candidate['weight_oz'],
@@ -407,11 +459,11 @@ class ShipEngine_Service {
 						),
 					),
 				),
-				'service_code'     => $this->settings->get_shipengine_service_code(),
+				'service_code'     => $this->resolve_service_code_for_destination( $ship_to ),
 			),
 		);
 
-		$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
+			$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
 		if ( $timeout < 1 ) {
 			$timeout = 1;
 		}
