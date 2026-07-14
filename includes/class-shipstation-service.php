@@ -104,6 +104,65 @@ class ShipStation_Service {
 	}
 
 	/**
+	 * Resolve the effective service code for a destination country.
+	 *
+	 * Domestic US/PR addresses use the configured service code directly.
+	 * International destinations (e.g. Canada) need international service
+	 * codes — e.g. usps_priority_mail_international instead of
+	 * usps_priority_mail.  When no international equivalent is known the
+	 * original service code is returned unchanged.
+	 *
+	 * When the service code is empty (meaning "all services") no mapping
+	 * is performed — the carrier API returns whatever is available for
+	 * that carrier+country combination.
+	 *
+	 * @param array $ship_to Carrier-compatible destination address.
+	 * @return string Resolved service code.
+	 */
+	protected function resolve_service_code_for_destination( array $ship_to ): string {
+		$service_code = $this->get_service_code();
+		$country      = strtoupper( (string) ( $ship_to['country_code'] ?? 'US' ) );
+
+		// When no specific service is configured, leave it empty so the API
+		// returns everything available for the carrier+country combination.
+		if ( '' === $service_code ) {
+			return '';
+		}
+
+		if ( 'US' === $country || 'PR' === $country ) {
+			return $service_code;
+		}
+
+		// Map domestic carrier service codes to their international equivalents.
+		// Filterable so admins can tailor the mapping per carrier or destination.
+		$intl_map = (array) apply_filters(
+			'fk_usps_optimizer_intl_service_code_map',
+			array(
+				// USPS.
+				'usps_priority_mail'         => 'usps_priority_mail_international',
+				'usps_priority_mail_express' => 'usps_priority_mail_express_international',
+				'usps_first_class_mail'      => 'usps_first_class_mail_international',
+				// UPS.
+				'ups_ground'                 => 'ups_standard',
+				'ups_next_day_air'           => 'ups_worldwide_express',
+				'ups_next_day_air_saver'     => 'ups_worldwide_express',
+				'ups_2nd_day_air'            => 'ups_worldwide_expedited',
+				'ups_3_day_select'           => 'ups_worldwide_saver',
+				'ups_ground_saver'           => 'ups_standard',
+				// FedEx.
+				'fedex_ground'               => 'fedex_international_ground',
+				'fedex_home_delivery'        => 'fedex_international_economy',
+				'fedex_2day'                 => 'fedex_international_economy',
+				'fedex_express_saver'        => 'fedex_international_priority',
+			),
+			$service_code,
+			$country
+		);
+
+		return $intl_map[ $service_code ] ?? $service_code;
+	}
+
+	/**
 	 * Get the effective carrier code, preferring the override.
 	 *
 	 * @return string Carrier code.
@@ -182,13 +241,16 @@ class ShipStation_Service {
 		);
 
 		$service_names = array(
-			'usps_priority_mail'         => 'Priority',
-			'usps_priority_mail_express' => 'Priority Express',
-			'usps_first_class_mail'      => 'First Class',
-			'usps_ground_advantage'      => 'Ground Advantage',
-			'usps_parcel_select'         => 'Parcel Select',
-			'usps_media_mail'            => 'Media Mail',
-			'ups_ground'                 => 'Ground',
+			'usps_priority_mail'                     => 'Priority',
+			'usps_priority_mail_express'             => 'Priority Express',
+			'usps_first_class_mail'                  => 'First Class',
+			'usps_ground_advantage'                  => 'Ground Advantage',
+			'usps_parcel_select'                     => 'Parcel Select',
+			'usps_media_mail'                        => 'Media Mail',
+			'usps_priority_mail_international'       => 'Priority Intl',
+			'usps_priority_mail_express_international' => 'Priority Express Intl',
+			'usps_first_class_mail_international'    => 'First Class Intl',
+			'ups_ground'                             => 'Ground',
 			'ups_next_day_air'           => 'Next Day Air',
 			'ups_next_day_air_saver'     => 'Next Day Air Saver',
 			'ups_2nd_day_air'            => '2nd Day Air',
@@ -197,7 +259,16 @@ class ShipStation_Service {
 			'fedex_ground'               => 'Ground',
 			'fedex_home_delivery'        => 'Home Delivery',
 			'fedex_2day'                 => '2Day',
-			'fedex_express_saver'        => 'Express Saver',
+			'fedex_express_saver'             => 'Express Saver',
+			// UPS international.
+			'ups_standard'                     => 'Standard',
+			'ups_worldwide_express'            => 'Worldwide Express',
+			'ups_worldwide_expedited'          => 'Worldwide Expedited',
+			'ups_worldwide_saver'              => 'Worldwide Saver',
+			// FedEx international.
+			'fedex_international_ground'       => 'International Ground',
+			'fedex_international_economy'      => 'International Economy',
+			'fedex_international_priority'     => 'International Priority',
 		);
 
 		$carrier_name = $carrier_names[ $carrier_code ]
@@ -417,7 +488,7 @@ class ShipStation_Service {
 	 */
 	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->get_service_code();
+		$service_code = $this->resolve_service_code_for_destination( $ship_to );
 		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
@@ -453,7 +524,7 @@ class ShipStation_Service {
 			return array();
 		}
 
-		$service_code = $this->get_service_code();
+		$service_code = $this->resolve_service_code_for_destination( $ship_to );
 		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id );
 		$plans        = array();
 
@@ -761,7 +832,7 @@ class ShipStation_Service {
 
 		$payload = array(
 			'carrierCode'    => $carrier_code,
-			'serviceCode'    => $this->get_service_code(),
+			'serviceCode'    => $this->resolve_service_code_for_destination( $ship_to ),
 			'packageCode'    => $candidate['package_code'],
 			'fromPostalCode' => $ship_from['postal_code'] ?? '',
 			'toState'        => $ship_to['state_province'] ?? '',
