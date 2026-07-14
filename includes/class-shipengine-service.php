@@ -49,15 +49,15 @@ class ShipEngine_Service {
 		$service_code = '' !== $override_service_code ? $override_service_code : $this->settings->get_shipengine_service_code();
 
 		$service_names = array(
-			'usps_priority_mail'                     => 'Priority',
-			'usps_priority_mail_express'             => 'Priority Express',
-			'usps_first_class_mail'                  => 'First Class',
-			'usps_ground_advantage'                  => 'Ground Advantage',
-			'usps_parcel_select'                     => 'Parcel Select',
-			'usps_media_mail'                        => 'Media Mail',
-			'usps_priority_mail_international'       => 'Priority Intl',
+			'usps_priority_mail'                       => 'Priority',
+			'usps_priority_mail_express'               => 'Priority Express',
+			'usps_first_class_mail'                    => 'First Class',
+			'usps_ground_advantage'                    => 'Ground Advantage',
+			'usps_parcel_select'                       => 'Parcel Select',
+			'usps_media_mail'                          => 'Media Mail',
+			'usps_priority_mail_international'         => 'Priority Intl',
 			'usps_priority_mail_express_international' => 'Priority Express Intl',
-			'usps_first_class_mail_international'    => 'First Class Intl',
+			'usps_first_class_mail_international'      => 'First Class Intl',
 		);
 
 		$service_name = $service_names[ $service_code ]
@@ -460,8 +460,8 @@ class ShipEngine_Service {
 					),
 				),
 				'service_code'     => $this->resolve_service_code_for_destination( $ship_to ),
-				),
-			);
+			),
+		);
 
 			$timeout = (int) apply_filters( 'fk_usps_optimizer_api_timeout', 8, 'shipengine' );
 		if ( $timeout < 1 ) {
