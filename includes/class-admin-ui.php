@@ -62,7 +62,7 @@ class Admin_UI {
 	public function register_meta_box(): void {
 		add_meta_box(
 			'fk-usps-optimizer-plan',
-			__( 'USPS Priority Shipping Plan', 'fk-usps-optimizer' ),
+			__( 'USPS Priority Shipping Plan (US & Canada)', 'fk-usps-optimizer' ),
 			array( $this, 'render_meta_box' ),
 			'shop_order',
 			'side',
@@ -73,7 +73,7 @@ class Admin_UI {
 		if ( function_exists( 'wc_get_page_screen_id' ) ) {
 			add_meta_box(
 				'fk-usps-optimizer-plan',
-				__( 'USPS Priority Shipping Plan', 'fk-usps-optimizer' ),
+				__( 'USPS Priority Shipping Plan (US & Canada)', 'fk-usps-optimizer' ),
 				array( $this, 'render_meta_box' ),
 				wc_get_page_screen_id( 'shop-order' ),
 				'side',
@@ -107,7 +107,7 @@ class Admin_UI {
 		}
 
 		echo '<p><strong>' . esc_html__( 'Packages:', 'fk-usps-optimizer' ) . '</strong> ' . esc_html( (string) ( $plan['total_package_count'] ?? 0 ) ) . '</p>';
-		echo '<p><strong>' . esc_html__( 'Total USPS Rate:', 'fk-usps-optimizer' ) . '</strong> ' . wp_kses_post( wc_price( (float) ( $plan['total_rate_amount'] ?? 0 ), array( 'currency' => $plan['currency'] ?? 'USD' ) ) ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Total USPS Rate (US & Canada):', 'fk-usps-optimizer' ) . '</strong> ' . wp_kses_post( wc_price( (float) ( $plan['total_rate_amount'] ?? 0 ), array( 'currency' => $plan['currency'] ?? 'USD' ) ) ) . '</p>';
 
 		foreach ( $plan['packages'] ?? array() as $package ) {
 			echo '<hr />';

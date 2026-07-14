@@ -53,7 +53,7 @@ class Shipping_Method extends \WC_Shipping_Method {
 			'title' => array(
 				'title'   => __( 'Method Title', 'fk-usps-optimizer' ),
 				'type'    => 'text',
-				'default' => __( 'USPS Priority Mail (Optimized)', 'fk-usps-optimizer' ),
+				'default' => __( 'USPS Priority Mail US & Canada (Optimized)', 'fk-usps-optimizer' ),
 			),
 		);
 	}
@@ -62,10 +62,10 @@ class Shipping_Method extends \WC_Shipping_Method {
 	 * Calculate shipping rates for a package.
 	 *
 	 * Packs the cart items using BoxPacker, fetches USPS rates from the
-	 * configured carrier API (ShipEngine or ShipStation), and adds the
-	 * combined optimized rate.  When "Show All Options" is enabled, every
-	 * combination (cartesian product) of rated box candidates is offered as
-	 * a separate shipping option.
+	 * configured carrier API (ShipEngine or ShipStation) for US and Canadian
+	 * destinations, and adds the combined optimized rate.  When "Show All
+	 * Options" is enabled, every combination (cartesian product) of rated
+	 * box candidates is offered as a separate shipping option.
 	 *
 	 * @param array $package WooCommerce shipping package.
 	 */

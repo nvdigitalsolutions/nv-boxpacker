@@ -76,7 +76,7 @@ class Settings {
 
 		add_settings_section(
 			'fk_usps_optimizer_api',
-			__( 'ShipEngine and Shipping Origin', 'fk-usps-optimizer' ),
+			__( 'Carrier APIs & Shipping Origin (US & Canada)', 'fk-usps-optimizer' ),
 			'__return_false',
 			'fk-usps-optimizer'
 		);
@@ -222,7 +222,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_attr( $value ),
-				esc_html__( 'Your ShipEngine USPS carrier ID (e.g. se-123456). Use the "Test Connection" button below to verify.', 'fk-usps-optimizer' )
+				esc_html__( 'Your ShipEngine USPS carrier ID (e.g. se-123456). Supports rating to US and Canadian destinations. Use the "Test Connection" button below to verify.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -234,7 +234,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_attr( $value ),
-				esc_html__( 'ShipEngine service code (e.g. usps_priority_mail). Supports flat-rate and cubic pricing.', 'fk-usps-optimizer' )
+				esc_html__( 'ShipEngine service code (e.g. usps_priority_mail). Supports flat-rate and cubic pricing for US and Canadian destinations.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -246,7 +246,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_attr( $value ),
-				esc_html__( 'ShipStation service code (e.g. usps_priority_mail). Leave empty to match any service from the carrier.', 'fk-usps-optimizer' )
+				esc_html__( 'ShipStation service code (e.g. usps_priority_mail). Leave empty to match any service from the carrier. Supports US and Canadian destinations.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -267,7 +267,7 @@ class Settings {
 				esc_attr( self::OPTION_KEY ),
 				esc_attr( $key ),
 				esc_textarea( $value ? $value : $default_services ),
-				esc_html__( 'Optional JSON array of additional ShipStation carrier+service pairs to rate-shop. Each entry needs "carrier_code" and "service_code". Example: [{"carrier_code":"ups_walleted","service_code":"ups_ground"},{"carrier_code":"stamps_com","service_code":"usps_priority_mail"}]. Rates from all pairs plus the primary pair above are compared.', 'fk-usps-optimizer' )
+				esc_html__( 'Optional JSON array of additional ShipStation carrier+service pairs to rate-shop. Each entry needs "carrier_code" and "service_code". Example: [{"carrier_code":"ups_walleted","service_code":"ups_ground"},{"carrier_code":"stamps_com","service_code":"usps_priority_mail"}]. Rates from all pairs plus the primary pair above are compared. Supports US and Canadian destinations.', 'fk-usps-optimizer' )
 			);
 			return;
 		}
@@ -405,7 +405,7 @@ class Settings {
 		}
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html__( 'FunnelKit USPS Priority Shipping Optimizer', 'fk-usps-optimizer' ); ?></h1>
+			<h1><?php echo esc_html__( 'FunnelKit USPS Priority Shipping Optimizer for US & Canada', 'fk-usps-optimizer' ); ?></h1>
 
 			<?php if ( is_array( $test_result ) ) : ?>
 			<div class="notice <?php echo esc_attr( $test_result['success'] ? 'notice-success' : 'notice-error' ); ?> is-dismissible">

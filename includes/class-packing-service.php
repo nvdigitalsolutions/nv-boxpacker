@@ -2,6 +2,8 @@
 /**
  * Packing service for the FK USPS Optimizer plugin.
  *
+ * Handles order item packing for US and Canadian destination shipments.
+ *
  * @package FK_USPS_Optimizer
  */
 

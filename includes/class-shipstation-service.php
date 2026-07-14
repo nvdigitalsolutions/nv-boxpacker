@@ -2,9 +2,10 @@
 /**
  * ShipStation service for the FK USPS Optimizer plugin.
  *
- * Provides USPS Priority Mail rate-shopping via the ShipStation REST API.
- * Supports sandbox mode: when enabled all requests are logged with a [SANDBOX]
- * prefix so they can be distinguished from live production calls.
+ * Provides USPS Priority Mail rate-shopping to US and Canadian destinations
+ * via the ShipStation REST API. Supports sandbox mode: when enabled all
+ * requests are logged with a [SANDBOX] prefix so they can be distinguished
+ * from live production calls.
  *
  * Authentication uses HTTP Basic Auth (API Key : API Secret), which differs
  * from the ShipEngine header-based scheme used by ShipEngine_Service.
@@ -19,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handles ShipStation API communication and USPS rate building.
+ * Handles ShipStation API communication and USPS rate building for US and Canadian destinations.
  */
 class ShipStation_Service {
 
@@ -233,6 +234,8 @@ class ShipStation_Service {
 
 	/**
 	 * Build the best USPS Priority shipping plan for a packed package.
+	 *
+	 * Supports US and Canadian destination addresses.
 	 *
 	 * @param \WC_Order $order          The WooCommerce order.
 	 * @param array     $package        Packed package data from Packing_Service.
@@ -647,6 +650,8 @@ class ShipStation_Service {
 	/**
 	 * Request a USPS Priority rate from the ShipStation API.
 	 *
+	 * Supports US and Canadian destination addresses.
+	 *
 	 * @param array $ship_to   ShipStation-compatible destination address.
 	 * @param array $candidate Candidate shipment (mode, package_code, dimensions, weight_oz).
 	 * @param int   $order_id  Order ID for log context; 0 for test runs.
@@ -729,6 +734,8 @@ class ShipStation_Service {
 	 *
 	 * Returns null when credentials or carrier config are missing so the
 	 * caller can short-circuit without dispatching an HTTP request.
+	 *
+	 * Supports US and Canadian destination addresses.
 	 *
 	 * @param array $ship_to   ShipStation-compatible destination address.
 	 * @param array $candidate Candidate shipment.
