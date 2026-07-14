@@ -94,7 +94,7 @@ Full security checklist: [`.context/security-checklist.md`](.context/security-ch
 
 ```php
 // woocommerce-fk-usps-optimizer.php
-define( 'FK_USPS_OPTIMIZER_VERSION', '1.4.0' );
+define( 'FK_USPS_OPTIMIZER_VERSION', '1.3.7' );
 define( 'FK_USPS_OPTIMIZER_FILE', __FILE__ );
 define( 'FK_USPS_OPTIMIZER_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FK_USPS_OPTIMIZER_URL', plugin_dir_url( __FILE__ ) );

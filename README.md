@@ -600,6 +600,11 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.3.7
+
+- **Changed:** Plugin rebranded to **FunnelKit USPS Priority Shipping Optimizer for US & Canada** — the plugin name, admin order metabox, Test Pricing page, settings page header, shipping method default title, and carrier API field descriptions now explicitly communicate support for both US and Canadian destinations. The plugin tag `canada` has been added to `readme.txt`.
+- **New:** Comprehensive multi-agent AI development configuration — `CLAUDE.md` (per-turn context), `AGENTS.md` (agent inventory + coordination rules), `.context/` (conventions, security checklist, testing guide), BMAD agents rewritten for this plugin, GitHub Custom Agents (developer, shipping reviewer, security reviewer), and `.github/copilot-instructions.md`.
+
 ### 1.3.6
 
 - **Fixed:** BoxPacker heuristic could pick a suboptimal box size for a group of items even when a smaller box would fit. A post-processing optimisation (`Packing_Service::optimize_packed_boxes()`) now checks each packed package and downsizes to the smallest fitting box — single-item packages use a straightforward dimensional match, while multi-item packages are re-packed through BoxPacker with only the candidate box. This prevents cases such as a Half-Off Magic Bag (5×5.5×2.5 in, 2 lb) being placed in a 2 Bag when it fits in a 1 Bag, or two Organic All-In-One grow bags (10.25×5.5×5 in each) being placed in a 4 Bag when they fit in a 3 Bag.
