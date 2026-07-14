@@ -195,37 +195,41 @@ class Packing_Service {
 			);
 		}
 
-		$packed_boxes = $packer->pack();
-		$packages     = array();
+		try {
+			$packed_boxes = $packer->pack();
+			$packages     = array();
 
-		foreach ( $packed_boxes as $packed_box ) {
-			$box_meta     = method_exists( $packed_box->getBox(), 'getMeta' ) ? $packed_box->getBox()->getMeta() : array();
-			$display_box  = $box_meta['source_definition'] ?? $box_meta;
-			$packed_items = array();
-			$item_weight  = 0.0;
+			foreach ( $packed_boxes as $packed_box ) {
+				$box_meta     = method_exists( $packed_box->getBox(), 'getMeta' ) ? $packed_box->getBox()->getMeta() : array();
+				$display_box  = $box_meta['source_definition'] ?? $box_meta;
+				$packed_items = array();
+				$item_weight  = 0.0;
 
-			foreach ( $packed_box->getItems() as $packed_item ) {
-				$source_item    = $packed_item->getItem()->getSourceData();
-				$packed_items[] = $source_item;
-				$item_weight   += (float) $source_item['weight_oz'];
+				foreach ( $packed_box->getItems() as $packed_item ) {
+					$source_item    = $packed_item->getItem()->getSourceData();
+					$packed_items[] = $source_item;
+					$item_weight   += (float) $source_item['weight_oz'];
+				}
+
+				$packages[] = array(
+					'packed_box' => $display_box,
+					'items'      => $packed_items,
+					'weight_oz'  => $item_weight,
+					'dimensions' => array(
+						'length' => (float) ( $display_box['inner_length'] ?? 0 ),
+						'width'  => (float) ( $display_box['inner_width'] ?? 0 ),
+						'height' => (float) ( $display_box['inner_depth'] ?? 0 ),
+					),
+				);
 			}
 
-			$packages[] = array(
-				'packed_box' => $display_box,
-				'items'      => $packed_items,
-				'weight_oz'  => $item_weight,
-				'dimensions' => array(
-					'length' => (float) ( $display_box['inner_length'] ?? 0 ),
-					'width'  => (float) ( $display_box['inner_width'] ?? 0 ),
-					'height' => (float) ( $display_box['inner_depth'] ?? 0 ),
-				),
-			);
+			// Post-process: BoxPacker's heuristic search can miss optimal
+			// box assignments.  Try to downsize each package to the smallest
+			// box that can actually hold its items.
+			return $this->optimize_packed_boxes( $packages, $boxes );
+		} catch ( \DVDoug\BoxPacker\ItemTooLargeException | \DVDoug\BoxPacker\NoBoxesAvailableException $e ) {
+			return $this->pack_fallback( $items, $boxes );
 		}
-
-		// Post-process: BoxPacker's heuristic search can miss optimal
-		// box assignments.  Try to downsize each package to the smallest
-		// box that can actually hold its items.
-		return $this->optimize_packed_boxes( $packages, $boxes );
 	}
 
 	/**
@@ -337,7 +341,7 @@ class Packing_Service {
 
 			$result = $packer->pack();
 			return 1 === $result->count();
-		} catch ( \DVDoug\BoxPacker\ItemTooLargeException $e ) {
+		} catch ( \DVDoug\BoxPacker\ItemTooLargeException | \DVDoug\BoxPacker\NoBoxesAvailableException $e ) {
 			return false;
 		}
 	}
