@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, canada, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.4.0
+Stable tag: 1.3.7
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,10 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.7 =
+* Changed: Plugin rebranded to **FunnelKit USPS Priority Shipping Optimizer for US & Canada** — the plugin name, admin order metabox, Test Pricing page, settings page header, shipping method default title, and carrier API field descriptions now explicitly communicate support for both US and Canadian destinations. Plugin tags updated to include `canada`.
+* New: Comprehensive multi-agent AI development configuration (CLAUDE.md, AGENTS.md, context files, BMAD agents, GitHub custom agents, Copilot instructions).
 
 = 1.3.6 =
 * Fixed: BoxPacker heuristic could assign a larger box than necessary to small or medium items (e.g. a Half-Off Magic Bag fitting in a 1 Bag was placed in a 2 Bag, and two AIO grow bags that fit in a 3 Bag were placed in a 4 Bag). A post-processing pass now downsizes each packed package to the smallest box that can hold its items.
