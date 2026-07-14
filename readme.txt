@@ -1,25 +1,25 @@
-=== FunnelKit USPS Priority Shipping Optimizer ===
+=== FunnelKit USPS Priority Shipping Optimizer for US & Canada ===
 Contributors: nvdigitalsolutions
-Tags: woocommerce, shipping, usps, box-packing, funnelkit
+Tags: woocommerce, shipping, usps, canada, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.6
+Stable tag: 1.4.0
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Optimize WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat-rate boxes using ShipEngine, ShipStation, or both simultaneously.
+Optimize WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and Priority flat-rate boxes to US and Canadian destinations using ShipEngine, ShipStation, or both simultaneously.
 
 == Description ==
 
-This plugin prepares USPS Priority shipping plans for WooCommerce orders by:
+This plugin prepares USPS Priority Mail shipping plans for WooCommerce orders to both US and Canadian destinations by:
 
 * collecting shippable order items,
 * packing them with `dvdoug/boxpacker` when available (falls back to a single-item-per-box strategy otherwise),
 * comparing custom cubic boxes and USPS flat-rate boxes,
 * requesting USPS Priority rates from **ShipEngine**, **ShipStation**, or both — each configured carrier/service pair is offered as a separate shipping option at checkout so customers can compare (e.g. "USPS Priority $7.25" vs "UPS Ground $8.50"),
 * storing a package-by-package plan on the order for admin review and PirateShip export,
-* providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items without placing a real order, and
+* providing a **USPS Test Pricing** admin page where store managers can preview packing and live rates for any set of items and destinations (US or Canada) without placing a real order, and
 * registering a native **WooCommerce Shipping Method** so it appears in shipping zones and provides live optimized rates during cart and checkout.
 
 When selecting carriers on the settings page, check one or both carrier APIs — the relevant credential fields are shown automatically. A **Test Connection** button lets you verify your ShipEngine API key and carrier ID inline, without reloading the page.

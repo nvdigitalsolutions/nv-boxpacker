@@ -2,9 +2,10 @@
 /**
  * Test pricing service for the FK USPS Optimizer plugin.
  *
- * Packs arbitrary test items and fetches live USPS rates from the configured
- * carrier API (ShipEngine or ShipStation) without requiring a real WooCommerce
- * order.  Used exclusively by the admin test pricing UI.
+ * Packs arbitrary test items and fetches live USPS rates to US and Canadian
+ * destinations from the configured carrier API (ShipEngine or ShipStation)
+ * without requiring a real WooCommerce order.  Used exclusively by the admin
+ * test pricing UI.
  *
  * @package FK_USPS_Optimizer
  */

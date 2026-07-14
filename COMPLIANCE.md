@@ -1,10 +1,10 @@
 # WordPress Plugin Compliance Review
 
-**Plugin:** FunnelKit USPS Priority Shipping Optimizer v1.2.9
+**Plugin:** FunnelKit USPS Priority Shipping Optimizer for US & Canada v1.4.0
 **Namespace:** `FK_USPS_Optimizer`
 **Author:** NV Digital Solutions
 **License:** GPLv3-or-later
-**Review Date:** April 13, 2026
+**Review Date:** June 12, 2026
 
 ---
 
@@ -272,9 +272,9 @@ The script is only loaded on the plugin's own settings page, not globally.
 
 | Field | Value |
 |-------|-------|
-| Plugin Name | FunnelKit USPS Priority Shipping Optimizer |
-| Description | Optimizes WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat rate boxes. |
-| Version | 1.2.9 |
+| Plugin Name | FunnelKit USPS Priority Shipping Optimizer for US & Canada |
+| Description | Optimizes WooCommerce and FunnelKit orders for USPS Priority cubic custom boxes and USPS Priority flat rate boxes to US and Canadian destinations. |
+| Version | 1.4.0 |
 | Author | NV Digital Solutions |
 | Author URI | https://nvdigitalsolutions.com |
 | Requires at least | 6.0 |
@@ -287,13 +287,13 @@ The script is only loaded on the plugin's own settings page, not globally.
 
 | Field | Value |
 |-------|-------|
-| Stable tag | 1.2.9 (matches plugin header) |
+| Stable tag | 1.4.0 (matches plugin header) |
 | Tested up to | 6.8 |
 | License | GPLv3 |
 | Description section | ✅ Present |
 | Installation section | ✅ Present |
 | FAQ section | ✅ Present (9 questions) |
-| Changelog section | ✅ Present (v1.0.0–v1.2.9) |
+| Changelog section | ✅ Present (v1.0.0–v1.4.0) |
 | Third-party service disclosure | ✅ Present — ShipEngine and ShipStation with API endpoints, ToS, and Privacy Policy links |
 
 ### LICENSE file
@@ -519,7 +519,7 @@ the codebase:
 
 ## Conclusion
 
-The FunnelKit USPS Priority Shipping Optimizer plugin v1.2.9 **passes all 13
+The FunnelKit USPS Priority Shipping Optimizer for US & Canada plugin v1.4.0 **passes all 13
 WordPress Plugin Review Team guidelines**. It demonstrates:
 
 - Rigorous input sanitization and output escaping

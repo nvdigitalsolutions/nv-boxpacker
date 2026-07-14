@@ -2,6 +2,8 @@
 /**
  * ShipEngine service for the FK USPS Optimizer plugin.
  *
+ * Handles USPS rate-shopping to US and Canadian destinations via ShipEngine.
+ *
  * @package FK_USPS_Optimizer
  */
 
@@ -12,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Handles ShipEngine API communication and rate building.
+ * Handles ShipEngine API communication and rate building for US and Canadian destinations.
  */
 class ShipEngine_Service {
 	/**
@@ -63,6 +65,8 @@ class ShipEngine_Service {
 
 	/**
 	 * Build the best shipping package plan for a packed package.
+	 *
+	 * Supports US and Canadian destination addresses via the carrier API.
 	 *
 	 * @param \WC_Order $order          The order.
 	 * @param array     $package        Packed package data.
@@ -363,6 +367,8 @@ class ShipEngine_Service {
 	 * Returns null when credentials are missing so the caller can short-
 	 * circuit without dispatching an HTTP request.  The returned descriptor
 	 * is consumed by both the single-call path and the parallel batch path.
+	 *
+	 * Supports US and Canadian destination addresses via the ship_to array.
 	 *
 	 * @param array $ship_to   ShipEngine-formatted destination address.
 	 * @param array $candidate Candidate shipment.

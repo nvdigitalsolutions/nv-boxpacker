@@ -1,0 +1,125 @@
+team:
+    name: FK USPS Optimizer Feature Development Team
+    description: >
+        Full GSD × BMAD feature development team for medium-to-large FK USPS Optimizer features.
+        Orchestrator delegates to specialized agents at each phase gate.
+    pattern: orchestrator # Supervisor delegates to specialized workers
+    workflow: GSD × BMAD (Phases 0–9)
+    config_version: "1.0"
+
+    members:
+        - role: orchestrator
+          agent_id: fk-usps-scrum-master
+          phases: [0, 4, 7, 9]
+          responsibilities:
+              - Load context from .context/active/[feature].md at session start (Phase 0)
+              - Route tasks to appropriate specialist agents at each phase gate
+              - Monitor progress and enforce phase-completion gates before advancing
+              - Coordinate release checklist (Phase 7)
+              - Archive context and harvest learnings (Phase 9)
+
+        - role: researcher
+          agent_id: fk-usps-analyst
+          phases: [1]
+          responsibilities:
+              - Phase 1 (Discovery): research WooCommerce shipping, USPS pricing, carrier API docs
+              - Produce Project Brief covering scope, feasibility, and dependencies
+
+        - role: product_manager
+          agent_id: fk-usps-product-manager
+          phases: [2]
+          responsibilities:
+              - Phase 2 (Planning): formalize brief into PRD
+              - Define epics, user stories, acceptance criteria
+              - Specify carrier API integration requirements
+
+        - role: architect
+          agent_id: fk-usps-architect
+          phases: [3]
+          responsibilities:
+              - Phase 3 (Architecture): analyze existing patterns in the codebase
+              - Produce Architecture Specification with file map and data flow
+              - Define class structure, hook points, and API integration strategy
+
+        - role: developer
+          agent_id: fk-usps-developer
+          phases: [5]
+          responsibilities:
+              - Phase 5 (Implementation): atomic story execution
+              - Follow WPCS + security-checklist.md strictly
+              - Commit atomically with story reference
+
+        - role: qa_engineer
+          agent_id: fk-usps-qa-engineer
+          phases: [6, 8]
+          responsibilities:
+              - Phase 6 (Validation): run PHPUnit, PHPCS; verify acceptance criteria
+              - Phase 8 (Monitoring): track post-release health
+
+    phase_gates:
+        phase_0_to_1:
+            - Base context files loaded
+            - Feature context initialized from Project Brief
+            - Context budget < 30%
+        phase_1_to_2:
+            - Project Brief complete and approved
+            - Feasibility assessment documented
+        phase_2_to_3:
+            - PRD approved with all acceptance criteria
+        phase_3_to_4:
+            - Architecture Specification complete and reviewed
+            - File Map complete
+        phase_4_to_5:
+            - All stories broken down in feature context
+            - Stories sequenced with dependencies
+        phase_5_to_6:
+            - All story code committed
+            - Atomic commits with story references
+        phase_6_to_7:
+            - All acceptance criteria verified
+            - PHPUnit + PHPCS both pass
+            - Security review complete
+        phase_7_to_8:
+            - Version bumped in all locations
+            - readme.txt stable tag updated
+            - Git tag created and Release published
+        phase_8_to_9:
+            - No new errors in first 48 hours
+        phase_9_complete:
+            - Context archived to .context/archive/
+            - Learnings persisted
+
+    context_files:
+        base: # Always loaded
+            - .context/conventions.md
+            - .context/security-checklist.md
+        feature: # Loaded per active feature
+            - .context/active/[feature].md
+        subsystem: # Loaded based on feature scope
+            - .context/testing.md
+
+    scale_adaptive:
+        patch_bug_fix:
+            agents: [developer, qa_engineer]
+            phases: [5, 6, 7]
+            description: "Use for bug fixes and patches — skip discovery/design phases"
+        small_feature:
+            agents: [orchestrator, developer, qa_engineer]
+            phases: [0, 4, 5, 6, 7, 9]
+            description: "Use for well-understood small features — skip discovery/design phases"
+        medium_feature:
+            agents: [orchestrator, researcher, developer, qa_engineer]
+            phases: [0, 1, 2, 3, 4, 5, 6, 7, 9]
+            description: "Use for medium features requiring research and architecture planning"
+        major_feature:
+            agents:
+                [
+                    orchestrator,
+                    researcher,
+                    product_manager,
+                    architect,
+                    developer,
+                    qa_engineer,
+                ]
+            phases: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+            description: "Use for major features and integrations — full workflow"

@@ -3,7 +3,8 @@
  * Admin test pricing UI for the FK USPS Optimizer plugin.
  *
  * Provides a WooCommerce submenu page that lets store managers test box
- * packing and live USPS rate-shopping without placing a real order.
+ * packing and live USPS rate-shopping to US and Canadian destinations
+ * without placing a real order.
  *
  * @package FK_USPS_Optimizer
  */
@@ -61,8 +62,8 @@ class Admin_Test_UI {
 	public function register_menu(): void {
 		add_submenu_page(
 			'woocommerce',
-			__( 'USPS Test Pricing', 'fk-usps-optimizer' ),
-			__( 'USPS Test Pricing', 'fk-usps-optimizer' ),
+			__( 'USPS Test Pricing (US & Canada)', 'fk-usps-optimizer' ),
+			__( 'USPS Test Pricing (US & Canada)', 'fk-usps-optimizer' ),
 			'manage_woocommerce',
 			'fk-usps-optimizer-test',
 			array( $this, 'render_page' )
@@ -111,7 +112,7 @@ class Admin_Test_UI {
 		$carrier_label = implode( ' + ', $carrier_names );
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html__( 'USPS Priority Test Pricing', 'fk-usps-optimizer' ); ?></h1>
+			<h1><?php echo esc_html__( 'USPS Priority Test Pricing (US & Canada)', 'fk-usps-optimizer' ); ?></h1>
 
 			<?php if ( $is_sandbox ) : ?>
 			<div class="notice notice-warning">
@@ -239,7 +240,7 @@ class Admin_Test_UI {
 
 				<?php if ( ! empty( $result['packages'] ) ) : ?>
 			<p>
-				<strong><?php echo esc_html__( 'Total estimated USPS rate:', 'fk-usps-optimizer' ); ?></strong>
+				<strong><?php echo esc_html__( 'Total estimated USPS rate (US & Canada):', 'fk-usps-optimizer' ); ?></strong>
 					<?php echo wp_kses_post( wc_price( (float) $result['total_rate_amount'], array( 'currency' => $result['currency'] ) ) ); ?>
 			</p>
 
