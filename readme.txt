@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, canada, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.7
+Stable tag: 1.3.8
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,13 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.8 =
+* Fixed: BoxPacker NoBoxesAvailableException crash during checkout quantity changes — when a customer changes quantity during checkout, the AJAX update_order_review repacks items; if no box fit, BoxPacker threw an uncaught exception causing a 500 error. items_fit_in_box() now catches the exception, and pack_with_boxpacker() wraps pack() in try/catch with fallback to pack_fallback().
+* Fixed: International shipment rate display for Canada and other non-US destinations. Carrier APIs require international service codes (e.g. usps_priority_mail_international, ups_standard, fedex_international_ground) instead of domestic ones. resolve_service_code_for_destination() in both ShipEngine_Service and ShipStation_Service now maps domestic codes to their international equivalents based on destination country, covering USPS, UPS, and FedEx.
+* Fixed: usps_ground_advantage added to the international service code map — mapping to usps_first_class_mail_international for international destinations since Ground Advantage is domestic-only.
+* Fixed: Allow-list service code resolution for international checkout — when multiple ShipStation service pairs share a carrier, the checkout path grouped them into a single API call with a domestic-code allow-list. International API responses returned international codes that didn't match, silently discarding all plans. The allow-list now includes the international equivalents so plans match regardless of which form the API returns.
+* New: fk_usps_optimizer_intl_service_code_map filter — override the domestic-to-international service code mapping at runtime.
 
 = 1.3.7 =
 * Changed: Plugin rebranded to **FunnelKit USPS Priority Shipping Optimizer for US & Canada** — the plugin name, admin order metabox, Test Pricing page, settings page header, shipping method default title, and carrier API field descriptions now explicitly communicate support for both US and Canadian destinations. Plugin tags updated to include `canada`.

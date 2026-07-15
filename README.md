@@ -377,6 +377,7 @@ All filters follow the naming convention `fk_usps_optimizer_{name}`.
 | `fk_usps_optimizer_rate_cache_ttl` | `300` | TTL (seconds) for the rate-response transient cache. Set to `0` to disable caching. Sandbox endpoints bypass the cache regardless of this value. |
 | `fk_usps_optimizer_skip_rates` | `false` | When truthy, `Shipping_Method::calculate_shipping()` returns immediately. Receives the WooCommerce shipping package as context. Useful as a feature flag or debug toggle. |
 | `fk_usps_optimizer_min_postcode_length` | US/PR = `5`, CA = `3`, default = `3` | Minimum postcode length below which rate calculation is skipped (prevents API churn during partial-checkout typing). Receives the default int and the uppercased country code. Return `0` to disable the gate. |
+| `fk_usps_optimizer_intl_service_code_map` | _(see source)_ | Override the domestic-to-international service code mapping used when the destination country is not `US`. Receives an associative array of domestic service codes (keys) to international equivalents (values). Covers USPS, UPS, and FedEx. |
 
 **Example — load credentials from environment variables:**
 
@@ -599,6 +600,14 @@ fk-usps-optimizer/
 ---
 
 ## Changelog
+
+### 1.3.8
+
+- **Fixed:** BoxPacker `NoBoxesAvailableException` crash during checkout quantity changes. When a customer changes quantity in checkout, the AJAX `update_order_review` call repacks items — if no box could fit all items, BoxPacker threw an uncaught exception resulting in a 500 error. `items_fit_in_box()` now catches the exception and returns `false`, and `pack_with_boxpacker()` wraps `pack()` in a try/catch with fallback to `pack_fallback()`.
+- **Fixed:** International shipment rate display for Canada and other non-US destinations. Carrier APIs require international service codes (e.g. `usps_priority_mail_international`, `ups_standard`, `fedex_international_ground`) instead of domestic ones. Without this mapping, the APIs returned zero rates. `resolve_service_code_for_destination()` in both `ShipEngine_Service` and `ShipStation_Service` now maps domestic codes to their international equivalents based on destination country, covering USPS, UPS, and FedEx.
+- **Fixed:** `usps_ground_advantage` added to the international service code map — mapping to `usps_first_class_mail_international` for international destinations since Ground Advantage is domestic-only. Without this entry, additional ShipStation service-code pairs using Ground Advantage silently returned zero rates for Canada.
+- **Fixed:** Allow-list service code resolution for international checkout. When multiple ShipStation service pairs shared a carrier, the checkout path grouped them into a single API call with a domestic-code allow-list (e.g. `usps_priority_mail`). International API responses returned international codes (e.g. `usps_priority_mail_international`), which didn't match the domestic allow-list — silently discarding all plans. `resolve_code_for_country()` now expands each allow-list entry to include both the original and international equivalent, so plans match regardless of which form the API returns.
+- **New:** `fk_usps_optimizer_intl_service_code_map` filter — override the domestic-to-international service code mapping at runtime. Receives the default associative array and returns the modified map.
 
 ### 1.3.7
 
