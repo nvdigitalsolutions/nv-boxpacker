@@ -120,17 +120,30 @@ class ShipStation_Service {
 	 * @return string Resolved service code.
 	 */
 	protected function resolve_service_code_for_destination( array $ship_to ): string {
-		$service_code = $this->get_service_code();
-		$country      = strtoupper( (string) ( $ship_to['country_code'] ?? 'US' ) );
+		return $this->resolve_code_for_country( $this->get_service_code(), $ship_to );
+	}
 
-		// When no specific service is configured, leave it empty so the API
-		// returns everything available for the carrier+country combination.
-		if ( '' === $service_code ) {
+	/**
+	 * Resolve an explicit service code to its international equivalent.
+	 *
+	 * Same mapping as resolve_service_code_for_destination() but accepts an
+	 * explicit code instead of using the instance's configured service_code.
+	 * Used to resolve allow-list entries so international plans aren't
+	 * discarded by domestic-code filters in grouped carrier requests.
+	 *
+	 * @param string $code    The service code to resolve.
+	 * @param array  $ship_to Carrier-compatible destination address.
+	 * @return string Resolved service code.
+	 */
+	protected function resolve_code_for_country( string $code, array $ship_to ): string {
+		if ( '' === $code ) {
 			return '';
 		}
 
+		$country = strtoupper( (string) ( $ship_to['country_code'] ?? 'US' ) );
+
 		if ( 'US' === $country || 'PR' === $country ) {
-			return $service_code;
+			return $code;
 		}
 
 		// Map domestic carrier service codes to their international equivalents.
@@ -156,11 +169,11 @@ class ShipStation_Service {
 				'fedex_2day'                 => 'fedex_international_economy',
 				'fedex_express_saver'        => 'fedex_international_priority',
 			),
-			$service_code,
+			$code,
 			$country
 		);
 
-		return $intl_map[ $service_code ] ?? $service_code;
+		return $intl_map[ $code ] ?? $code;
 	}
 
 	/**
@@ -550,9 +563,19 @@ class ShipStation_Service {
 		// Restrict to the admin-configured service codes when an allow-list
 		// is set.  This lets a single carrier-level rate request fan out into
 		// multiple shipping options without including services the admin did
-		// not request.
+		// not request.  For international destinations each allow-list code
+		// is also resolved to its international equivalent so that plans
+		// returned by the API with international codes are not discarded.
 		if ( is_array( $this->allowed_service_codes ) && ! empty( $this->allowed_service_codes ) ) {
-			$allowed = array_flip( $this->allowed_service_codes );
+			$expanded = array();
+			foreach ( $this->allowed_service_codes as $allowed_code ) {
+				$expanded[] = $allowed_code;
+				$intl       = $this->resolve_code_for_country( $allowed_code, $ship_to );
+				if ( $intl !== $allowed_code && '' !== $intl ) {
+					$expanded[] = $intl;
+				}
+			}
+			$allowed = array_flip( array_unique( $expanded ) );
 			$plans   = array_values(
 				array_filter(
 					$plans,
