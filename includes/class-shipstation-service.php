@@ -141,6 +141,7 @@ class ShipStation_Service {
 				// USPS.
 				'usps_priority_mail'         => 'usps_priority_mail_international',
 				'usps_priority_mail_express' => 'usps_priority_mail_express_international',
+				'usps_ground_advantage'      => 'usps_first_class_mail_international',
 				'usps_first_class_mail'      => 'usps_first_class_mail_international',
 				// UPS.
 				'ups_ground'                 => 'ups_standard',
