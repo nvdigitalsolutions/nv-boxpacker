@@ -553,6 +553,14 @@ composer phpcbf
 
 The PHPCS configuration lives in `phpcs.xml.dist`. The `manage_woocommerce` capability is registered as a custom known-good capability so PHPCS does not flag it.
 
+> **Security note:** the PHPCS toolchain (`squizlabs/php_codesniffer`, `wp-coding-standards/wpcs`, and the `phpcsstandards/*` helpers) has had code-execution advisories in the past. Keep it patched:
+>
+> ```bash
+> composer audit                                                           # Check for known advisories
+> composer update squizlabs/php_codesniffer wp-coding-standards/wpcs \
+>   --with-all-dependencies                                                # Apply patches
+> ```
+
 ### Directory Structure
 
 ```
