@@ -26,7 +26,8 @@
       "find includes -name '*.php' -print0 | xargs -0 -n1 php -l"
     ],
     "phpcs": "phpcs",
-    "test": "phpunit"
+    "test": "phpunit",
+    "test-live": "phpunit --configuration phpunit.live.xml.dist"
   },
   "config": {
     "allow-plugins": {

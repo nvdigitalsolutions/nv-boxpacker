@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+	LOCAL live-API test config — your credentials live HERE, never in git.
+
+	1. Copy this file to phpunit.live.local.xml (same directory).
+	2. Fill in the value="" attributes below.
+	3. Run: vendor/bin/phpunit -c phpunit.live.local.xml
+
+	phpunit.live.local.xml is git-ignored.  Never commit API keys.
+	Use a TEST_-prefixed ShipEngine sandbox key for the ShipEngine tests;
+	ShipStation getrates creates no labels and can use account credentials.
+-->
+<phpunit bootstrap="tests/bootstrap.php"
+	colors="true"
+	verbose="true">
+	<php>
+		<!-- ShipEngine (sandbox) -->
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPENGINE_API_KEY" value=""/>
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPENGINE_CARRIER_ID" value="se-423887"/>
+		<!-- ShipStation -->
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPSTATION_API_KEY" value=""/>
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPSTATION_API_SECRET" value=""/>
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPSTATION_CARRIER_CODE" value="stamps_com"/>
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIPSTATION_SERVICE_CODE" value="usps_priority_mail"/>
+		<!-- Origin / destination (optional; real addresses give real rates) -->
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIP_FROM_POSTAL" value="90210"/>
+		<env name="FK_USPS_OPTIMIZER_TEST_SHIP_TO_POSTAL" value="78701"/>
+		<!-- Only needed when PHP cURL lacks a system CA bundle (stock Windows
+		     PHP): Git for Windows ships one at this path. -->
+		<env name="FK_USPS_OPTIMIZER_TEST_CA_BUNDLE" value="C:\Program Files\Git\usr\ssl\cert.pem"/>
+	</php>
+	<testsuites>
+		<testsuite name="Live API Integration">
+			<directory suffix="Test.php">tests/Integration</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>
