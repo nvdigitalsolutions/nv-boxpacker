@@ -32,7 +32,7 @@ tests/
 ## Running Tests
 
 ```bash
-# Full test suite (512 tests, 1076 assertions)
+# Full test suite (562 tests, 1187 assertions)
 composer run test
 
 # Run with configuration (bootstrap + test suite)
@@ -44,6 +44,33 @@ vendor/bin/phpunit --configuration phpunit.xml.dist tests/Unit/ShippingMethodTes
 # Run a single test method
 vendor/bin/phpunit --configuration phpunit.xml.dist --filter test_skip_when_country_is_missing
 ```
+
+---
+
+## Live API Tests (optional, network + credentials required)
+
+`tests/Integration/` holds live tests that hit the **real** ShipEngine sandbox and ShipStation APIs. They are **skipped automatically** when credentials are missing, so they never block the unit suite or CI.
+
+```bash
+# Runs the live suite; skips what it cannot authenticate
+composer run test-live
+```
+
+Credentials come from environment variables:
+
+| Variable | Required | Default |
+|----------|----------|---------|
+| `FK_USPS_OPTIMIZER_TEST_SHIPENGINE_API_KEY` | for ShipEngine tests | — (sandbox `TEST_` key) |
+| `FK_USPS_OPTIMIZER_TEST_SHIPENGINE_CARRIER_ID` | no | `se-423887` (sandbox stamps_com) |
+| `FK_USPS_OPTIMIZER_TEST_SHIPSTATION_API_KEY` + `_API_SECRET` | for ShipStation tests | — |
+| `FK_USPS_OPTIMIZER_TEST_SHIPSTATION_CARRIER_CODE` | no | `stamps_com` |
+| `FK_USPS_OPTIMIZER_TEST_SHIPSTATION_SERVICE_CODE` | no | `usps_priority_mail` |
+| `FK_USPS_OPTIMIZER_TEST_SHIP_FROM_POSTAL` / `_SHIP_TO_POSTAL` | no | `90210` / `78701` |
+| `FK_USPS_OPTIMIZER_TEST_CA_BUNDLE` | only when PHP cURL has no system CAs | e.g. `C:\Program Files\Git\usr\ssl\cert.pem` |
+
+**Where to keep credentials locally:** copy `phpunit.live.local.xml.example` → `phpunit.live.local.xml` (git-ignored) and fill in the `<env>` values, then run `vendor/bin/phpunit -c phpunit.live.local.xml`. Never commit API keys.
+
+**Live passthrough seam:** the unit bootstrap stubs `wp_remote_post`/`wp_remote_get`; live tests set `$GLOBALS['_test_wp_remote_live'] = true` (and unset it in `tearDown()`), which routes those functions through `live_http_request()` (cURL) with the same response shape the plugin parsers expect.
 
 ---
 

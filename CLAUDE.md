@@ -148,7 +148,7 @@ Both use `wp_remote_post()` and cache responses in transients (5-min TTL, filter
 # PHP linting (WordPress Coding Standards)
 composer run lint
 
-# PHPUnit test suite (512 tests, 1076 assertions)
+# PHPUnit test suite (562 tests, 1187 assertions)
 composer run test
 
 # Run a specific test file
