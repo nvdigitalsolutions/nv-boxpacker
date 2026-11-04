@@ -749,6 +749,10 @@ function wc_get_logger(): WC_Test_Logger {
  * @return array|\WP_Error Response array or WP_Error.
  */
 function wp_remote_get( string $url, array $args = array() ) {
+	if ( ! empty( $GLOBALS['_test_wp_remote_live'] ) ) {
+		return live_http_request( 'GET', $url, $args );
+	}
+
 	$stub = $GLOBALS['_test_wp_remote_get'] ?? null;
 	if ( null === $stub ) {
 		return array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
@@ -831,6 +835,10 @@ function delete_transient( string $transient ): bool {
  * @return array|\WP_Error Response array or WP_Error.
  */
 function wp_remote_post( string $url, array $args = array() ) {
+	if ( ! empty( $GLOBALS['_test_wp_remote_live'] ) ) {
+		return live_http_request( 'POST', $url, $args );
+	}
+
 	$stub = $GLOBALS['_test_wp_remote_post'];
 	if ( null === $stub ) {
 		return array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
@@ -839,6 +847,70 @@ function wp_remote_post( string $url, array $args = array() ) {
 		return $stub( $url, $args );
 	}
 	return $stub;
+}
+
+/**
+ * Perform a REAL HTTP request for live-API integration tests.
+ *
+ * The unit-test bootstrap replaces wp_remote_* with stubs, so the live test
+ * suite (tests/Integration, run via phpunit.live.xml.dist) opts in by setting
+ * $GLOBALS['_test_wp_remote_live'] = true.  Uses cURL directly; returns the
+ * same response shape the plugin's parsers expect.
+ *
+ * @param string $method HTTP method ('GET' or 'POST').
+ * @param string $url    Request URL.
+ * @param array  $args   wp_remote_*()-shaped request args.
+ * @return array|\WP_Error Response array or WP_Error.
+ */
+function live_http_request( string $method, string $url, array $args = array() ) {
+	if ( ! function_exists( 'curl_init' ) ) {
+		return new \WP_Error( 'no_curl', 'The cURL extension is required for live API tests.' );
+	}
+
+	$headers = array();
+	foreach ( (array) ( $args['headers'] ?? array() ) as $key => $value ) {
+		$headers[] = $key . ': ' . $value;
+	}
+
+	$options = array(
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_CUSTOMREQUEST  => $method,
+		CURLOPT_POSTFIELDS     => (string) ( $args['body'] ?? '' ),
+		CURLOPT_HTTPHEADER     => $headers,
+		CURLOPT_TIMEOUT        => (int) ( $args['timeout'] ?? 30 ),
+		CURLOPT_FOLLOWLOCATION => false,
+	);
+
+	// Some local PHP installs (e.g. stock Windows) have no system CA bundle,
+	// which makes every TLS handshake fail.  Allow an explicit bundle path
+	// via FK_USPS_OPTIMIZER_TEST_CA_BUNDLE (Git for Windows ships one at
+	// C:\Program Files\Git\usr\ssl\cert.pem).
+	$cainfo = getenv( 'FK_USPS_OPTIMIZER_TEST_CA_BUNDLE' );
+	if ( false === $cainfo || '' === $cainfo ) {
+		$cainfo = $_ENV['FK_USPS_OPTIMIZER_TEST_CA_BUNDLE'] ?? ( $_SERVER['FK_USPS_OPTIMIZER_TEST_CA_BUNDLE'] ?? '' );
+	}
+	if ( is_string( $cainfo ) && '' !== $cainfo && file_exists( $cainfo ) ) {
+		$options[ CURLOPT_CAINFO ] = $cainfo;
+	}
+
+	$ch = curl_init( $url );
+	curl_setopt_array( $ch, $options );
+
+	$body = curl_exec( $ch );
+
+	if ( false === $body ) {
+		$error = curl_error( $ch );
+		curl_close( $ch );
+		return new \WP_Error( 'http_request_failed', $error );
+	}
+
+	$code = (int) curl_getinfo( $ch, CURLINFO_RESPONSE_CODE );
+	curl_close( $ch );
+
+	return array(
+		'response' => array( 'code' => $code ),
+		'body'     => (string) $body,
+	);
 }
 
 /**
@@ -979,6 +1051,20 @@ class WC_Order {
 	public function add_order_note( string $note, int $is_customer_note = 0, bool $added_by_user = false ): int { return 0; }
 
 	/**
+	 * Get the order's shipping line items.
+	 *
+	 * @return array Shipping items.
+	 */
+	public function get_shipping_methods(): array { return array(); }
+
+	/**
+	 * Get the total the customer paid for shipping.
+	 *
+	 * @return string Shipping total.
+	 */
+	public function get_shipping_total(): string { return '0'; }
+
+	/**
 	 * Get the order's customer-provided note.
 	 *
 	 * @param string $context Context: "view" applies filters, "edit" returns raw.
@@ -1024,6 +1110,29 @@ class WC_Order_Item_Product extends WC_Order_Item {
 	 */
 	public function get_product() { return false; }
 	public function get_quantity(): int { return 1; }
+}
+
+/**
+ * WooCommerce order item shipping stub.
+ */
+class WC_Order_Item_Shipping extends WC_Order_Item {
+
+	/**
+	 * Get the shipping method ID (rate ID for shipping-zone methods).
+	 *
+	 * @return string Method ID.
+	 */
+	public function get_method_id(): string { return ''; }
+
+	/**
+	 * Get item meta data.
+	 *
+	 * @param string $key     Meta key.
+	 * @param bool   $single  Whether to return a single value.
+	 * @param string $context Context.
+	 * @return mixed Meta value.
+	 */
+	public function get_meta( string $key = '', bool $single = true, string $context = 'view' ) { return ''; }
 }
 
 /**

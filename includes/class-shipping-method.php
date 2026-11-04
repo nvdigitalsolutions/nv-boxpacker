@@ -111,19 +111,87 @@ class Shipping_Method extends \WC_Shipping_Method {
 			return;
 		}
 
-		foreach ( $rates as $idx => $rate ) {
-			$rate_args = array(
-				'id'    => $this->get_rate_id() . ( $idx > 0 ? ':' . $idx : '' ),
-				'label' => $rate['label'],
-				'cost'  => (float) $rate['cost'],
-			);
+		foreach ( $rates as $rate ) {
+			$meta_data = $rate['meta_data'] ?? array();
 
-			if ( ! empty( $rate['meta_data'] ) ) {
-				$rate_args['meta_data'] = $rate['meta_data'];
-			}
+			// Persist service identity alongside the rate so the order plan can
+			// later match the exact option the customer selected and paid for.
+			// WooCommerce copies rate meta_data onto the order's shipping item.
+			$meta_data[ Plugin::META_SERVICE_CODE ]  = (string) ( $rate['service_code'] ?? '' );
+			$meta_data[ Plugin::META_SERVICE_LABEL ] = (string) ( $rate['service_label'] ?? '' );
+			$meta_data[ Plugin::META_CARRIER_CODE ]  = (string) ( $rate['carrier_code'] ?? '' );
+
+			$rate_args = array(
+				'id'        => $this->build_rate_id( $rate ),
+				'label'     => $rate['label'],
+				'cost'      => (float) $rate['cost'],
+				'meta_data' => $meta_data,
+			);
 
 			$this->add_rate( $rate_args );
 		}
+	}
+
+	/**
+	 * Build a stable WooCommerce rate ID for a rate entry.
+	 *
+	 * The ID is derived from the option's service code plus a short hash of
+	 * its label and cost, so it is deterministic across `calculate_shipping()`
+	 * invocations.  The previously-used positional index could silently remap
+	 * the customer's selection to a different service when the rate set was
+	 * re-sorted between cart and checkout (e.g. after a cache expiry or price
+	 * change).  A content-derived ID can never point at a different option.
+	 *
+	 * @param array $rate Rate entry produced by the rate calculators.
+	 * @return string Unique, stable rate ID.
+	 */
+	protected function build_rate_id( array $rate ): string {
+		$service_key = sanitize_key( (string) ( $rate['service_code'] ?? '' ) );
+
+		if ( '' === $service_key ) {
+			$service_key = 'any-service';
+		}
+
+		$signature = substr( md5( (string) ( $rate['label'] ?? '' ) . '|' . (float) ( $rate['cost'] ?? 0 ) ), 0, 8 );
+
+		return $this->get_rate_id( $service_key . '-' . $signature );
+	}
+
+	/**
+	 * Resolve a display title from a set of plan service labels.
+	 *
+	 * Returns the single label when every plan in the group agrees, or the
+	 * most frequent label when they differ.  An empty string means the group
+	 * has no usable label at all and the caller must skip it — falling back to
+	 * the method title would advertise a service the customer did not price.
+	 *
+	 * @param string[] $labels Service labels from the plans in a group.
+	 * @return string Display title, or '' when no label is available.
+	 */
+	protected function resolve_rate_title( array $labels ): string {
+		$clean = array_values(
+			array_unique(
+				array_filter(
+					array_map( 'strval', $labels ),
+					static function ( string $label ): bool {
+						return '' !== trim( $label );
+					}
+				)
+			)
+		);
+
+		if ( empty( $clean ) ) {
+			return '';
+		}
+
+		if ( 1 === count( $clean ) ) {
+			return $clean[0];
+		}
+
+		$counts = array_count_values( $clean );
+		arsort( $counts );
+
+		return (string) array_key_first( $counts );
 	}
 
 	/**
@@ -289,10 +357,14 @@ class Shipping_Method extends \WC_Shipping_Method {
 					continue;
 				}
 
-				$unique_labels = array_unique( array_filter( $service_labels ) );
-				$title         = 1 === count( $unique_labels )
-					? reset( $unique_labels )
-					: $this->title;
+				$title = $this->resolve_rate_title( $service_labels );
+
+				if ( '' === $title ) {
+					// Every plan in this group lacks a service label.  Offering
+					// the option under the generic method title would advertise
+					// a service the customer did not actually price, so skip it.
+					continue;
+				}
 
 				$label = $title;
 				if ( $settings->is_show_package_count_enabled() && $package_count > 0 ) {
@@ -323,9 +395,12 @@ class Shipping_Method extends \WC_Shipping_Method {
 				}
 
 				$rates[] = array(
-					'label'     => $label,
-					'cost'      => $total_cost,
-					'meta_data' => $meta_data,
+					'label'         => $label,
+					'cost'          => $total_cost,
+					'service_code'  => $sc,
+					'service_label' => $title,
+					'carrier_code'  => $this->first_carrier_code( $plans_by_index ),
+					'meta_data'     => $meta_data,
 				);
 			}
 		}
@@ -447,12 +522,13 @@ class Shipping_Method extends \WC_Shipping_Method {
 							: $name;
 					}
 
-					// Use the carrier service label when available; fall back to the
-					// method title for backward compatibility.
-					$unique_labels = array_unique( array_filter( $service_labels ) );
-					$title_prefix  = 1 === count( $unique_labels )
-						? reset( $unique_labels )
-						: $this->title;
+					// Use the service label confirmed by the carrier; never
+					// fall back to the method title for a priced service.
+					$title_prefix = $this->resolve_rate_title( $service_labels );
+
+					if ( '' === $title_prefix ) {
+						continue;
+					}
 
 					$label = $title_prefix . ' — ' . implode( ' + ', $parts );
 
@@ -490,9 +566,12 @@ class Shipping_Method extends \WC_Shipping_Method {
 					$seen_labels[ $label ] = true;
 
 					$rates[] = array(
-						'label'     => $label,
-						'cost'      => $total,
-						'meta_data' => $meta_data,
+						'label'         => $label,
+						'cost'          => $total,
+						'service_code'  => $sc,
+						'service_label' => $title_prefix,
+						'carrier_code'  => $this->first_carrier_code( $combo ),
+						'meta_data'     => $meta_data,
 					);
 				}
 			}
@@ -507,6 +586,24 @@ class Shipping_Method extends \WC_Shipping_Method {
 		);
 
 		return $rates;
+	}
+
+	/**
+	 * Pick the first non-empty carrier code from a set of plans.
+	 *
+	 * @param array $plans Shipping plans.
+	 * @return string Carrier code (e.g. 'usps', 'ups'), or '' when unknown.
+	 */
+	protected function first_carrier_code( array $plans ): string {
+		foreach ( $plans as $plan ) {
+			$carrier = (string) ( $plan['carrier_code'] ?? '' );
+
+			if ( '' !== $carrier ) {
+				return $carrier;
+			}
+		}
+
+		return '';
 	}
 
 	/**

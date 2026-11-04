@@ -386,4 +386,116 @@ class PirateShipExportTest extends TestCase {
 
 		$GLOBALS['_test_wp_mail_return'] = true;
 	}
+
+	// -------------------------------------------------------------------------
+	// Carrier/service derivation (no more hardcoded USPS Priority Mail)
+	// -------------------------------------------------------------------------
+
+	public function test_build_row_derives_carrier_and_service_for_ups_2nd_day_air(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'ups_2nd_day_air',
+				'service_label' => 'UPS 2nd Day Air',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'UPS', $row['carrier'] );
+		$this->assertSame( '2nd Day Air', $row['service'] );
+	}
+
+	public function test_build_row_derives_carrier_and_service_for_ups_ground(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'ups_ground',
+				'service_label' => 'UPS Ground',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'UPS', $row['carrier'] );
+		$this->assertSame( 'Ground', $row['service'] );
+	}
+
+	public function test_build_row_derives_carrier_and_service_for_usps_media_mail(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'usps_media_mail',
+				'service_label' => 'USPS Media Mail',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'USPS', $row['carrier'] );
+		$this->assertSame( 'Media Mail', $row['service'] );
+	}
+
+	public function test_build_row_derives_carrier_and_service_for_usps_ground_advantage(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'usps_ground_advantage',
+				'service_label' => 'USPS Ground Advantage',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'USPS', $row['carrier'] );
+		$this->assertSame( 'Ground Advantage', $row['service'] );
+	}
+
+	public function test_build_row_falls_back_to_service_label_for_unknown_code(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'usps_unknown_thing',
+				'service_label' => 'USPS Priority',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'USPS', $row['carrier'] );
+		$this->assertSame( 'Priority', $row['service'] );
+	}
+
+	public function test_build_row_keeps_legacy_default_when_no_service_info(): void {
+		// Plans written before service codes existed carry no identity.
+		$plan = $this->make_package_plan();
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'USPS', $row['carrier'] );
+		$this->assertSame( 'Priority Mail', $row['service'] );
+	}
+
+	public function test_build_row_keeps_legacy_default_when_label_unparseable(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'something_odd',
+				'service_label' => '',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'USPS', $row['carrier'] );
+		$this->assertSame( 'Priority Mail', $row['service'] );
+	}
+
+	public function test_build_row_derives_fedex_from_label(): void {
+		$plan = $this->make_package_plan(
+			array(
+				'service_code'  => 'fedex_ground',
+				'service_label' => 'FedEx Ground',
+			)
+		);
+
+		$row = $this->export->build_row( $this->make_order(), $plan );
+
+		$this->assertSame( 'FedEx', $row['carrier'] );
+		$this->assertSame( 'Ground', $row['service'] );
+	}
 }

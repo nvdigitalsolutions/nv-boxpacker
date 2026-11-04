@@ -609,6 +609,16 @@ fk-usps-optimizer/
 
 ## Changelog
 
+### 1.3.9
+
+- **Fixed:** Checkout rate labels could advertise the configured service (e.g. "USPS Priority") while the price came from a different service the API actually returned (e.g. Media Mail). Plans now carry the `service_code` of the rate that was priced, and the ShipEngine/ShipStation plan builders label from the API response instead of the settings value.
+- **Fixed:** The ShipStation single-plan rate path priced the cheapest returned rate regardless of the requested service. `request_rate()` now filters to the requested service and the configured allow-list, and refuses to label a price with a service the API did not confirm.
+- **Fixed:** Checkout rate IDs were positional (sorted index). If the rate set was re-sorted between cart and checkout (cache expiry, price change), the customer's selection could silently remap to a different service (e.g. select 2nd Day Air, pay Ground). IDs now derive from the service code plus the option content.
+- **Fixed:** Order plans re-quoted each package against every enabled carrier, producing mixed-carrier plans (some bags UPS, some USPS) that ignored the service the customer selected and paid for. `Plugin::process_order()` now captures the checkout-selected service from the order's shipping-item meta, constrains planning to that service, and adds a visible warning when the plan total diverges from the amount paid.
+- **Fixed:** The PirateShip CSV export hardcoded carrier "USPS" and service "Priority Mail" for every row, even for UPS/Media Mail plans. The carrier and service columns now derive from the plan's actual service code.
+- **Fixed:** Checkout options with no usable service label no longer fall back to the generic method title.
+- **New:** Opt-in live API integration test suite (`tests/Integration`, `composer run test-live`) that exercises the real ShipStation and ShipEngine sandbox APIs with env-var credentials; skipped automatically when credentials are missing. See `phpunit.live.xml.dist` and `phpunit.live.local.xml.example`.
+
 ### 1.3.8
 
 - **Fixed:** BoxPacker `NoBoxesAvailableException` crash during checkout quantity changes. When a customer changes quantity in checkout, the AJAX `update_order_review` call repacks items — if no box could fit all items, BoxPacker threw an uncaught exception resulting in a 500 error. `items_fit_in_box()` now catches the exception and returns `false`, and `pack_with_boxpacker()` wraps `pack()` in a try/catch with fallback to `pack_fallback()`.

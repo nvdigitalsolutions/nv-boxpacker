@@ -4,7 +4,7 @@ Tags: woocommerce, shipping, usps, canada, box-packing, funnelkit
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.3.8
+Stable tag: 1.3.9
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -153,6 +153,15 @@ To the WooCommerce logger under the `fk-usps-optimizer` source. Enable debug log
 Yes, using the `fk_usps_optimizer_shipstation_api_url` filter. This is useful for integration testing with a mock server.
 
 == Changelog ==
+
+= 1.3.9 =
+* Fixed: Checkout rate labels could advertise the configured service (e.g. "USPS Priority") while the price came from a different service the API actually returned (e.g. Media Mail). Plans now carry the service_code of the rate that was priced, and ShipEngine/ShipStation plan builders label from the API response instead of the settings value.
+* Fixed: ShipStation single-plan rate path priced the cheapest returned rate regardless of the requested service. request_rate() now filters to the requested service and the configured allow-list, and refuses to label a price with a service the API did not confirm.
+* Fixed: Checkout rate IDs were positional (sorted index). If the rate set was re-sorted between cart and checkout (cache expiry, price change), the customer's selection could silently remap to a different service (e.g. select 2nd Day Air, pay Ground). IDs now derive from the service code plus the option content.
+* Fixed: Order plans re-quoted each package against every enabled carrier, producing mixed-carrier plans (some bags UPS, some USPS) that ignored the service the customer selected and paid for. Plugin::process_order() now captures the checkout-selected service from the order's shipping item meta, constrains planning to that service, and adds a visible warning when the plan total diverges from the amount paid.
+* Fixed: PirateShip CSV export hardcoded carrier "USPS" and service "Priority Mail" for every row, even UPS/Media Mail plans. Carrier and service columns now derive from the plan's actual service code.
+* Fixed: Checkout options with no usable service label no longer fall back to the generic method title.
+* New: Opt-in live API integration test suite (tests/Integration, `composer run test-live`) that exercises the real ShipStation and ShipEngine sandbox APIs with env-var credentials; skipped automatically when credentials are missing.
 
 = 1.3.8 =
 * Fixed: BoxPacker NoBoxesAvailableException crash during checkout quantity changes — when a customer changes quantity during checkout, the AJAX update_order_review repacks items; if no box fit, BoxPacker threw an uncaught exception causing a 500 error. items_fit_in_box() now catches the exception, and pack_with_boxpacker() wraps pack() in try/catch with fallback to pack_fallback().

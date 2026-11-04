@@ -7,6 +7,9 @@
 
 namespace FK_USPS_Optimizer\Tests\Unit;
 
+use FK_USPS_Optimizer\Plugin;
+use FK_USPS_Optimizer\Settings;
+use FK_USPS_Optimizer\ShipStation_Service;
 use FK_USPS_Optimizer\Shipping_Method;
 use PHPUnit\Framework\TestCase;
 
@@ -235,5 +238,331 @@ class ShippingMethodTest extends TestCase {
 		$this->assertGreaterThanOrEqual( 40, $context['elapsed_ms'], 'Elapsed time should be ≳50ms.' );
 		$this->assertSame( 'fk-usps-optimizer', $entry['context']['source'] );
 		$this->assertStringStartsWith( 'calculate_shipping completed', $entry['message'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// build_rate_id — stable, content-derived rate IDs
+	// -------------------------------------------------------------------------
+
+	public function test_build_rate_id_is_deterministic_and_contains_service_code(): void {
+		$rate = array( 'service_code' => 'ups_2nd_day_air', 'label' => 'UPS 2nd Day Air', 'cost' => 25.00 );
+
+		$id1 = $this->call_protected( 'build_rate_id', array( $rate ) );
+		$id2 = $this->call_protected( 'build_rate_id', array( $rate ) );
+
+		$this->assertSame( $id1, $id2, 'The same option must always produce the same ID.' );
+		$this->assertStringContainsString( 'ups_2nd_day_air', $id1 );
+		$this->assertStringStartsWith( 'fk_usps_optimizer:', $id1 );
+	}
+
+	public function test_build_rate_id_differs_between_services(): void {
+		$priority = array( 'service_code' => 'usps_priority_mail', 'label' => 'USPS Priority', 'cost' => 8.50 );
+		$media    = array( 'service_code' => 'usps_media_mail', 'label' => 'USPS Media Mail', 'cost' => 8.50 );
+
+		$id_priority = $this->call_protected( 'build_rate_id', array( $priority ) );
+		$id_media    = $this->call_protected( 'build_rate_id', array( $media ) );
+
+		$this->assertNotSame( $id_priority, $id_media );
+		$this->assertStringContainsString( 'usps_priority_mail', $id_priority );
+		$this->assertStringContainsString( 'usps_media_mail', $id_media );
+	}
+
+	public function test_build_rate_id_differs_for_same_service_with_different_combo(): void {
+		$combo_a = array( 'service_code' => 'usps_priority_mail', 'label' => 'USPS Priority — Small', 'cost' => 8.50 );
+		$combo_b = array( 'service_code' => 'usps_priority_mail', 'label' => 'USPS Priority — Large', 'cost' => 8.50 );
+
+		$this->assertNotSame(
+			$this->call_protected( 'build_rate_id', array( $combo_a ) ),
+			$this->call_protected( 'build_rate_id', array( $combo_b ) )
+		);
+	}
+
+	public function test_build_rate_id_changes_when_cost_changes(): void {
+		$before = array( 'service_code' => 'ups_ground', 'label' => 'UPS Ground', 'cost' => 10.00 );
+		$after  = array( 'service_code' => 'ups_ground', 'label' => 'UPS Ground', 'cost' => 11.00 );
+
+		// A price change is a different offer: the old selection must not
+		// silently bind to the re-priced option at a different index.
+		$this->assertNotSame(
+			$this->call_protected( 'build_rate_id', array( $before ) ),
+			$this->call_protected( 'build_rate_id', array( $after ) )
+		);
+	}
+
+	public function test_build_rate_id_uses_placeholder_when_service_code_missing(): void {
+		$id = $this->call_protected(
+			'build_rate_id',
+			array( array( 'label' => 'Mystery', 'cost' => 5.00 ) )
+		);
+
+		$this->assertStringContainsString( 'any-service', $id );
+	}
+
+	public function test_build_rate_id_is_stable_under_reordering(): void {
+		$ground  = array( 'service_code' => 'ups_ground', 'label' => 'UPS Ground', 'cost' => 9.00 );
+		$air     = array( 'service_code' => 'ups_2nd_day_air', 'label' => 'UPS 2nd Day Air', 'cost' => 22.00 );
+
+		$ids_first_pass  = array(
+			$this->call_protected( 'build_rate_id', array( $ground ) ),
+			$this->call_protected( 'build_rate_id', array( $air ) ),
+		);
+		$ids_second_pass = array(
+			$this->call_protected( 'build_rate_id', array( $air ) ),
+			$this->call_protected( 'build_rate_id', array( $ground ) ),
+		);
+
+		sort( $ids_first_pass );
+		sort( $ids_second_pass );
+
+		$this->assertSame( $ids_first_pass, $ids_second_pass );
+	}
+
+	// -------------------------------------------------------------------------
+	// resolve_rate_title — never advertise a service the customer did not price
+	// -------------------------------------------------------------------------
+
+	public function test_resolve_rate_title_returns_sole_label(): void {
+		$title = $this->call_protected(
+			'resolve_rate_title',
+			array( array( 'USPS Priority', 'USPS Priority' ) )
+		);
+
+		$this->assertSame( 'USPS Priority', $title );
+	}
+
+	public function test_resolve_rate_title_returns_most_frequent_label_when_mixed(): void {
+		$title = $this->call_protected(
+			'resolve_rate_title',
+			array( array( 'USPS Priority', 'UPS Ground', 'USPS Priority' ) )
+		);
+
+		$this->assertSame( 'USPS Priority', $title );
+	}
+
+	public function test_resolve_rate_title_returns_empty_when_all_labels_blank(): void {
+		$title = $this->call_protected(
+			'resolve_rate_title',
+			array( array( '', '   ' ) )
+		);
+
+		$this->assertSame( '', $title );
+	}
+
+	public function test_resolve_rate_title_ignores_blank_labels_among_valid(): void {
+		$title = $this->call_protected(
+			'resolve_rate_title',
+			array( array( '', 'UPS Ground', '' ) )
+		);
+
+		$this->assertSame( 'UPS Ground', $title );
+	}
+
+	// -------------------------------------------------------------------------
+	// first_carrier_code
+	// -------------------------------------------------------------------------
+
+	public function test_first_carrier_code_returns_first_non_empty(): void {
+		$carrier = $this->call_protected(
+			'first_carrier_code',
+			array(
+				array(
+					array( 'carrier_code' => '' ),
+					array( 'carrier_code' => 'ups' ),
+					array( 'carrier_code' => 'usps' ),
+				),
+			)
+		);
+
+		$this->assertSame( 'ups', $carrier );
+	}
+
+	public function test_first_carrier_code_returns_empty_when_none_present(): void {
+		$carrier = $this->call_protected(
+			'first_carrier_code',
+			array( array( array( 'no_carrier' => true ) ) )
+		);
+
+		$this->assertSame( '', $carrier );
+	}
+
+	// -------------------------------------------------------------------------
+	// calculate_cheapest_option / calculate_all_options label fidelity
+	// -------------------------------------------------------------------------
+
+	public function test_calculate_cheapest_option_labels_rates_by_confirmed_service(): void {
+		$settings = $this->make_rate_settings();
+		$plugin   = $this->make_plugin_with_shipstation( $settings, '' );
+
+		$GLOBALS['_test_wp_remote_post'] = $this->shipstation_multi_service_response();
+
+		$rates = $this->call_protected(
+			'calculate_cheapest_option',
+			array( $plugin, array( $this->make_packed_package() ), $this->make_calc_ship_to(), $settings )
+		);
+
+		$this->assertCount( 2, $rates );
+		// Cheapest-first.
+		$this->assertSame( 'USPS Media Mail', $rates[0]['label'] );
+		$this->assertSame( 4.20, $rates[0]['cost'] );
+		$this->assertSame( 'usps_media_mail', $rates[0]['service_code'] );
+		$this->assertSame( 'usps', $rates[0]['carrier_code'] );
+		$this->assertSame( 'USPS Priority', $rates[1]['label'] );
+		$this->assertSame( 8.50, $rates[1]['cost'] );
+		$this->assertSame( 'usps_priority_mail', $rates[1]['service_code'] );
+		// The generic method title must never leak into a priced option.
+		$this->assertStringNotContainsString( 'USPS Priority Optimizer', $rates[0]['label'] );
+		$this->assertStringNotContainsString( 'USPS Priority Optimizer', $rates[1]['label'] );
+	}
+
+	public function test_calculate_all_options_labels_rates_by_confirmed_service(): void {
+		$settings = $this->make_rate_settings();
+		$plugin   = $this->make_plugin_with_shipstation( $settings, '' );
+
+		$GLOBALS['_test_wp_remote_post'] = $this->shipstation_multi_service_response();
+
+		$rates = $this->call_protected(
+			'calculate_all_options',
+			array( $plugin, array( $this->make_packed_package() ), $this->make_calc_ship_to(), $settings )
+		);
+
+		$this->assertCount( 2, $rates );
+
+		$this->assertStringContainsString( 'USPS Media Mail', $rates[0]['label'] );
+		$this->assertSame( 'usps_media_mail', $rates[0]['service_code'] );
+		$this->assertSame( 'USPS Media Mail', $rates[0]['service_label'] );
+
+		$this->assertStringContainsString( 'USPS Priority', $rates[1]['label'] );
+		$this->assertSame( 'usps_priority_mail', $rates[1]['service_code'] );
+		$this->assertSame( 'USPS Priority', $rates[1]['service_label'] );
+
+		$this->assertStringNotContainsString( 'USPS Priority Optimizer', $rates[0]['label'] );
+		$this->assertStringNotContainsString( 'USPS Priority Optimizer', $rates[1]['label'] );
+	}
+
+	public function test_calculate_cheapest_option_skips_groups_with_no_label(): void {
+		$settings = $this->make_rate_settings();
+		$plugin   = $this->make_plugin_with_shipstation( $settings, '' );
+
+		// Rates without a serviceCode and no configured service produce plans
+		// with empty labels, which must be skipped rather than sold under the
+		// generic method title.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'shipmentCost' => 4.20, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$rates = $this->call_protected(
+			'calculate_cheapest_option',
+			array( $plugin, array( $this->make_packed_package() ), $this->make_calc_ship_to(), $settings )
+		);
+
+		$this->assertSame( array(), $rates );
+	}
+
+	// -------------------------------------------------------------------------
+	// Rate-calculator helpers
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Build a settings mock for the rate calculators.
+	 *
+	 * @return Settings|\PHPUnit\Framework\MockObject\MockObject
+	 */
+	private function make_rate_settings() {
+		$settings = $this->createMock( Settings::class );
+		$settings->method( 'is_show_package_count_enabled' )->willReturn( false );
+		$settings->method( 'is_show_estimated_delivery_enabled' )->willReturn( false );
+
+		// ShipStation service wiring.
+		$settings->method( 'get_boxes_for_carrier' )->willReturn(
+			array(
+				array(
+					'reference'    => 'Test Box',
+					'package_code' => 'package',
+					'package_name' => 'Test Box',
+					'box_type'     => 'cubic',
+					'outer_width'  => 8.0,
+					'outer_length' => 8.0,
+					'outer_depth'  => 6.0,
+					'inner_width'  => 8.0,
+					'inner_length' => 8.0,
+					'inner_depth'  => 6.0,
+					'empty_weight' => 3.0,
+					'max_weight'   => 20.0,
+				),
+			)
+		);
+		$settings->method( 'get_shipstation_api_key' )->willReturn( 'k' );
+		$settings->method( 'get_shipstation_api_secret' )->willReturn( 's' );
+		$settings->method( 'get_shipstation_carrier_code' )->willReturn( 'stamps_com' );
+		$settings->method( 'get_shipstation_service_code' )->willReturn( '' );
+		$settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+		$settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+
+		return $settings;
+	}
+
+	/**
+	 * Build a Plugin mock whose carrier services are a single ShipStation
+	 * service instance.
+	 *
+	 * @param Settings $settings     Settings mock.
+	 * @param string   $service_code ShipStation service code override.
+	 * @return Plugin|\PHPUnit\Framework\MockObject\MockObject
+	 */
+	private function make_plugin_with_shipstation( Settings $settings, string $service_code ) {
+		$service = new ShipStation_Service( $settings, 'stamps_com', $service_code );
+
+		$plugin = $this->createMock( Plugin::class );
+		$plugin->method( 'get_carrier_services' )->willReturn( array( $service ) );
+
+		return $plugin;
+	}
+
+	/**
+	 * A ShipStation response with two services (cheapest = Media Mail).
+	 *
+	 * @return array wp_remote_post()-shaped stub.
+	 */
+	private function shipstation_multi_service_response(): array {
+		return array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceName' => 'USPS Priority Mail', 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 8.50, 'otherCost' => 0.00 ),
+				array( 'serviceName' => 'USPS Media Mail', 'serviceCode' => 'usps_media_mail', 'shipmentCost' => 4.20, 'otherCost' => 0.00 ),
+			) ),
+		);
+	}
+
+	/**
+	 * A minimal packed package for the rate calculators.
+	 *
+	 * @return array Packed package.
+	 */
+	private function make_packed_package(): array {
+		return array(
+			'dimensions' => array( 'length' => 6.0, 'width' => 6.0, 'height' => 4.0 ),
+			'weight_oz'  => 16.0,
+			'items'      => array( array( 'name' => 'Widget', 'weight_oz' => 16.0 ) ),
+		);
+	}
+
+	/**
+	 * A minimal ship-to array for the rate calculators.
+	 *
+	 * @return array Ship-to.
+	 */
+	private function make_calc_ship_to(): array {
+		return array(
+			'name'           => 'Jane Doe',
+			'address_line1'  => '123 Main St',
+			'city_locality'  => 'Austin',
+			'state_province' => 'TX',
+			'postal_code'    => '78701',
+			'country_code'   => 'US',
+		);
 	}
 }

@@ -55,6 +55,8 @@ class PirateShip_Export {
 	 * @return array CSV row data.
 	 */
 	public function build_row( \WC_Order $order, array $package_plan ): array {
+		$carrier_service = $this->derive_carrier_and_service( $package_plan );
+
 		return array(
 			'order_number'   => $order->get_order_number(),
 			'package_number' => $package_plan['package_number'],
@@ -66,8 +68,8 @@ class PirateShip_Export {
 			'state'          => $order->get_shipping_state(),
 			'postal_code'    => $order->get_shipping_postcode(),
 			'country'        => $order->get_shipping_country(),
-			'carrier'        => 'USPS',
-			'service'        => 'Priority Mail',
+			'carrier'        => $carrier_service['carrier'],
+			'service'        => $carrier_service['service'],
 			'package_type'   => $package_plan['package_code'],
 			'package_name'   => $package_plan['package_name'],
 			'weight_oz'      => $package_plan['weight_oz'],
@@ -76,6 +78,165 @@ class PirateShip_Export {
 			'height'         => $package_plan['dimensions']['height'],
 			'packing_list'   => implode( '; ', $package_plan['packing_list'] ),
 			'references'     => sprintf( 'Order #%s / Package %d', $order->get_order_number(), $package_plan['package_number'] ),
+		);
+	}
+
+	/**
+	 * Derive the PirateShip carrier/service columns from a package plan.
+	 *
+	 * Uses the plan's service_code (from the API rate that was actually
+	 * priced) so the CSV no longer hardcodes "USPS Priority Mail" for plans
+	 * that were rated as UPS, Media Mail, etc.  Falls back to the human
+	 * service label, then to the historical USPS Priority default for legacy
+	 * plans that predate service codes.
+	 *
+	 * @param array $package_plan Package plan data.
+	 * @return array ['carrier' => string, 'service' => string].
+	 */
+	protected function derive_carrier_and_service( array $package_plan ): array {
+		$code = (string) ( $package_plan['service_code'] ?? '' );
+		$map  = $this->get_carrier_service_map();
+
+		if ( isset( $map[ $code ] ) ) {
+			return $map[ $code ];
+		}
+
+		// Unknown code: fall back to the service label ("UPS Ground" →
+		// carrier UPS, service Ground).
+		$label = (string) ( $package_plan['service_label'] ?? '' );
+		$parts = array_values( array_filter( array_map( 'trim', explode( ' ', $label ) ) ) );
+
+		if ( count( $parts ) >= 2 ) {
+			$carrier_key = strtolower( $parts[0] );
+
+			if ( in_array( $carrier_key, array( 'usps', 'ups', 'fedex', 'dhl' ), true ) ) {
+				$carrier = 'fedex' === $carrier_key ? 'FedEx' : strtoupper( $carrier_key );
+
+				return array(
+					'carrier' => $carrier,
+					'service' => implode( ' ', array_slice( $parts, 1 ) ),
+				);
+			}
+		}
+
+		// Legacy plans predate service codes; keep the historical default.
+		return array(
+			'carrier' => 'USPS',
+			'service' => 'Priority Mail',
+		);
+	}
+
+	/**
+	 * Map known carrier service codes to PirateShip carrier/service names.
+	 *
+	 * @return array Map of service_code => ['carrier' => string, 'service' => string].
+	 */
+	protected function get_carrier_service_map(): array {
+		return array(
+			'usps_priority_mail'                       => array(
+				'carrier' => 'USPS',
+				'service' => 'Priority Mail',
+			),
+			'usps_priority_mail_express'               => array(
+				'carrier' => 'USPS',
+				'service' => 'Priority Mail Express',
+			),
+			'usps_ground_advantage'                    => array(
+				'carrier' => 'USPS',
+				'service' => 'Ground Advantage',
+			),
+			'usps_media_mail'                          => array(
+				'carrier' => 'USPS',
+				'service' => 'Media Mail',
+			),
+			'usps_parcel_select'                       => array(
+				'carrier' => 'USPS',
+				'service' => 'Parcel Select',
+			),
+			'usps_first_class_mail'                    => array(
+				'carrier' => 'USPS',
+				'service' => 'First Class Mail',
+			),
+			'usps_priority_mail_international'         => array(
+				'carrier' => 'USPS',
+				'service' => 'Priority Mail International',
+			),
+			'usps_priority_mail_express_international' => array(
+				'carrier' => 'USPS',
+				'service' => 'Priority Mail Express International',
+			),
+			'usps_first_class_mail_international'      => array(
+				'carrier' => 'USPS',
+				'service' => 'First Class Mail International',
+			),
+			'ups_ground'                               => array(
+				'carrier' => 'UPS',
+				'service' => 'Ground',
+			),
+			'ups_ground_saver'                         => array(
+				'carrier' => 'UPS',
+				'service' => 'Ground Saver',
+			),
+			'ups_2nd_day_air'                          => array(
+				'carrier' => 'UPS',
+				'service' => '2nd Day Air',
+			),
+			'ups_next_day_air'                         => array(
+				'carrier' => 'UPS',
+				'service' => 'Next Day Air',
+			),
+			'ups_next_day_air_saver'                   => array(
+				'carrier' => 'UPS',
+				'service' => 'Next Day Air Saver',
+			),
+			'ups_3_day_select'                         => array(
+				'carrier' => 'UPS',
+				'service' => '3 Day Select',
+			),
+			'ups_standard'                             => array(
+				'carrier' => 'UPS',
+				'service' => 'Standard',
+			),
+			'ups_worldwide_express'                    => array(
+				'carrier' => 'UPS',
+				'service' => 'Worldwide Express',
+			),
+			'ups_worldwide_expedited'                  => array(
+				'carrier' => 'UPS',
+				'service' => 'Worldwide Expedited',
+			),
+			'ups_worldwide_saver'                      => array(
+				'carrier' => 'UPS',
+				'service' => 'Worldwide Saver',
+			),
+			'fedex_ground'                             => array(
+				'carrier' => 'FedEx',
+				'service' => 'Ground',
+			),
+			'fedex_home_delivery'                      => array(
+				'carrier' => 'FedEx',
+				'service' => 'Home Delivery',
+			),
+			'fedex_2day'                               => array(
+				'carrier' => 'FedEx',
+				'service' => '2Day',
+			),
+			'fedex_express_saver'                      => array(
+				'carrier' => 'FedEx',
+				'service' => 'Express Saver',
+			),
+			'fedex_international_ground'               => array(
+				'carrier' => 'FedEx',
+				'service' => 'International Ground',
+			),
+			'fedex_international_economy'              => array(
+				'carrier' => 'FedEx',
+				'service' => 'International Economy',
+			),
+			'fedex_international_priority'             => array(
+				'carrier' => 'FedEx',
+				'service' => 'International Priority',
+			),
 		);
 	}
 

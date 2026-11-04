@@ -1374,6 +1374,154 @@ class ShipEngineServiceTest extends TestCase {
 		$this->assertArrayHasKey( 'b', $out );
 	}
 
+	// -------------------------------------------------------------------------
+	// Rate service-code fidelity (label must match the price that was rated)
+	// -------------------------------------------------------------------------
+
+	public function test_plan_uses_rate_service_code_when_response_confirms_another_service(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array( 'service_code' => 'usps_media_mail', 'shipping_amount' => array( 'amount' => 4.20, 'currency' => 'USD' ) ),
+						array( 'service_code' => 'usps_priority_mail', 'shipping_amount' => array( 'amount' => 9.99, 'currency' => 'USD' ) ),
+					),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		// The cheapest rate is Media Mail — the label must say so instead of
+		// stamping the configured Priority code onto a Media Mail price.
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_media_mail', $plans[0]['service_code'] );
+		$this->assertSame( 'USPS Media Mail', $plans[0]['service_label'] );
+		$this->assertSame( 4.20, $plans[0]['rate_amount'] );
+		$this->assertSame( 'usps', $plans[0]['carrier_code'] );
+	}
+
+	public function test_plan_falls_back_to_requested_code_when_rate_omits_service_code(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array( 'shipping_amount' => array( 'amount' => 7.99, 'currency' => 'USD' ) ),
+					),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plans   = $this->service->build_all_test_package_plans( $this->make_package(), $ship_to, 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_priority_mail', $plans[0]['service_code'] );
+		$this->assertSame( 'USPS Priority', $plans[0]['service_label'] );
+	}
+
+	public function test_single_plan_path_uses_rate_service_code(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				'rate_response' => array(
+					'rates' => array(
+						array( 'service_code' => 'usps_media_mail', 'shipping_amount' => array( 'amount' => 3.50, 'currency' => 'USD' ) ),
+					),
+				),
+			) ),
+		);
+
+		$ship_to = array( 'postal_code' => '78701', 'country_code' => 'US' );
+		$plan    = $this->service->build_test_package_plan( $this->make_package(), $ship_to, 1 );
+
+		$this->assertSame( 'usps_media_mail', $plan['service_code'] );
+		$this->assertSame( 'USPS Media Mail', $plan['service_label'] );
+	}
+
+	public function test_preferred_service_code_is_sent_in_rate_request(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->settings->method( 'get_shipengine_api_key' )->willReturn( 'key' );
+		$this->settings->method( 'get_shipengine_carrier_id' )->willReturn( 'carrier' );
+		$this->settings->method( 'is_debug_logging_enabled' )->willReturn( false );
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+		$this->settings->method( 'get_ship_from_address' )->willReturn( array( 'postal_code' => '90210' ) );
+		$this->settings->method( 'is_sandbox_mode_enabled' )->willReturn( true );
+
+		$captured_payload = null;
+		$GLOBALS['_test_wp_remote_post'] = function ( $url, array $args ) use ( &$captured_payload ) {
+			$captured_payload = json_decode( $args['body'], true );
+			return array(
+				'response' => array( 'code' => 200 ),
+				'body'     => json_encode( array(
+					'rate_response' => array(
+						'rates' => array(
+							array( 'service_code' => 'usps_media_mail', 'shipping_amount' => array( 'amount' => 3.50, 'currency' => 'USD' ) ),
+						),
+					),
+				) ),
+			);
+		};
+
+		$order = $this->make_order();
+		$plan  = $this->service->build_package_plan( $order, $this->make_package(), 1, 'usps_media_mail' );
+
+		$this->assertNotNull( $captured_payload );
+		$this->assertSame( 'usps_media_mail', $captured_payload['shipment']['service_code'] );
+		$this->assertSame( 'usps_media_mail', $plan['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// supports_service_code
+	// -------------------------------------------------------------------------
+
+	public function test_supports_service_code_matches_configured_service(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+
+		$this->assertTrue( $this->service->supports_service_code( 'usps_priority_mail' ) );
+		$this->assertFalse( $this->service->supports_service_code( 'usps_media_mail' ) );
+	}
+
+	public function test_supports_service_code_matches_international_equivalent(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( 'usps_priority_mail' );
+
+		$this->assertTrue( $this->service->supports_service_code( 'usps_priority_mail_international' ) );
+	}
+
+	public function test_supports_service_code_accepts_any_code_when_all_services_configured(): void {
+		$this->settings->method( 'get_shipengine_service_code' )->willReturn( '' );
+
+		$this->assertTrue( $this->service->supports_service_code( 'usps_media_mail' ) );
+		$this->assertTrue( $this->service->supports_service_code( 'anything_at_all' ) );
+	}
+
 	private function call_protected_on( object $instance, string $method, array $args = array() ) {
 		$ref = new \ReflectionMethod( $instance, $method );
 		$ref->setAccessible( true );

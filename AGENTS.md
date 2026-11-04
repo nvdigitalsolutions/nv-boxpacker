@@ -53,6 +53,7 @@ The `.agents/skills/` directory contains WordPress-focused agent skills — port
 | WordPress Security | wp-security-audit, wp-security-deep, wp-security-secrets |
 | WordPress Text | wp-i18n-audit, wp-utf8-text |
 | WordPress Performance | wp-query-cache |
+| FK USPS Optimizer (repo) | nv-boxpacker |
 
 ---
 

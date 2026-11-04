@@ -28,6 +28,12 @@
 # Composer temporary files
 /vendor/composer/tmp-*
 
+# Live API test credentials — never commit API keys.
+# Copy phpunit.live.local.xml.example to phpunit.live.local.xml to run locally.
+/phpunit.live.local.xml
+/.env.live
+/.env.live.*
+
 /node_modules/
 /build/
 /.phpunit.result.cache

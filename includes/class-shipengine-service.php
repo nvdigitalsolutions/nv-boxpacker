@@ -90,25 +90,7 @@ class ShipEngine_Service {
 		// Filterable so admins can tailor the mapping per carrier or destination.
 		$intl_map = (array) apply_filters(
 			'fk_usps_optimizer_intl_service_code_map',
-			array(
-				// USPS.
-				'usps_priority_mail'         => 'usps_priority_mail_international',
-				'usps_priority_mail_express' => 'usps_priority_mail_express_international',
-				'usps_ground_advantage'      => 'usps_first_class_mail_international',
-				'usps_first_class_mail'      => 'usps_first_class_mail_international',
-				// UPS.
-				'ups_ground'                 => 'ups_standard',
-				'ups_next_day_air'           => 'ups_worldwide_express',
-				'ups_next_day_air_saver'     => 'ups_worldwide_express',
-				'ups_2nd_day_air'            => 'ups_worldwide_expedited',
-				'ups_3_day_select'           => 'ups_worldwide_saver',
-				'ups_ground_saver'           => 'ups_standard',
-				// FedEx.
-				'fedex_ground'               => 'fedex_international_ground',
-				'fedex_home_delivery'        => 'fedex_international_economy',
-				'fedex_2day'                 => 'fedex_international_economy',
-				'fedex_express_saver'        => 'fedex_international_priority',
-			),
+			$this->get_intl_service_code_map(),
 			$service_code,
 			$country
 		);
@@ -117,21 +99,77 @@ class ShipEngine_Service {
 	}
 
 	/**
+	 * Default domestic-to-international service code map.
+	 *
+	 * Shared by resolve_service_code_for_destination() and
+	 * supports_service_code() so both agree on what an international
+	 * equivalent looks like.
+	 *
+	 * @return array Map of domestic code => international code.
+	 */
+	protected function get_intl_service_code_map(): array {
+		return array(
+			// USPS.
+			'usps_priority_mail'         => 'usps_priority_mail_international',
+			'usps_priority_mail_express' => 'usps_priority_mail_express_international',
+			'usps_ground_advantage'      => 'usps_first_class_mail_international',
+			'usps_first_class_mail'      => 'usps_first_class_mail_international',
+			// UPS.
+			'ups_ground'                 => 'ups_standard',
+			'ups_next_day_air'           => 'ups_worldwide_express',
+			'ups_next_day_air_saver'     => 'ups_worldwide_express',
+			'ups_2nd_day_air'            => 'ups_worldwide_expedited',
+			'ups_3_day_select'           => 'ups_worldwide_saver',
+			'ups_ground_saver'           => 'ups_standard',
+			// FedEx.
+			'fedex_ground'               => 'fedex_international_ground',
+			'fedex_home_delivery'        => 'fedex_international_economy',
+			'fedex_2day'                 => 'fedex_international_economy',
+			'fedex_express_saver'        => 'fedex_international_priority',
+		);
+	}
+
+	/**
+	 * Whether this service instance can rate the given service code.
+	 *
+	 * Used by Plugin::process_order() to constrain order-plan building to the
+	 * exact service the customer selected at checkout.  An empty configured
+	 * service code means "all services", so every code is supported.
+	 *
+	 * @param string $code Service code to check (e.g. 'usps_priority_mail').
+	 * @return bool True when the service can be rated by this instance.
+	 */
+	public function supports_service_code( string $code ): bool {
+		$configured = $this->settings->get_shipengine_service_code();
+
+		if ( '' === $configured ) {
+			return true;
+		}
+
+		$map = $this->get_intl_service_code_map();
+
+		return $code === $configured || ( $map[ $configured ] ?? '' ) === $code;
+	}
+
+	/**
 	 * Build the best shipping package plan for a packed package.
 	 *
 	 * Supports US and Canadian destination addresses via the carrier API.
 	 *
-	 * @param \WC_Order $order          The order.
-	 * @param array     $package        Packed package data.
-	 * @param int       $package_number Package sequence number.
+	 * @param \WC_Order $order                The order.
+	 * @param array     $package              Packed package data.
+	 * @param int       $package_number       Package sequence number.
+	 * @param string    $preferred_service_code Optional service code override (chosen
+	 *                                          at checkout); empty uses the settings value.
 	 * @return array Best shipping plan found.
 	 */
-	public function build_package_plan( \WC_Order $order, array $package, int $package_number ): array {
+	public function build_package_plan( \WC_Order $order, array $package, int $package_number, string $preferred_service_code = '' ): array {
 		return $this->build_package_plan_for_address(
 			$package,
 			$this->get_ship_to_address( $order ),
 			$package_number,
-			$order->get_id()
+			$order->get_id(),
+			$preferred_service_code
 		);
 	}
 
@@ -168,18 +206,23 @@ class ShipEngine_Service {
 	/**
 	 * Core plan-building logic shared by build_package_plan and build_test_package_plan.
 	 *
-	 * @param array $package        Packed package data.
-	 * @param array $ship_to        ShipEngine-formatted destination address.
-	 * @param int   $package_number Package sequence number.
-	 * @param int   $order_id       Order ID used for logging (0 for test runs).
+	 * @param array  $package        Packed package data.
+	 * @param array  $ship_to        ShipEngine-formatted destination address.
+	 * @param int    $package_number Package sequence number.
+	 * @param int    $order_id       Order ID used for logging (0 for test runs).
+	 * @param string $preferred_service_code Optional service code override; empty
+	 *                                       resolves from settings/destination.
 	 * @return array Best shipping plan found, or empty array.
 	 */
-	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
+	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0, string $preferred_service_code = '' ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->resolve_service_code_for_destination( $ship_to );
+		$service_code = '' !== $preferred_service_code
+			? $preferred_service_code
+			: $this->resolve_service_code_for_destination( $ship_to );
 		$best_plan    = array();
+
 		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id );
+			$response = $this->request_rate_for_address( $ship_to, $candidate, $order_id, $service_code );
 
 			if ( ! $response['success'] ) {
 				continue;
@@ -189,13 +232,17 @@ class ShipEngine_Service {
 
 			if ( empty( $best_plan ) || (float) $rate['shipping_amount']['amount'] < (float) $best_plan['rate_amount'] ) {
 				$dimensions = $candidate['dimensions'];
+				$rate_code  = (string) ( $rate['service_code'] ?? $service_code );
 				$best_plan  = array(
 					'package_number'          => $package_number,
 					'mode'                    => $candidate['mode'],
 					'package_code'            => $candidate['package_code'],
 					'package_name'            => $candidate['package_name'],
-					'service_code'            => $service_code,
-					'service_label'           => $this->get_service_label( $service_code ),
+					'service_code'            => $rate_code,
+					// No confirmed service code => no label; callers must skip
+					// the plan instead of advertising an unidentifiable service.
+					'service_label'           => '' !== $rate_code ? $this->get_service_label( $rate_code ) : '',
+					'carrier_code'            => 'usps',
 					'rate_amount'             => (float) $rate['shipping_amount']['amount'],
 					'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 					'weight_oz'               => (float) $candidate['weight_oz'],
@@ -228,7 +275,7 @@ class ShipEngine_Service {
 		}
 
 		$service_code = $this->resolve_service_code_for_destination( $ship_to );
-		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id );
+		$results      = $this->fetch_rates_for_candidates( $ship_to, $candidates, $order_id, $service_code );
 		$plans        = array();
 
 		foreach ( $candidates as $idx => $candidate ) {
@@ -239,14 +286,18 @@ class ShipEngine_Service {
 			}
 
 			$rate       = $result['rate'];
+			$rate_code  = (string) ( $rate['service_code'] ?? $service_code );
 			$dimensions = $candidate['dimensions'];
 			$plans[]    = array(
 				'package_number'          => $package_number,
 				'mode'                    => $candidate['mode'],
 				'package_code'            => $candidate['package_code'],
 				'package_name'            => $candidate['package_name'],
-				'service_code'            => $service_code,
-				'service_label'           => $this->get_service_label( $service_code ),
+				'service_code'            => $rate_code,
+				// No confirmed service code => no label; callers must skip
+				// the plan instead of advertising an unidentifiable service.
+				'service_label'           => '' !== $rate_code ? $this->get_service_label( $rate_code ) : '',
+				'carrier_code'            => 'usps',
 				'rate_amount'             => (float) $rate['shipping_amount']['amount'],
 				'currency'                => (string) ( $rate['shipping_amount']['currency'] ?? 'USD' ),
 				'weight_oz'               => (float) $candidate['weight_oz'],
@@ -374,13 +425,15 @@ class ShipEngine_Service {
 	/**
 	 * Perform the actual ShipEngine rate HTTP request for a given address.
 	 *
-	 * @param array $ship_to   ShipEngine-formatted destination address.
-	 * @param array $candidate Candidate shipment.
-	 * @param int   $order_id  Order ID used for log context (0 for test runs).
+	 * @param array  $ship_to   ShipEngine-formatted destination address.
+	 * @param array  $candidate Candidate shipment.
+	 * @param int    $order_id  Order ID used for log context (0 for test runs).
+	 * @param string $service_code Optional service code override; empty resolves
+	 *                             from settings/destination.
 	 * @return array Result with 'success' key and optionally 'rate'.
 	 */
-	protected function request_rate_for_address( array $ship_to, array $candidate, int $order_id = 0 ): array {
-		$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+	protected function request_rate_for_address( array $ship_to, array $candidate, int $order_id = 0, string $service_code = '' ): array {
+		$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id, $service_code );
 
 		if ( null === $descriptor ) {
 			return array( 'success' => false );
@@ -423,18 +476,24 @@ class ShipEngine_Service {
 	 *
 	 * Supports US and Canadian destination addresses via the ship_to array.
 	 *
-	 * @param array $ship_to   ShipEngine-formatted destination address.
-	 * @param array $candidate Candidate shipment.
-	 * @param int   $order_id  Order ID for log context.
+	 * @param array  $ship_to   ShipEngine-formatted destination address.
+	 * @param array  $candidate Candidate shipment.
+	 * @param int    $order_id  Order ID for log context.
+	 * @param string $service_code Optional service code override; empty resolves
+	 *                             from settings/destination.
 	 * @return array|null Descriptor or null when the request cannot be built.
 	 */
-	protected function build_rate_request_descriptor( array $ship_to, array $candidate, int $order_id = 0 ): ?array {
+	protected function build_rate_request_descriptor( array $ship_to, array $candidate, int $order_id = 0, string $service_code = '' ): ?array {
 		$api_key    = $this->settings->get_shipengine_api_key();
 		$carrier_id = $this->settings->get_shipengine_carrier_id();
 
 		if ( '' === $api_key || '' === $carrier_id ) {
 			$this->log( 'Missing ShipEngine credentials.', array( 'order_id' => $order_id ) );
 			return null;
+		}
+
+		if ( '' === $service_code ) {
+			$service_code = $this->resolve_service_code_for_destination( $ship_to );
 		}
 
 		$payload = array(
@@ -460,7 +519,7 @@ class ShipEngine_Service {
 						),
 					),
 				),
-				'service_code'     => $this->resolve_service_code_for_destination( $ship_to ),
+				'service_code'     => $service_code,
 			),
 		);
 
@@ -570,18 +629,20 @@ class ShipEngine_Service {
 	 * transient cache are dispatched.  When more than one candidate misses,
 	 * all misses fire concurrently via {@see dispatch_requests_multi()}.
 	 *
-	 * @param array $ship_to    Destination address.
-	 * @param array $candidates Candidate shipments.
-	 * @param int   $order_id   Order ID for log context.
+	 * @param array  $ship_to    Destination address.
+	 * @param array  $candidates Candidate shipments.
+	 * @param int    $order_id   Order ID for log context.
+	 * @param string $service_code Optional service code override; empty resolves
+	 *                             from settings/destination.
 	 * @return array Map of candidate index ⇒ ['success' => bool, 'rate' => array].
 	 */
-	protected function fetch_rates_for_candidates( array $ship_to, array $candidates, int $order_id = 0 ): array {
+	protected function fetch_rates_for_candidates( array $ship_to, array $candidates, int $order_id = 0, string $service_code = '' ): array {
 		$results   = array();
 		$pending   = array();
 		$req_specs = array();
 
 		foreach ( $candidates as $idx => $candidate ) {
-			$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id );
+			$descriptor = $this->build_rate_request_descriptor( $ship_to, $candidate, $order_id, $service_code );
 			if ( null === $descriptor ) {
 				$results[ $idx ] = array( 'success' => false );
 				continue;

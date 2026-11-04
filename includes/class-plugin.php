@@ -57,6 +57,32 @@ class Plugin {
 	const PACKING_NOTE_END_MARKER = '<!-- fk-pack-end -->';
 
 	/**
+	 * Shipping-item meta key holding the service code of the rate the customer
+	 * selected at checkout.  Written by Shipping_Method::calculate_shipping()
+	 * (WooCommerce persists rate meta onto the order's shipping item) and read
+	 * by process_order() so the plan matches what the customer paid for.
+	 *
+	 * @var string
+	 */
+	const META_SERVICE_CODE = '_fk_usps_optimizer_service_code';
+
+	/**
+	 * Shipping-item meta key holding the human-readable service label of the
+	 * checkout rate (e.g. "USPS Priority").
+	 *
+	 * @var string
+	 */
+	const META_SERVICE_LABEL = '_fk_usps_optimizer_service_label';
+
+	/**
+	 * Shipping-item meta key holding the carrier code of the checkout rate
+	 * (e.g. 'usps', 'ups').
+	 *
+	 * @var string
+	 */
+	const META_CARRIER_CODE = '_fk_usps_optimizer_carrier_code';
+
+	/**
 	 * Singleton plugin instance.
 	 *
 	 * @var Plugin|null
@@ -204,7 +230,10 @@ class Plugin {
 			return;
 		}
 
-		$carrier_services = $this->get_carrier_services();
+		// The service the customer actually selected (and paid for) at
+		// checkout, when it was one of our optimized rates.
+		$chosen         = $this->get_chosen_shipping_info( $order );
+		$chosen_service = $chosen['service_code'];
 
 		$plan = array(
 			'created_at'          => current_time( 'mysql', true ),
@@ -225,17 +254,21 @@ class Plugin {
 				return;
 			}
 
+			$carrier_services = $this->get_carrier_services();
+
 			foreach ( $packed_packages as $index => $package ) {
-				$best_plan = array();
-				$best_cost = PHP_FLOAT_MAX;
+				// Prefer the service the customer paid for; never mix carriers
+				// or services unless the chosen one cannot be rated.
+				$best_plan = $this->find_best_plan( $carrier_services, $order, $package, $index + 1, $chosen_service );
 
-				foreach ( $carrier_services as $carrier_svc ) {
-					$candidate_plan = $carrier_svc->build_package_plan( $order, $package, $index + 1 );
-
-					if ( ! empty( $candidate_plan ) && (float) $candidate_plan['rate_amount'] < $best_cost ) {
-						$best_plan = $candidate_plan;
-						$best_cost = (float) $candidate_plan['rate_amount'];
-					}
+				if ( empty( $best_plan ) && '' !== $chosen_service ) {
+					$plan['warnings'][] = sprintf(
+						/* translators: 1: selected service code, 2: package number. */
+						__( 'The selected service "%1$s" could not be rated for package %2$d; falling back to the cheapest available option.', 'fk-usps-optimizer' ),
+						$chosen_service,
+						$index + 1
+					);
+					$best_plan = $this->find_best_plan( $carrier_services, $order, $package, $index + 1, '' );
 				}
 
 				if ( empty( $best_plan ) ) {
@@ -269,6 +302,25 @@ class Plugin {
 			);
 		}
 
+		// Reconcile the plan with what the customer paid.  Only meaningful when
+		// the order shipped via one of our rates.
+		if ( $chosen['is_optimizer_method'] ) {
+			if ( '' === $chosen_service ) {
+				$plan['warnings'][] = __( 'The exact service the customer selected at checkout could not be determined; the plan below shows the cheapest available option.', 'fk-usps-optimizer' );
+			} elseif ( $plan['total_package_count'] > 0 ) {
+				$paid_total = (float) $order->get_shipping_total();
+
+				if ( abs( $plan['total_rate_amount'] - $paid_total ) >= 0.01 ) {
+					$plan['warnings'][] = sprintf(
+						/* translators: 1: planned shipping total, 2: amount the customer paid. */
+						__( 'The planned shipping total (%1$s) does not match the amount the customer paid (%2$s). Verify the service before buying labels.', 'fk-usps-optimizer' ),
+						number_format( $plan['total_rate_amount'], 2 ),
+						number_format( $paid_total, 2 )
+					);
+				}
+			}
+		}
+
 		$this->order_plan_service->save( $order, $plan );
 
 		if ( $this->settings->is_add_package_note_enabled() && ! empty( $plan['packages'] ) ) {
@@ -295,6 +347,80 @@ class Plugin {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Find the cheapest plan for one package across carrier services.
+	 *
+	 * When $service_code is non-empty only services that can rate that code
+	 * are considered and the plan is requested for that exact service, so the
+	 * stored plan matches what the customer selected at checkout instead of
+	 * silently mixing carriers or services.
+	 *
+	 * @param array     $carrier_services Enabled carrier services.
+	 * @param \WC_Order $order            The order.
+	 * @param array     $package          Packed package data.
+	 * @param int       $package_number   1-based package number.
+	 * @param string    $service_code     Chosen service code, or '' for cheapest.
+	 * @return array Best plan or empty array.
+	 */
+	protected function find_best_plan( array $carrier_services, \WC_Order $order, array $package, int $package_number, string $service_code ): array {
+		$best_plan = array();
+		$best_cost = PHP_FLOAT_MAX;
+
+		foreach ( $carrier_services as $carrier_svc ) {
+			if ( '' !== $service_code && ! $carrier_svc->supports_service_code( $service_code ) ) {
+				continue;
+			}
+
+			$candidate_plan = $carrier_svc->build_package_plan( $order, $package, $package_number, $service_code );
+
+			if ( ! empty( $candidate_plan ) && (float) $candidate_plan['rate_amount'] < $best_cost ) {
+				$best_plan = $candidate_plan;
+				$best_cost = (float) $candidate_plan['rate_amount'];
+			}
+		}
+
+		return $best_plan;
+	}
+
+	/**
+	 * Extract the checkout-selected service from the order's shipping items.
+	 *
+	 * Shipping_Method::calculate_shipping() stores the rated service identity
+	 * in the rate meta_data and WooCommerce persists it onto the order's
+	 * shipping item, so it survives from checkout to order processing.
+	 *
+	 * @param \WC_Order $order The order.
+	 * @return array {
+	 *     service_code: string  The selected service code ('' when unknown).
+	 *     is_optimizer_method: bool Whether the order shipped via this plugin.
+	 *     method_label: string The shipping method label the customer saw.
+	 * }
+	 */
+	protected function get_chosen_shipping_info( \WC_Order $order ): array {
+		$info = array(
+			'service_code'        => '',
+			'is_optimizer_method' => false,
+			'method_label'        => '',
+		);
+
+		foreach ( $order->get_shipping_methods() as $item ) {
+			if ( ! $item instanceof \WC_Order_Item_Shipping ) {
+				continue;
+			}
+
+			if ( ! str_starts_with( (string) $item->get_method_id(), 'fk_usps_optimizer' ) ) {
+				continue;
+			}
+
+			$info['is_optimizer_method'] = true;
+			$info['method_label']        = (string) $item->get_name();
+			$info['service_code']        = (string) $item->get_meta( self::META_SERVICE_CODE );
+			break;
+		}
+
+		return $info;
 	}
 
 	/**

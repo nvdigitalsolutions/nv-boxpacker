@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+	Live-API integration tests.  Requires network access and credentials.
+
+	Credentials come from environment variables:
+	  FK_USPS_OPTIMIZER_TEST_SHIPENGINE_API_KEY      (sandbox TEST_ key)
+	  FK_USPS_OPTIMIZER_TEST_SHIPENGINE_CARRIER_ID   (default: se-423887)
+	  FK_USPS_OPTIMIZER_TEST_SHIPSTATION_API_KEY
+	  FK_USPS_OPTIMIZER_TEST_SHIPSTATION_API_SECRET
+	  FK_USPS_OPTIMIZER_TEST_SHIPSTATION_CARRIER_CODE  (default: stamps_com)
+	  FK_USPS_OPTIMIZER_TEST_SHIPSTATION_SERVICE_CODE  (default: usps_priority_mail)
+	  FK_USPS_OPTIMIZER_TEST_SHIP_FROM_POSTAL          (default: 90210)
+	  FK_USPS_OPTIMIZER_TEST_SHIP_TO_POSTAL            (default: 78701)
+	  FK_USPS_OPTIMIZER_TEST_CA_BUNDLE  (only if PHP cURL has no system CAs;
+	                                     e.g. C:\Program Files\Git\usr\ssl\cert.pem)
+
+	Tests SKIP when their credentials are missing, so this config is safe to
+	run anywhere.  For local credentials, copy phpunit.live.local.xml.example
+	to phpunit.live.local.xml (git-ignored) and run:
+	  vendor/bin/phpunit -c phpunit.live.local.xml
+-->
+<phpunit bootstrap="tests/bootstrap.php"
+	colors="true"
+	verbose="true">
+	<testsuites>
+		<testsuite name="Live API Integration">
+			<directory suffix="Test.php">tests/Integration</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>

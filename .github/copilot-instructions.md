@@ -40,7 +40,7 @@ includes/
 └── class-admin-test-ui.php              ← Test pricing admin page
 tests/
 └── Unit/
-    └── *Test.php                         ← PHPUnit tests (512 tests)
+    └── *Test.php                         ← PHPUnit tests (562 tests)
 assets/
 └── js/
     └── admin.js                          ← Settings page JS
@@ -69,7 +69,7 @@ assets/
 ## Testing
 
 ```bash
-# Run full test suite (512 tests, 1076 assertions)
+# Run full test suite (562 tests, 1187 assertions)
 composer run test
 
 # Run with configuration

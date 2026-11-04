@@ -150,30 +150,76 @@ class ShipStation_Service {
 		// Filterable so admins can tailor the mapping per carrier or destination.
 		$intl_map = (array) apply_filters(
 			'fk_usps_optimizer_intl_service_code_map',
-			array(
-				// USPS.
-				'usps_priority_mail'         => 'usps_priority_mail_international',
-				'usps_priority_mail_express' => 'usps_priority_mail_express_international',
-				'usps_ground_advantage'      => 'usps_first_class_mail_international',
-				'usps_first_class_mail'      => 'usps_first_class_mail_international',
-				// UPS.
-				'ups_ground'                 => 'ups_standard',
-				'ups_next_day_air'           => 'ups_worldwide_express',
-				'ups_next_day_air_saver'     => 'ups_worldwide_express',
-				'ups_2nd_day_air'            => 'ups_worldwide_expedited',
-				'ups_3_day_select'           => 'ups_worldwide_saver',
-				'ups_ground_saver'           => 'ups_standard',
-				// FedEx.
-				'fedex_ground'               => 'fedex_international_ground',
-				'fedex_home_delivery'        => 'fedex_international_economy',
-				'fedex_2day'                 => 'fedex_international_economy',
-				'fedex_express_saver'        => 'fedex_international_priority',
-			),
+			$this->get_intl_service_code_map(),
 			$code,
 			$country
 		);
 
 		return $intl_map[ $code ] ?? $code;
+	}
+
+	/**
+	 * Default domestic-to-international service code map.
+	 *
+	 * Shared by resolve_code_for_country() and supports_service_code() so
+	 * both agree on what an international equivalent looks like.
+	 *
+	 * @return array Map of domestic code => international code.
+	 */
+	protected function get_intl_service_code_map(): array {
+		return array(
+			// USPS.
+			'usps_priority_mail'         => 'usps_priority_mail_international',
+			'usps_priority_mail_express' => 'usps_priority_mail_express_international',
+			'usps_ground_advantage'      => 'usps_first_class_mail_international',
+			'usps_first_class_mail'      => 'usps_first_class_mail_international',
+			// UPS.
+			'ups_ground'                 => 'ups_standard',
+			'ups_next_day_air'           => 'ups_worldwide_express',
+			'ups_next_day_air_saver'     => 'ups_worldwide_express',
+			'ups_2nd_day_air'            => 'ups_worldwide_expedited',
+			'ups_3_day_select'           => 'ups_worldwide_saver',
+			'ups_ground_saver'           => 'ups_standard',
+			// FedEx.
+			'fedex_ground'               => 'fedex_international_ground',
+			'fedex_home_delivery'        => 'fedex_international_economy',
+			'fedex_2day'                 => 'fedex_international_economy',
+			'fedex_express_saver'        => 'fedex_international_priority',
+		);
+	}
+
+	/**
+	 * Whether this service instance can rate the given service code.
+	 *
+	 * Used by Plugin::process_order() to constrain order-plan building to the
+	 * exact service the customer selected at checkout.  A wildcard instance
+	 * (empty service code) supports every code unless an allow-list restricts
+	 * it to the admin's configured services.
+	 *
+	 * @param string $code Service code to check (e.g. 'ups_ground').
+	 * @return bool True when the service can be rated by this instance.
+	 */
+	public function supports_service_code( string $code ): bool {
+		$configured = $this->get_service_code();
+		$map        = $this->get_intl_service_code_map();
+
+		if ( '' === $configured ) {
+			$allow = $this->get_allowed_service_codes();
+
+			if ( null === $allow || empty( $allow ) ) {
+				return true;
+			}
+
+			foreach ( $allow as $allowed_code ) {
+				if ( $allowed_code === $code || ( $map[ $allowed_code ] ?? '' ) === $code ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		return $code === $configured || ( $map[ $configured ] ?? '' ) === $code;
 	}
 
 	/**
@@ -322,17 +368,20 @@ class ShipStation_Service {
 	 *
 	 * Supports US and Canadian destination addresses.
 	 *
-	 * @param \WC_Order $order          The WooCommerce order.
-	 * @param array     $package        Packed package data from Packing_Service.
-	 * @param int       $package_number 1-based package sequence number.
+	 * @param \WC_Order $order                The WooCommerce order.
+	 * @param array     $package              Packed package data from Packing_Service.
+	 * @param int       $package_number       1-based package sequence number.
+	 * @param string    $preferred_service_code Optional service code override (chosen
+	 *                                          at checkout); empty uses the settings value.
 	 * @return array Best shipping plan or empty array if no rate was found.
 	 */
-	public function build_package_plan( \WC_Order $order, array $package, int $package_number ): array {
+	public function build_package_plan( \WC_Order $order, array $package, int $package_number, string $preferred_service_code = '' ): array {
 		return $this->build_package_plan_for_address(
 			$package,
 			$this->get_ship_to_address( $order ),
 			$package_number,
-			$order->get_id()
+			$order->get_id(),
+			$preferred_service_code
 		);
 	}
 
@@ -494,19 +543,23 @@ class ShipStation_Service {
 	/**
 	 * Core rate-shopping logic shared by build_package_plan and build_test_package_plan.
 	 *
-	 * @param array $package        Packed package data.
-	 * @param array $ship_to        ShipStation-compatible destination address.
-	 * @param int   $package_number 1-based package sequence number.
-	 * @param int   $order_id       Order ID for log context; 0 for test runs.
+	 * @param array  $package        Packed package data.
+	 * @param array  $ship_to        ShipStation-compatible destination address.
+	 * @param int    $package_number 1-based package sequence number.
+	 * @param int    $order_id       Order ID for log context; 0 for test runs.
+	 * @param string $preferred_service_code Optional service code override; empty
+	 *                                       resolves from settings/destination.
 	 * @return array Best shipping plan or empty array.
 	 */
-	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0 ): array {
+	protected function build_package_plan_for_address( array $package, array $ship_to, int $package_number, int $order_id = 0, string $preferred_service_code = '' ): array {
 		$candidates   = $this->build_candidates( $package );
-		$service_code = $this->resolve_service_code_for_destination( $ship_to );
+		$service_code = '' !== $preferred_service_code
+			? $preferred_service_code
+			: $this->resolve_service_code_for_destination( $ship_to );
 		$best_plan    = array();
 
 		foreach ( $candidates as $candidate ) {
-			$response = $this->request_rate( $ship_to, $candidate, $order_id );
+			$response = $this->request_rate( $ship_to, $candidate, $order_id, $service_code );
 
 			if ( ! $response['success'] ) {
 				continue;
@@ -556,7 +609,14 @@ class ShipStation_Service {
 					$plans[] = $this->build_plan_from_rate( $rate, $candidate, $package, $package_number, '' );
 				}
 			} else {
-				$plans[] = $this->build_plan_from_rate( $result['rates'][0], $candidate, $package, $package_number, $service_code );
+				// A specific service was requested: only rate plans the API
+				// confirmed for that service so the label always matches the
+				// price the customer is shown.
+				$filtered = $this->filter_rates_by_service( $result['rates'], $service_code, $ship_to );
+
+				if ( ! empty( $filtered ) ) {
+					$plans[] = $this->build_plan_from_rate( $filtered[0], $candidate, $package, $package_number, $service_code );
+				}
 			}
 		}
 
@@ -566,25 +626,7 @@ class ShipStation_Service {
 		// not request.  For international destinations each allow-list code
 		// is also resolved to its international equivalent so that plans
 		// returned by the API with international codes are not discarded.
-		if ( is_array( $this->allowed_service_codes ) && ! empty( $this->allowed_service_codes ) ) {
-			$expanded = array();
-			foreach ( $this->allowed_service_codes as $allowed_code ) {
-				$expanded[] = $allowed_code;
-				$intl       = $this->resolve_code_for_country( $allowed_code, $ship_to );
-				if ( $intl !== $allowed_code && '' !== $intl ) {
-					$expanded[] = $intl;
-				}
-			}
-			$allowed = array_flip( array_unique( $expanded ) );
-			$plans   = array_values(
-				array_filter(
-					$plans,
-					static function ( array $plan ) use ( $allowed ): bool {
-						return isset( $allowed[ (string) ( $plan['service_code'] ?? '' ) ] );
-					}
-				)
-			);
-		}
+		$plans = $this->apply_allow_list_filter( $plans, $ship_to );
 
 		usort(
 			$plans,
@@ -619,7 +661,10 @@ class ShipStation_Service {
 			'package_code'            => $candidate['package_code'],
 			'package_name'            => $candidate['package_name'],
 			'service_code'            => $rate_service_code,
-			'service_label'           => $this->get_service_label( $rate_service_code ),
+			// No confirmed service code => no label; callers must skip the
+			// plan instead of advertising an unidentifiable service.
+			'service_label'           => '' !== $rate_service_code ? $this->get_service_label( $rate_service_code ) : '',
+			'carrier_code'            => $this->get_carrier_keyword(),
 			'rate_amount'             => $total_cost,
 			'currency'                => 'USD',
 			'weight_oz'               => (float) $candidate['weight_oz'],
@@ -747,21 +792,131 @@ class ShipStation_Service {
 	 *
 	 * Supports US and Canadian destination addresses.
 	 *
-	 * @param array $ship_to   ShipStation-compatible destination address.
-	 * @param array $candidate Candidate shipment (mode, package_code, dimensions, weight_oz).
-	 * @param int   $order_id  Order ID for log context; 0 for test runs.
+	 * @param array  $ship_to   ShipStation-compatible destination address.
+	 * @param array  $candidate Candidate shipment (mode, package_code, dimensions, weight_oz).
+	 * @param int    $order_id  Order ID for log context; 0 for test runs.
+	 * @param string $service_code Optional service code to constrain the result;
+	 *                             '' keeps the cheapest rate across all services.
 	 * @return array ['success' => bool, 'rate' => array|null].
 	 */
-	protected function request_rate( array $ship_to, array $candidate, int $order_id = 0 ): array {
+	protected function request_rate( array $ship_to, array $candidate, int $order_id = 0, string $service_code = '' ): array {
 		$result = $this->request_all_rates( $ship_to, $candidate, $order_id );
 
 		if ( ! $result['success'] ) {
 			return array( 'success' => false );
 		}
 
+		// Never label a price with a service the API did not confirm.  When a
+		// specific service was requested (or an allow-list restricts this
+		// instance), only rates for those services are eligible.
+		$rates = $this->filter_rates_by_service( $result['rates'], $service_code, $ship_to );
+
+		if ( empty( $rates ) ) {
+			if ( $order_id > 0 ) {
+				$this->log(
+					'No rates remained after service filtering.',
+					array(
+						'order_id'     => $order_id,
+						'service_code' => $service_code,
+					)
+				);
+			}
+
+			return array( 'success' => false );
+		}
+
 		return array(
 			'success' => true,
-			'rate'    => $result['rates'][0],
+			'rate'    => $rates[0],
+		);
+	}
+
+	/**
+	 * Filter raw API rates to the services this instance is allowed to use.
+	 *
+	 * Applies two independent constraints:
+	 *  1. A non-empty requested service code keeps only rates whose
+	 *     serviceCode matches (rates without a serviceCode fall back to the
+	 *     requested code, mirroring build_plan_from_rate()).
+	 *  2. A configured allow-list keeps only rates whose serviceCode is in
+	 *     the allow-list (expanded with international equivalents).
+	 *
+	 * @param array  $rates          Raw rates from the ShipStation API.
+	 * @param string $requested_code Service code that was requested ('' = all).
+	 * @param array  $ship_to        Destination address (for intl allow-list expansion).
+	 * @return array Filtered rates (original order, which is cheapest-first).
+	 */
+	protected function filter_rates_by_service( array $rates, string $requested_code, array $ship_to ): array {
+		$filtered = $rates;
+
+		if ( '' !== $requested_code ) {
+			$filtered = array_values(
+				array_filter(
+					$filtered,
+					static function ( array $rate ) use ( $requested_code ): bool {
+						return (string) ( $rate['serviceCode'] ?? $requested_code ) === $requested_code;
+					}
+				)
+			);
+		}
+
+		if ( is_array( $this->allowed_service_codes ) && ! empty( $this->allowed_service_codes ) ) {
+			$allowed  = array_flip( $this->expand_allow_list( $ship_to ) );
+			$filtered = array_values(
+				array_filter(
+					$filtered,
+					static function ( array $rate ) use ( $allowed ): bool {
+						return isset( $allowed[ (string) ( $rate['serviceCode'] ?? '' ) ] );
+					}
+				)
+			);
+		}
+
+		return $filtered;
+	}
+
+	/**
+	 * Expand the configured allow-list with international equivalents.
+	 *
+	 * @param array $ship_to Destination address (used to resolve intl codes).
+	 * @return string[] Expanded allow-list.
+	 */
+	protected function expand_allow_list( array $ship_to ): array {
+		$expanded = array();
+
+		foreach ( (array) $this->allowed_service_codes as $allowed_code ) {
+			$expanded[] = $allowed_code;
+			$intl       = $this->resolve_code_for_country( $allowed_code, $ship_to );
+
+			if ( $intl !== $allowed_code && '' !== $intl ) {
+				$expanded[] = $intl;
+			}
+		}
+
+		return array_unique( $expanded );
+	}
+
+	/**
+	 * Filter built plans through the configured allow-list.
+	 *
+	 * @param array $plans   Shipping plans.
+	 * @param array $ship_to Destination address (for intl allow-list expansion).
+	 * @return array Filtered plans, re-indexed.
+	 */
+	protected function apply_allow_list_filter( array $plans, array $ship_to ): array {
+		if ( ! is_array( $this->allowed_service_codes ) || empty( $this->allowed_service_codes ) ) {
+			return $plans;
+		}
+
+		$allowed = array_flip( $this->expand_allow_list( $ship_to ) );
+
+		return array_values(
+			array_filter(
+				$plans,
+				static function ( array $plan ) use ( $allowed ): bool {
+					return isset( $allowed[ (string) ( $plan['service_code'] ?? '' ) ] );
+				}
+			)
 		);
 	}
 

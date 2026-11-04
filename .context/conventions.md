@@ -68,7 +68,7 @@ dist/                                     ← Built plugin ZIP (CI artifact)
 # PHP linting (WordPress Coding Standards)
 composer run lint
 
-# PHPUnit test suite (512 tests, 1076 assertions)
+# PHPUnit test suite (562 tests, 1187 assertions)
 composer run test
 
 # Run specific test file

@@ -518,4 +518,201 @@ class PluginProcessOrderTest extends TestCase {
 
 		return $order;
 	}
+
+	// -------------------------------------------------------------------------
+	// get_chosen_shipping_info
+	// -------------------------------------------------------------------------
+
+	public function test_get_chosen_shipping_info_reads_service_code_from_shipping_item(): void {
+		$item = $this->createMock( \WC_Order_Item_Shipping::class );
+		$item->method( 'get_method_id' )->willReturn( 'fk_usps_optimizer:3:ups_ground-ab12cd34' );
+		$item->method( 'get_name' )->willReturn( 'UPS Ground' );
+		$item->method( 'get_meta' )->willReturn( 'ups_ground' );
+
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_shipping_methods' )->willReturn( array( $item ) );
+
+		$info = $this->call_plugin_protected( 'get_chosen_shipping_info', array( $order ) );
+
+		$this->assertTrue( $info['is_optimizer_method'] );
+		$this->assertSame( 'ups_ground', $info['service_code'] );
+		$this->assertSame( 'UPS Ground', $info['method_label'] );
+	}
+
+	public function test_get_chosen_shipping_info_ignores_non_optimizer_methods(): void {
+		$item = $this->createMock( \WC_Order_Item_Shipping::class );
+		$item->method( 'get_method_id' )->willReturn( 'flat_rate:1' );
+		$item->method( 'get_name' )->willReturn( 'Flat rate' );
+		$item->method( 'get_meta' )->willReturn( '' );
+
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_shipping_methods' )->willReturn( array( $item ) );
+
+		$info = $this->call_plugin_protected( 'get_chosen_shipping_info', array( $order ) );
+
+		$this->assertFalse( $info['is_optimizer_method'] );
+		$this->assertSame( '', $info['service_code'] );
+	}
+
+	public function test_get_chosen_shipping_info_returns_defaults_without_shipping_items(): void {
+		$order = $this->createMock( \WC_Order::class );
+		$order->method( 'get_shipping_methods' )->willReturn( array() );
+
+		$info = $this->call_plugin_protected( 'get_chosen_shipping_info', array( $order ) );
+
+		$this->assertFalse( $info['is_optimizer_method'] );
+		$this->assertSame( '', $info['service_code'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// process_order reconciliation warnings
+	// -------------------------------------------------------------------------
+
+	public function test_process_order_adds_divergence_warning_when_plan_differs_from_paid(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		$this->stub_successful_rate_response();
+
+		$item = $this->make_chosen_shipping_item( 'usps_priority_mail' );
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array( $item ) );
+		$order->method( 'get_shipping_total' )->willReturn( '99.99' );
+
+		$captured_plan = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_plan ): void {
+					if ( Order_Plan_Service::META_KEY === $key ) {
+						$captured_plan = $value;
+					}
+				}
+			);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$this->assertNotEmpty( $captured_plan['warnings'] );
+		$joined = implode( ' | ', $captured_plan['warnings'] );
+		$this->assertStringContainsString( 'does not match', $joined );
+	}
+
+	public function test_process_order_omits_divergence_warning_when_totals_match(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		$this->stub_successful_rate_response();
+
+		$item  = $this->make_chosen_shipping_item( 'usps_priority_mail' );
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array( $item ) );
+		$order->method( 'get_shipping_total' )->willReturn( '7.99' );
+
+		$captured_plan = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_plan ): void {
+					if ( Order_Plan_Service::META_KEY === $key ) {
+						$captured_plan = $value;
+					}
+				}
+			);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$joined = implode( ' | ', $captured_plan['warnings'] );
+		$this->assertStringNotContainsString( 'does not match', $joined );
+	}
+
+	public function test_process_order_omits_divergence_warning_for_non_optimizer_method(): void {
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+		);
+
+		$this->stub_successful_rate_response();
+
+		// No shipping items at all → the order did not ship via this plugin.
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array() );
+
+		$captured_plan = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_plan ): void {
+					if ( Order_Plan_Service::META_KEY === $key ) {
+						$captured_plan = $value;
+					}
+				}
+			);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$joined = implode( ' | ', $captured_plan['warnings'] );
+		$this->assertStringNotContainsString( 'does not match', $joined );
+	}
+
+	public function test_process_order_falls_back_with_warning_when_chosen_service_unrateable(): void {
+		// ShipEngine is configured for Priority only, but the customer chose
+		// Media Mail — no carrier service can rate it, so the planner must
+		// fall back to the cheapest option AND say so.
+		$GLOBALS['_test_wp_options'][ Settings::OPTION_KEY ] = array(
+			'shipengine_api_key'    => 'test_key',
+			'shipengine_carrier_id' => 'se-123',
+			'shipengine_service_code' => 'usps_priority_mail',
+		);
+
+		$this->stub_successful_rate_response();
+
+		$item  = $this->make_chosen_shipping_item( 'usps_media_mail' );
+		$order = $this->build_packable_order_mock();
+		$order->method( 'get_shipping_methods' )->willReturn( array( $item ) );
+		$order->method( 'get_shipping_total' )->willReturn( '4.20' );
+
+		$captured_plan = array();
+		$order->method( 'update_meta_data' )
+			->willReturnCallback(
+				function ( $key, $value ) use ( &$captured_plan ): void {
+					if ( Order_Plan_Service::META_KEY === $key ) {
+						$captured_plan = $value;
+					}
+				}
+			);
+
+		$this->plugin->process_order( 42, array(), $order );
+
+		$joined = implode( ' | ', $captured_plan['warnings'] );
+		$this->assertStringContainsString( 'could not be rated for package', $joined );
+		$this->assertStringContainsString( 'falling back', $joined );
+	}
+
+	/**
+	 * Invoke a protected Plugin method via reflection.
+	 *
+	 * @param string $method Method name.
+	 * @param array  $args   Arguments.
+	 * @return mixed
+	 */
+	private function call_plugin_protected( string $method, array $args = array() ) {
+		$ref = new \ReflectionMethod( $this->plugin, $method );
+		$ref->setAccessible( true );
+		return $ref->invokeArgs( $this->plugin, $args );
+	}
+
+	/**
+	 * Build a mocked shipping item for an optimized rate.
+	 *
+	 * @param string $service_code Service code the item reports.
+	 * @return \WC_Order_Item_Shipping|\PHPUnit\Framework\MockObject\MockObject
+	 */
+	private function make_chosen_shipping_item( string $service_code ) {
+		$item = $this->createMock( \WC_Order_Item_Shipping::class );
+		$item->method( 'get_method_id' )->willReturn( 'fk_usps_optimizer:usps_priority_mail-ab12cd34' );
+		$item->method( 'get_name' )->willReturn( 'USPS Priority' );
+		$item->method( 'get_meta' )->willReturn( $service_code );
+		return $item;
+	}
 }

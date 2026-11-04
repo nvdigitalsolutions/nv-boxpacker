@@ -744,10 +744,12 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( array(), $plans );
 	}
 
-	public function test_build_all_test_package_plans_uses_configured_service_code(): void {
+	public function test_build_all_test_package_plans_discards_rates_for_unrequested_service(): void {
 		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
-		$this->configure_credentials();
+		$this->configure_credentials(); // Configured service: usps_priority_mail.
 
+		// The API responds with a rate for a DIFFERENT service than requested.
+		// The plan must not label that price with the requested service.
 		$GLOBALS['_test_wp_remote_post'] = array(
 			'response' => array( 'code' => 200 ),
 			'body'     => json_encode( array(
@@ -757,8 +759,45 @@ class ShipStationServiceTest extends TestCase {
 
 		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
 
+		$this->assertSame( array(), $plans );
+	}
+
+	public function test_build_all_test_package_plans_uses_rate_service_code_when_confirmed(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 7.99, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
 		$this->assertCount( 1, $plans );
-		$this->assertSame( 'usps_ground_advantage', $plans[0]['service_code'] );
+		$this->assertSame( 'usps_priority_mail', $plans[0]['service_code'] );
+		$this->assertSame( 'USPS Priority', $plans[0]['service_label'] );
+	}
+
+	public function test_build_all_test_package_plans_keeps_rate_without_service_code(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials();
+
+		// Some carriers omit serviceCode from the response.  When a specific
+		// service was requested the rate is assumed to be that service.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'shipmentCost' => 7.99, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plans = $this->service->build_all_test_package_plans( $this->make_package(), $this->make_ship_to(), 1 );
+
+		$this->assertCount( 1, $plans );
+		$this->assertSame( 'usps_priority_mail', $plans[0]['service_code'] );
+		$this->assertSame( 'USPS Priority', $plans[0]['service_label'] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -1992,6 +2031,190 @@ class ShipStationServiceTest extends TestCase {
 		$this->assertSame( array( 'https://a.example/x', 'https://b.example/y' ), $urls );
 		$this->assertArrayHasKey( 'a', $out );
 		$this->assertArrayHasKey( 'b', $out );
+	}
+
+	// -------------------------------------------------------------------------
+	// Service-code filtering (never label a price with an unconfirmed service)
+	// -------------------------------------------------------------------------
+
+	public function test_request_rate_filters_to_requested_service_when_specified(): void {
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_2nd_day_air', 'shipmentCost' => 22.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$result = $this->call_protected(
+			'request_rate',
+			array( $this->make_ship_to(), $this->make_candidate(), 0, 'ups_2nd_day_air' )
+		);
+
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( 'ups_2nd_day_air', $result['rate']['serviceCode'] );
+		$this->assertSame( 22.00, (float) $result['rate']['shipmentCost'] );
+	}
+
+	public function test_request_rate_returns_failure_when_requested_service_absent(): void {
+		$this->configure_credentials();
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$result = $this->call_protected(
+			'request_rate',
+			array( $this->make_ship_to(), $this->make_candidate(), 0, 'ups_2nd_day_air' )
+		);
+
+		$this->assertFalse( $result['success'] );
+	}
+
+	public function test_request_rate_keeps_rate_without_service_code_when_requested(): void {
+		$this->configure_credentials();
+
+		// Some carriers omit serviceCode.  When a specific service was
+		// requested the rate is assumed to be that service, so it survives.
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'shipmentCost' => 7.50, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$result = $this->call_protected(
+			'request_rate',
+			array( $this->make_ship_to(), $this->make_candidate(), 0, 'usps_priority_mail' )
+		);
+
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( 7.50, (float) $result['rate']['shipmentCost'] );
+	}
+
+	public function test_request_rate_filters_to_allow_list_in_single_plan_path(): void {
+		$this->configure_credentials();
+
+		$service = new ShipStation_Service(
+			$this->settings,
+			'ups_walleted',
+			'',
+			array( 'ups_ground', 'ups_2nd_day_air' )
+		);
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				// Cheapest service is NOT in the allow-list and must be dropped.
+				array( 'serviceCode' => 'ups_surepost', 'shipmentCost' => 5.00, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'ups_ground', 'shipmentCost' => 9.00, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$result = $this->call_protected_on(
+			$service,
+			'request_rate',
+			array( $this->make_ship_to(), $this->make_candidate(), 0, '' )
+		);
+
+		$this->assertTrue( $result['success'] );
+		$this->assertSame( 'ups_ground', $result['rate']['serviceCode'] );
+	}
+
+	public function test_build_package_plan_for_address_prefers_chosen_service(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials(); // Configured service: usps_priority_mail.
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_ground_advantage', 'shipmentCost' => 4.99, 'otherCost' => 0.00 ),
+				array( 'serviceCode' => 'usps_priority_mail', 'shipmentCost' => 8.50, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plan = $this->call_protected(
+			'build_package_plan_for_address',
+			array( $this->make_package(), $this->make_ship_to(), 1, 0, 'usps_priority_mail' )
+		);
+
+		$this->assertNotEmpty( $plan );
+		$this->assertSame( 'usps_priority_mail', $plan['service_code'] );
+		$this->assertSame( 'USPS Priority', $plan['service_label'] );
+		$this->assertSame( 8.50, $plan['rate_amount'] );
+		$this->assertSame( 'usps', $plan['carrier_code'] );
+	}
+
+	public function test_build_package_plan_for_address_returns_empty_when_chosen_service_unrateable(): void {
+		$this->settings->method( 'get_boxes_for_carrier' )->willReturn( array( $this->make_box() ) );
+		$this->configure_credentials(); // Configured service: usps_priority_mail.
+
+		$GLOBALS['_test_wp_remote_post'] = array(
+			'response' => array( 'code' => 200 ),
+			'body'     => json_encode( array(
+				array( 'serviceCode' => 'usps_ground_advantage', 'shipmentCost' => 4.99, 'otherCost' => 0.00 ),
+			) ),
+		);
+
+		$plan = $this->call_protected(
+			'build_package_plan_for_address',
+			array( $this->make_package(), $this->make_ship_to(), 1, 0, 'usps_media_mail' )
+		);
+
+		$this->assertSame( array(), $plan );
+	}
+
+	// -------------------------------------------------------------------------
+	// supports_service_code
+	// -------------------------------------------------------------------------
+
+	public function test_supports_service_code_matches_configured_service(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_priority_mail' );
+
+		$this->assertTrue( $service->supports_service_code( 'usps_priority_mail' ) );
+		$this->assertFalse( $service->supports_service_code( 'usps_media_mail' ) );
+	}
+
+	public function test_supports_service_code_matches_international_equivalent(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', 'usps_priority_mail' );
+
+		$this->assertTrue( $service->supports_service_code( 'usps_priority_mail_international' ) );
+	}
+
+	public function test_supports_service_code_respects_allow_list(): void {
+		$service = new ShipStation_Service(
+			$this->settings,
+			'ups_walleted',
+			'',
+			array( 'ups_ground', 'ups_2nd_day_air' )
+		);
+
+		$this->assertTrue( $service->supports_service_code( 'ups_ground' ) );
+		$this->assertTrue( $service->supports_service_code( 'ups_2nd_day_air' ) );
+		$this->assertFalse( $service->supports_service_code( 'ups_next_day_air' ) );
+	}
+
+	public function test_supports_service_code_accepts_any_code_for_wildcard_instance(): void {
+		$service = new ShipStation_Service( $this->settings, 'stamps_com', '' );
+
+		$this->assertTrue( $service->supports_service_code( 'usps_media_mail' ) );
+		$this->assertTrue( $service->supports_service_code( 'anything_at_all' ) );
+	}
+
+	public function test_supports_service_code_matches_allow_list_international_equivalent(): void {
+		$service = new ShipStation_Service(
+			$this->settings,
+			'ups_walleted',
+			'',
+			array( 'ups_ground' )
+		);
+
+		$this->assertTrue( $service->supports_service_code( 'ups_standard' ) );
 	}
 
 	/**
