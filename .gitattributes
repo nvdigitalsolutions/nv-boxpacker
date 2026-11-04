@@ -1,0 +1,7 @@
+# Line endings: the repository stores LF; keep working trees LF on all
+# platforms so local phpcs runs match CI and no CRLF ever sneaks into a
+# commit. `eol=lf` overrides any local core.autocrlf setting for this repo.
+* text=auto eol=lf
+
+# Never line-ending-normalize binaries.
+*.zip binary
