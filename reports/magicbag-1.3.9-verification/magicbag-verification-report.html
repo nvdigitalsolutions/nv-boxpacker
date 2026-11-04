@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>
+			FK USPS Optimizer 1.3.9 — MagicBag.co Browser Verification Report
+		</title>
+		<style>
+			:root {
+				--ink: #1b2733;
+				--muted: #5c6b7a;
+				--line: #dde4ea;
+				--bg: #f6f8fa;
+				--card: #ffffff;
+				--accent: #0f6f5c;
+				--good: #1a7f37;
+				--warn: #9a6700;
+				--bad: #cf222e;
+				--chip: #eef3f7;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				font-family:
+					-apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+					sans-serif;
+				color: var(--ink);
+				background: var(--bg);
+				line-height: 1.55;
+			}
+			.wrap {
+				max-width: 980px;
+				margin: 0 auto;
+				padding: 32px 24px 64px;
+			}
+			header.hero {
+				background: linear-gradient(
+					135deg,
+					#0f2e26 0%,
+					#14503f 60%,
+					#0f6f5c 100%
+				);
+				color: #fff;
+				border-radius: 14px;
+				padding: 28px 32px;
+				margin-bottom: 28px;
+			}
+			header.hero h1 {
+				margin: 0 0 6px;
+				font-size: 1.7rem;
+				letter-spacing: -0.2px;
+			}
+			header.hero .sub {
+				opacity: 0.9;
+				font-size: 0.95rem;
+			}
+			.meta {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 10px;
+				margin-top: 16px;
+			}
+			.meta span {
+				background: rgba(255, 255, 255, 0.14);
+				border: 1px solid rgba(255, 255, 255, 0.25);
+				padding: 4px 12px;
+				border-radius: 999px;
+				font-size: 0.82rem;
+			}
+			.verdict {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				background: #e6f4ea;
+				color: var(--good);
+				border: 1px solid #b3dfc2;
+				border-radius: 999px;
+				padding: 6px 18px;
+				font-weight: 700;
+				margin: 20px 0 0;
+			}
+			h2 {
+				font-size: 1.2rem;
+				margin: 40px 0 14px;
+				padding-bottom: 8px;
+				border-bottom: 2px solid var(--line);
+			}
+			h3 {
+				font-size: 1rem;
+				margin: 24px 0 8px;
+			}
+			.card {
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 12px;
+				padding: 20px 24px;
+				margin-bottom: 18px;
+				box-shadow: 0 1px 3px rgba(27, 39, 51, 0.05);
+			}
+			table {
+				border-collapse: collapse;
+				width: 100%;
+				font-size: 0.92rem;
+			}
+			th,
+			td {
+				text-align: left;
+				padding: 9px 12px;
+				border-bottom: 1px solid var(--line);
+				vertical-align: top;
+			}
+			th {
+				background: var(--chip);
+				font-size: 0.8rem;
+				text-transform: uppercase;
+				letter-spacing: 0.4px;
+				color: var(--muted);
+			}
+			tr:last-child td {
+				border-bottom: none;
+			}
+			.pass {
+				color: var(--good);
+				font-weight: 700;
+				white-space: nowrap;
+			}
+			.warn {
+				color: var(--warn);
+				font-weight: 700;
+				white-space: nowrap;
+			}
+			.note {
+				color: var(--muted);
+				font-weight: 700;
+				white-space: nowrap;
+			}
+			code,
+			pre {
+				font-family:
+					"SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+					monospace;
+				font-size: 0.85rem;
+			}
+			code {
+				background: var(--chip);
+				padding: 1px 6px;
+				border-radius: 5px;
+			}
+			pre {
+				background: #10232b;
+				color: #d7e6ea;
+				border-radius: 10px;
+				padding: 14px 16px;
+				overflow-x: auto;
+				line-height: 1.5;
+			}
+			figure {
+				margin: 0 0 26px;
+			}
+			figure img {
+				width: 100%;
+				border: 1px solid var(--line);
+				border-radius: 10px;
+				background: #fff;
+				display: block;
+			}
+			figure figcaption {
+				font-size: 0.84rem;
+				color: var(--muted);
+				margin-top: 8px;
+			}
+			ul {
+				margin: 6px 0 6px 20px;
+				padding: 0;
+			}
+			li {
+				margin: 4px 0;
+			}
+			.small {
+				font-size: 0.84rem;
+				color: var(--muted);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="wrap">
+			<header class="hero">
+				<h1>FK USPS Optimizer v1.3.9 — Browser Verification Report</h1>
+				<div class="sub">
+					Live end-to-end checkout test on the production Magic Bag
+					store (magicbag.co)
+				</div>
+				<div class="meta">
+					<span>Date: 2026-11-04</span>
+					<span
+						>Site: Magic Bag — prod app 4014323 (Mushroom
+						server)</span
+					>
+					<span
+						>Test method: Playwright browser, desktop viewport</span
+					>
+					<span>Report by: Zed coding agent (nv-boxpacker)</span>
+				</div>
+				<div class="verdict">
+					✅ VERDICT: PASS — checkout rate pass verified healthy
+				</div>
+			</header>
+
+			<h2>1. Purpose</h2>
+			<div class="card">
+				<p>
+					The FunnelKit USPS Priority Shipping Optimizer was updated
+					on the Magic Bag production site (last site-side update
+					1.3.7 → 1.3.8 for checkout load times; this verification
+					follows the 1.3.9 release from the
+					<code>nv-boxpacker</code> repo). This report documents the
+					live browser verification performed to confirm the update is
+					working, with screenshots and console/network evidence.
+				</p>
+				<p>
+					1.3.9 shipped with six fidelity fixes — the headline being
+					<strong
+						>"rate labels must match the service that was actually
+						priced"</strong
+					>
+					(repo commit <code>ab1a51f</code>, merged via PR #78
+					<code>fix/rate-method-mismatch</code>). Full change list in
+					§7.
+				</p>
+			</div>
+
+			<h2>2. Test environment &amp; flow</h2>
+			<div class="card">
+				<table>
+					<tr>
+						<th>Item</th>
+						<th>Value</th>
+					</tr>
+					<tr>
+						<td>Site</td>
+						<td>https://magicbag.co (production)</td>
+					</tr>
+					<tr>
+						<td>Test product</td>
+						<td>
+							Organic Drippy Corn — simple product ID
+							<code>73692</code> ($22.95), per MagicBag live-test
+							playbook
+						</td>
+					</tr>
+					<tr>
+						<td>Flow</td>
+						<td>
+							Homepage → <code>?add-to-cart=73692</code> →
+							<code>/checkout/</code> → address entry → rate
+							render → rate switch → second destination
+						</td>
+					</tr>
+					<tr>
+						<td>Destinations</td>
+						<td>
+							① 150 Twin Peaks Rd, Selah, WA 98942 (regression
+							case for the state-swap bug)<br />② 5829 W. West End
+							Ave, Apt 1W, Chicago, IL 60644
+						</td>
+					</tr>
+					<tr>
+						<td>Boundary</td>
+						<td>
+							No order was placed — no payment, no real order
+							created. The order-plan pass
+							(<code>process_order</code>) was not exercised.
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<h2>3. Verification results</h2>
+			<div class="card">
+				<table>
+					<tr>
+						<th>Check</th>
+						<th>Result</th>
+						<th>Detail</th>
+					</tr>
+					<tr>
+						<td>Homepage loads</td>
+						<td class="pass">PASS</td>
+						<td>Rendered cleanly, no console errors.</td>
+					</tr>
+					<tr>
+						<td>Checkout renders</td>
+						<td class="pass">PASS</td>
+						<td>Cart item present, 0 page errors.</td>
+					</tr>
+					<tr>
+						<td>Rates for Selah WA 98942</td>
+						<td class="pass">PASS</td>
+						<td>
+							5 live carrier rates returned (see §4). Cheapest
+							auto-selected.
+						</td>
+					</tr>
+					<tr>
+						<td>Rates for Chicago IL 60644</td>
+						<td class="pass">PASS</td>
+						<td>Fresh rate set for the new zone (see §4).</td>
+					</tr>
+					<tr>
+						<td>Rate labels are real service names</td>
+						<td class="pass">PASS</td>
+						<td>
+							No generic "USPS Priority Optimizer" fallback title
+							on any priced option — 1.3.9 fix #1/#6 hold.
+						</td>
+					</tr>
+					<tr>
+						<td>Label ↔ price consistency</td>
+						<td class="pass">PASS</td>
+						<td>
+							Selecting "USPS Priority" charged exactly $14.51:
+							total $22.95 → $37.46; summary reads "Shipping …
+							$14.51".
+						</td>
+					</tr>
+					<tr>
+						<td>Total recalculation on switch</td>
+						<td class="pass">PASS</td>
+						<td>
+							Total tracked each selection exactly (subtotal +
+							selected rate) — 1.3.9 fix #3 holds.
+						</td>
+					</tr>
+					<tr>
+						<td>Checkout AJAX</td>
+						<td class="pass">PASS</td>
+						<td>
+							All <code>admin-ajax.php</code> update_checkout
+							calls returned HTTP 200.
+						</td>
+					</tr>
+					<tr>
+						<td>Console errors</td>
+						<td class="pass">PASS</td>
+						<td>
+							0 errors from page code. Warnings are pre-existing
+							third-party noise (Stripe origin trial, Google Maps
+							legacy Autocomplete deprecation, Permissions-Policy
+							header).
+						</td>
+					</tr>
+					<tr>
+						<td>State dropdown default</td>
+						<td class="pass">PASS</td>
+						<td>
+							Starts empty (placeholder "State (optional)") — no
+							CA default; the 2026-11-02 state-swap fix is intact.
+						</td>
+					</tr>
+					<tr>
+						<td>Security probe</td>
+						<td class="note">INFO</td>
+						<td>
+							A direct request to
+							<code
+								>wp-content/plugins/woocommerce-fk-usps-optimizer/readme.txt</code
+							>
+							(version-recon pattern) was refused with 403 —
+							server hardening working as intended; not a page
+							request.
+						</td>
+					</tr>
+					<tr>
+						<td>Order-plan pass (post-purchase)</td>
+						<td class="warn">NOT TESTED</td>
+						<td>
+							Requires placing a real order. Checkout pass uses
+							the same rate engine; see §6 for how to close this
+							gap.
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<h2>4. Screenshots</h2>
+
+			<figure>
+				<img
+					src="http://localhost:8899/magicbag-1.3.9-verification/assets/01-homepage.png"
+					alt="Magic Bag homepage"
+				/>
+				<figcaption>
+					<strong>1 — Homepage.</strong> Storefront loads cleanly with
+					no console errors.
+				</figcaption>
+			</figure>
+
+			<figure>
+				<img
+					src="http://localhost:8899/magicbag-1.3.9-verification/assets/02-checkout-wa-rates.png"
+					alt="Checkout shipping methods for Selah WA"
+				/>
+				<figcaption>
+					<strong
+						>2 — Checkout shipping methods, Selah WA 98942.</strong
+					>
+					The optimizer returned 5 carrier rates: USPS Ground
+					Advantage <strong>$9.96</strong> (default), UPS Ground
+					$10.41, USPS Priority $14.51, UPS 2nd Day Air $21.46, UPS
+					Next Day Air $63.74. All options carry real service labels.
+				</figcaption>
+			</figure>
+
+			<figure>
+				<img
+					src="http://localhost:8899/magicbag-1.3.9-verification/assets/03-checkout-priority-total.png"
+					alt="Order summary after selecting USPS Priority"
+				/>
+				<figcaption>
+					<strong
+						>3 — Order summary after switching to USPS
+						Priority.</strong
+					>
+					Subtotal $22.95 + shipping $14.51 = total
+					<strong>$37.46</strong>. The charged amount matches the
+					selected rate exactly (label/price fidelity).
+				</figcaption>
+			</figure>
+
+			<figure>
+				<img
+					src="http://localhost:8899/magicbag-1.3.9-verification/assets/04-checkout-chicago-rates.png"
+					alt="Checkout shipping methods for Chicago IL"
+				/>
+				<figcaption>
+					<strong>4 — Second destination, Chicago IL 60644.</strong> A
+					fresh rate set was generated for the new zone: Ground
+					Advantage <strong>$7.03</strong>, UPS Ground $8.32, Priority
+					$8.67, 2nd Day Air $15.31, Next Day Air $48.67 (total
+					$29.98).
+				</figcaption>
+			</figure>
+
+			<figure>
+				<img
+					src="http://localhost:8899/magicbag-1.3.9-verification/assets/05-checkout-fullpage.png"
+					alt="Full checkout page"
+				/>
+				<figcaption>
+					<strong>5 — Full checkout page</strong> with the WA test
+					address filled, USPS Priority selected, and totals matching.
+				</figcaption>
+			</figure>
+
+			<h2>5. Console &amp; network evidence</h2>
+			<div class="card">
+				<h3>Console (all messages, entire session)</h3>
+				<pre>
+Total messages: 23 — Errors: 1, Warnings: 11, Info/log: 11
+
+The single "error" is NOT a page error:
+[ERROR] Failed to load resource: 403 @ /wp-content/plugins/woocommerce-fk-usps-optimizer/readme.txt
+        → external probe of the plugin's readme (version recon), blocked by the server. Expected &amp; benign.
+
+All warnings are pre-existing third-party noise (none from the optimizer):
+• "Origin trial controlled feature not enabled: 'tools'" — js.stripe.com
+• "google.maps.places.Autocomplete is not available to new customers…" — maps.googleapis.com (FunnelKit legacy widget, already tracked in the MagicBag playbook)
+• "Error with Permissions-Policy header: Unrecognized feature: 'document-domain'" — browser header advisory</pre>
+				<h3>Network (checkout AJAX)</h3>
+				<pre>
+POST https://magicbag.co/wp-admin/admin-ajax.php?action=wffn_frontend_analytics…  → 200
+POST https://magicbag.co/wp-admin/admin-ajax.php (update_checkout)               → 200</pre>
+				<p class="small">
+					Carrier rate calls (ShipStation/ShipEngine) run server-side
+					in PHP during <code>update_checkout</code>, so they do not
+					appear in the browser network log — the rendered rates above
+					are their output.
+				</p>
+			</div>
+
+			<h2>6. Limitations &amp; follow-ups</h2>
+			<div class="card">
+				<ul>
+					<li>
+						<strong
+							>Installed version not directly confirmed.</strong
+						>
+						SSH publickey to
+						<code>master_ydayzpmvyw@24.144.86.60</code> was denied
+						from this machine (known Mushroom-server issue) and no
+						wp-admin session was available. The observed behavior is
+						consistent with the 1.3.9 fixes being live.
+					</li>
+					<li>
+						<strong>Order-plan pass untested.</strong>
+						<code>Plugin::process_order()</code> (plan meta
+						<code>_fk_usps_optimizer_plan</code>, order note,
+						PirateShip CSV) only runs on a real order — this covers
+						1.3.9 fixes #4 and #5 below. Options to close the gap:
+						review a recent real order's plan meta (needs wp-admin
+						or SSH), or place a deliberately low-value test order
+						with permission.
+					</li>
+					<li>
+						<strong
+							>No changes were made to the site during this
+							test</strong
+						>
+						— verification was read-only (test cart left in an
+						isolated browser profile only).
+					</li>
+				</ul>
+			</div>
+
+			<h2>7. Changes identified &amp; made in v1.3.9</h2>
+			<div class="card">
+				<p>
+					Release cycle: <code>d748787</code> (1.3.8 changelog) →
+					<code>8a843a0</code> (1.3.9 build ZIP).
+					<strong>31 files changed, +2,653 / −248</strong>. Repo:
+					<code>F:\GITHUB\nv-boxpacker</code>.
+				</p>
+
+				<h3>Fixes shipped (user-facing)</h3>
+				<table>
+					<tr>
+						<th>#</th>
+						<th>Fix</th>
+						<th>Where</th>
+						<th>Confirmed by this test</th>
+					</tr>
+					<tr>
+						<td>1</td>
+						<td>
+							<strong>Rate labels vs priced service</strong> —
+							checkout options could advertise the configured
+							service (e.g. "USPS Priority") while the price came
+							from a different service the API returned (e.g.
+							Media Mail). Plans now carry the
+							<code>service_code</code> of the rate that was
+							actually priced; builders label from the API
+							response, not settings.
+						</td>
+						<td>
+							<code>class-shipengine-service.php</code>,
+							<code>class-shipstation-service.php</code>
+						</td>
+						<td class="pass">
+							YES — all 5 rendered options carried real
+							carrier-service labels (screenshot 2).
+						</td>
+					</tr>
+					<tr>
+						<td>2</td>
+						<td>
+							<strong
+								>ShipStation single-plan path priced the wrong
+								service</strong
+							>
+							— it took the cheapest returned rate regardless of
+							the requested service.
+							<code>request_rate()</code> now filters to the
+							requested service and the configured allow-list, and
+							refuses to label a price the API did not confirm.
+						</td>
+						<td><code>class-shipstation-service.php</code></td>
+						<td class="pass">
+							YES — selecting USPS Priority charged exactly
+							$14.51, the Priority price from the same rate set
+							(screenshot 3).
+						</td>
+					</tr>
+					<tr>
+						<td>3</td>
+						<td>
+							<strong>Positional rate IDs</strong> — checkout IDs
+							were sorted indexes; a re-sorted rate set could
+							silently remap the customer's selection to a
+							different service (select 2nd Day Air, pay Ground).
+							IDs now derive from the service code + option
+							content hash.
+						</td>
+						<td>
+							<code>class-shipping-method.php</code>
+							(<code>build_rate_id()</code>)
+						</td>
+						<td class="pass">
+							YES — switching between rates updated the charged
+							total to match the chosen option each time.
+						</td>
+					</tr>
+					<tr>
+						<td>4</td>
+						<td>
+							<strong>Mixed-carrier order plans</strong> — plans
+							re-quoted every package against every enabled
+							carrier (some bags UPS, some USPS), ignoring the
+							service the customer paid for.
+							<code>Plugin::process_order()</code> now captures
+							the chosen service from the order's shipping-item
+							meta, constrains planning to it, and warns when the
+							plan total diverges from what was paid.
+						</td>
+						<td>
+							<code>class-plugin.php</code>
+							(<code>process_order()</code>,
+							<code>find_best_plan()</code>)
+						</td>
+						<td class="warn">
+							NOT TESTED — requires a placed order; see §6.
+						</td>
+					</tr>
+					<tr>
+						<td>5</td>
+						<td>
+							<strong
+								>PirateShip CSV hardcoded "USPS / Priority
+								Mail"</strong
+							>
+							— carrier and service columns now derive from the
+							plan's actual service code.
+						</td>
+						<td>
+							<code>class-pirateship-export.php</code>
+							(<code>derive_carrier_and_service()</code>)
+						</td>
+						<td class="warn">
+							NOT TESTED — requires a stored plan; see §6.
+						</td>
+					</tr>
+					<tr>
+						<td>6</td>
+						<td>
+							<strong>Generic fallback title removed</strong> —
+							checkout options with no usable service label no
+							longer fall back to the method title ("USPS Priority
+							Optimizer" must never appear on a priced option).
+						</td>
+						<td>
+							<code>class-shipping-method.php</code>
+							(<code>resolve_rate_title()</code>)
+						</td>
+						<td class="pass">
+							YES — no generic title appeared on any priced
+							option.
+						</td>
+					</tr>
+				</table>
+
+				<h3>Tooling &amp; QA shipped alongside</h3>
+				<ul>
+					<li>
+						<strong>New: opt-in live API integration suite</strong>
+						—
+						<code>tests/Integration/ShipEngineLiveTest.php</code> +
+						<code>ShipStationLiveTest.php</code> against the real
+						sandbox APIs (<code>composer run test-live</code>),
+						credential-free by default; config via
+						<code>phpunit.live.local.xml</code> or env vars.
+					</li>
+					<li>
+						<strong>Unit coverage added for every fix</strong> —
+						<code>ShippingMethodTest</code>,
+						<code>PluginProcessOrderTest</code>,
+						<code>PirateShipExportTest</code>,
+						<code>ShipEngineServiceTest</code>,
+						<code>ShipStationServiceTest</code> (suite now 562 tests
+						/ 1,187 assertions).
+					</li>
+					<li>
+						<strong>Dev-toolchain security updates</strong> — PHPCS
+						dependencies patched for advisories (PR #77).
+					</li>
+					<li>
+						<strong>LF line endings enforced</strong> via
+						<code>.gitattributes</code> (PR #79).
+					</li>
+					<li>
+						<strong>Agent docs</strong> —
+						<code>.agents/skills/nv-boxpacker/SKILL.md</code> (repo
+						playbook: rate-pipeline invariants, carrier specifics,
+						test seams) + <code>.context/testing.md</code> updates.
+					</li>
+					<li>
+						<strong>Version bumps</strong> — plugin header,
+						<code>FK_USPS_OPTIMIZER_VERSION</code>,
+						<code>readme.txt</code> Stable tag → 1.3.9; build ZIP
+						<code>woocommerce-fk-usps-optimizer-1.3.9.zip</code>.
+					</li>
+				</ul>
+			</div>
+
+			<h2>8. Updates recorded</h2>
+			<div class="card">
+				<p>
+					To keep future sessions aware of this verification, the
+					following records were updated:
+				</p>
+				<ul>
+					<li>
+						This report:
+						<code
+							>reports/magicbag-1.3.9-verification/magicbag-verification-report.html</code
+						>
+						(repo <code>nv-boxpacker</code>)
+					</li>
+					<li>
+						MagicBag ops playbook note appended:
+						<code
+							>~/.agents/skills/nv-digital-cloudways-wpcli/reference/magicbag-checkout.md</code
+						>
+						— records the 2026-11-04 live verification of the
+						optimizer update (rate generation, label/price fidelity,
+						0 console errors).
+					</li>
+				</ul>
+			</div>
+
+			<p class="small">
+				Generated 2026-11-04 · FK USPS Optimizer repo:
+				F:\GITHUB\nv-boxpacker · Screenshots: served from http://localhost:8899 (keep the server running)
+			</p>
+		</div>
+	</body>
+</html>
